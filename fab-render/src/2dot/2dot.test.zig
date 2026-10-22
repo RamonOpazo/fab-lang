@@ -40,12 +40,26 @@ fn render(sheet: *const fab.Sheet) !Output {
     return .{ .dot = try out.toOwnedSlice(), .notes = notes };
 }
 
-fn expectDot(source: []const u8, expected: []const u8) !void {
+/// Every file starts with these defaults, so goldens show only the body.
+const header =
+    \\  graph [fontname="Helvetica", fontsize=11, nodesep=0.45, ranksep=0.45, pad=0.2]
+    \\  node [fontname="Helvetica", fontsize=11, fontcolor="#333333", color="#333333"]
+    \\  edge [fontname="Helvetica", fontsize=9, fontcolor="#555555", color="#333333", arrowsize=0.6]
+    \\
+;
+
+fn expectDot(source: []const u8, body: []const u8) !void {
     var c = try fab.Compilation.init(testing.allocator, source, preview);
     defer c.deinit();
     var o = try render((try c.sheet()).?);
     defer o.deinit();
-    try testing.expectEqualStrings(expected, o.dot);
+    try expectBody(body, o.dot);
+}
+
+fn expectBody(body: []const u8, dot: []const u8) !void {
+    const start = "digraph {\n" ++ header;
+    try testing.expect(std.mem.startsWith(u8, dot, start));
+    try testing.expectEqualStrings(body, dot[start.len..]);
 }
 
 // ---------------------------------------------------------------------------
@@ -53,12 +67,11 @@ fn expectDot(source: []const u8, expected: []const u8) !void {
 
 test "a chain: canonical labels, in the canonical class" {
     try expectDot("G :: f g",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="+f", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n2 [label="g+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\  n1 -> n2 [label="g"]
@@ -67,14 +80,13 @@ test "a chain: canonical labels, in the canonical class" {
     );
 }
 
-test "names are labels without their #; identifiers stay n{i}" {
+test "names label circles without their #; a named choice stays unlabelled" {
     try expectDot("G :: #A f #B? g",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="A", shape=plaintext]
-        \\    n1 [label="B", shape=diamond]
-        \\    n2 [label="g+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="A", shape=circle, width=0.37, height=0.37, fixedsize=true]
+        \\    n1 [label="", shape=diamond, width=0.32, height=0.32, fixedsize=true]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\  n1 -> n2 [label="g"]
@@ -83,15 +95,14 @@ test "names are labels without their #; identifiers stay n{i}" {
     );
 }
 
-test "kinds: null is a small circle, parallel a bar, choice a diamond" {
+test "marks: a start is a dot, a bar is as wide as its branches, a choice a diamond" {
     try expectDot("G :: *f! (g, h)? k",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="", xlabel="+f", shape=circle, width=0.15, height=0.15, fixedsize=true, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="", xlabel="f+", shape=box, width=0.5, height=0.06, fixedsize=true, fontname="Times-Italic", fontcolor="#888888", fillcolor="#000000", style="filled"]
-        \\    n2 [label="g+", shape=diamond, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n3 [label="k+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="", shape=circle, width=0.14, height=0.14, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\    n1 [label="", shape=box, width=0.76, height=0.05, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\    n2 [label="", shape=diamond, width=0.32, height=0.32, fixedsize=true]
+        \\    n3 [label="k+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\  n1 -> n2 [label="g"]
@@ -106,16 +117,15 @@ test "two zones sharing a node: it stays in its owner's cluster" {
     // `h` points into A. Were the edge written inside B's cluster, Graphviz
     // would place n0 there; nodes first, edges after, prevents it.
     try expectDot("A :: f g\nB :: h/A.+f",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="+f", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n2 [label="g+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  subgraph cluster_1 {
         \\    peripheries=0
-        \\    n3 [label="+h", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n3 [label="+h", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\  n1 -> n2 [label="g"]
@@ -127,11 +137,10 @@ test "two zones sharing a node: it stays in its owner's cluster" {
 
 test "undirected edges have no arrowhead" {
     try expectDot("G :: f/",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="+f", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f", dir=none]
         \\}
@@ -141,18 +150,39 @@ test "undirected edges have no arrowhead" {
 
 test "holes are dashed circles" {
     try expectDot("G :: f g/+k h",
-        \\digraph {
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="+f", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=circle, fontname="Times-Italic", fontcolor="#888888", style="dashed"]
-        \\    n2 [label="h+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", style="dashed"]
+        \\    n2 [label="h+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\  n1 -> n2 [label="h"]
         \\}
         \\
     );
+}
+
+test "an end is a bullseye" {
+    try expectDot("G :: f*",
+        \\  subgraph cluster_0 {
+        \\    peripheries=0
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="", shape=doublecircle, width=0.10, height=0.10, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\}
+        \\
+    );
+}
+
+test "every circle has the size of the longest label" {
+    var c = try fab.Compilation.init(testing.allocator, "G :: #A f #Approved g", preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    // "Approved" has 8 characters: 0.085 × 8 + 0.2 = 0.88, for all three.
+    try testing.expectEqual(3, std.mem.count(u8, o.dot, "width=0.88, height=0.88"));
 }
 
 test "cells are left out, with one note each" {
@@ -191,15 +221,14 @@ test "a framed cluster draws its border, label and fill" {
     sheet.zones = &zones;
     var o = try render(&sheet);
     defer o.deinit();
-    try testing.expectEqualStrings(
-        \\digraph {
+    try expectBody(
         \\  subgraph cluster_0 {
         \\    label="G"
         \\    pencolor="#336699"
         \\    fillcolor="#1f6feb"
         \\    style="filled,dashed"
-        \\    n0 [label="+f", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=plaintext, fontname="Times-Italic", fontcolor="#888888"]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
         \\}
@@ -239,15 +268,14 @@ test "lines and shapes: double, invisible, wavy, approximations" {
     sheet.edges = &edges;
     var o = try render(&sheet);
     defer o.deinit();
-    try testing.expectEqualStrings(
-        \\digraph {
+    try expectBody(
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="a", shape=box, style="rounded"]
         \\    n1 [label="b", shape=box, color="#ff0000", peripheries=2, style="rounded"]
         \\    n2 [label="c", shape=note]
         \\  }
-        \\  n0 -> n1 [label="f", color="#000000:invis:#000000"]
+        \\  n0 -> n1 [label="f", color="#333333:invis:#333333"]
         \\  n1 -> n2 [label="g", style="invis"]
         \\}
         \\
@@ -283,8 +311,8 @@ fn readDot(dot: []const u8) !Read {
     var cluster: ?u32 = null;
     var edges_started = false;
 
-    var lines = std.mem.splitScalar(u8, dot, '\n');
-    if (!std.mem.eql(u8, lines.next().?, "digraph {")) return error.BadHeader;
+    if (!std.mem.startsWith(u8, dot, "digraph {\n" ++ header)) return error.BadHeader;
+    var lines = std.mem.splitScalar(u8, dot[("digraph {\n" ++ header).len..], '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " ");
         if (std.mem.eql(u8, line, "}")) {

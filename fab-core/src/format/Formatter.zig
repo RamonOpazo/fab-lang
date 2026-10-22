@@ -14,6 +14,14 @@
 //! puts the node in the built-in class `.canonical`: italic and muted, and
 //! like any class, overridable. Edges and zones are labelled with their name.
 //!
+//! Marks are the exception: choices, parallels, starts and ends draw a shape
+//! that already says what they are, so by default they have no label, named
+//! or canonical. Only `:label` will label a mark.
+//!
+//! Kind defaults: a plain node is a circle, a hole a dashed circle, a choice
+//! a diamond, a parallel a bar. A null node is a start (a dot) if no edge
+//! arrives at it, else an end (a bullseye), as in UML activity diagrams.
+//!
 //! As with Parser and Analyser, the fields are the pass's working state, and
 //! `format` is the entry point.
 
@@ -41,9 +49,15 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir) error{OutOfMemory}!Sheet {
     defer f.labels.deinit(gpa);
     defer f.spans.deinit(gpa);
 
+    // Which nodes some edge arrives at: that tells a start from an end.
+    const reached = try gpa.alloc(bool, ir.nodes.len);
+    defer gpa.free(reached);
+    @memset(reached, false);
+    for (ir.edges.items(.target)) |t| reached[@backingInt(t)] = true;
+
     const nodes = try gpa.alloc(Style, ir.nodes.len);
     errdefer gpa.free(nodes);
-    for (nodes, 0..) |*style, i| style.* = try f.node(i);
+    for (nodes, reached, 0..) |*style, arrived, i| style.* = try f.node(i, arrived);
 
     const edges = try gpa.alloc(Style, ir.edges.len);
     errdefer gpa.free(edges);
@@ -62,12 +76,15 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir) error{OutOfMemory}!Sheet {
     return .{ .ir = ir, .nodes = nodes, .edges = edges, .zones = zones, .labels = owned, .gpa = gpa };
 }
 
-/// The cascade for node `i`. A canonical label is recorded in `labels` and
-/// filled in by `format` at the end.
-fn node(f: *Formatter, i: usize) error{OutOfMemory}!Style {
+/// The cascade for node `i`; `arrived` says whether some edge ends at it. A
+/// canonical label is recorded in `labels` and filled in by `format` at the
+/// end.
+fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Style {
     const n = f.ir.nodes.get(i);
-    var attrs = kindDefault(n.kind).over(builtin.node);
-    if (n.name) |name| {
+    var attrs = kindDefault(n.kind, arrived).over(builtin.node);
+    if (isMark(n.kind)) {
+        // Unlabelled: the shape says what it is.
+    } else if (n.name) |name| {
         attrs = attrs.over(.{ .label = withoutSigil(f.ir.string(name)) });
     } else if (n.canonical) |end| {
         attrs = attrs.over(builtin.canonical);
@@ -92,13 +109,22 @@ fn withoutSigil(name: []const u8) []const u8 {
 }
 
 /// The first layer of the cascade: how each kind of node looks by default.
-fn kindDefault(kind: Ir.Node.Kind) Attrs {
+/// A null node is a start unless some edge arrives at it.
+fn kindDefault(kind: Ir.Node.Kind, arrived: bool) Attrs {
     return switch (kind) {
-        .plain => .{ .shape = .none },
+        .plain => .{ .shape = .circle },
         .choice => .{ .shape = .diamond },
         .parallel => .{ .shape = .bar },
-        .null_node => .{ .shape = .terminal },
+        .null_node => .{ .shape = if (arrived) .bullseye else .point },
         .hole => .{ .shape = .circle, .line = .dashed },
+    };
+}
+
+/// Kinds whose shape is their meaning: unlabelled by default.
+fn isMark(kind: Ir.Node.Kind) bool {
+    return switch (kind) {
+        .choice, .parallel, .null_node => true,
+        .plain, .hole => false,
     };
 }
 

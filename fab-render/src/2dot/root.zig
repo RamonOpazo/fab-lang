@@ -20,10 +20,17 @@
 //!   - Cells are not drawn. Each one gets a note.
 //!
 //! The Sheet decides every look; this file only realizes it in DOT's terms.
+//! What DOT needs and the Sheet doesn't say, such as fonts, sizes and
+//! spacing, is decided here once, in the header:
+//!   - One sans-serif font; edge labels smaller, in the theme's soft grey.
+//!   - Every circle in a diagram has the same size, big enough for its
+//!     longest label, so the label fits inside.
+//!   - A bar is as wide as its busier side needs: one unit per branch.
 
 const std = @import("std");
 const fab = @import("fab_core");
 const Note = @import("../shared/Note.zig");
+const Theme = @import("../shared/Theme.zig");
 
 const Sheet = fab.Sheet;
 const Style = fab.Style;
@@ -37,6 +44,8 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
     const ir = sheet.ir;
     const node_zone = ir.nodes.items(.zone);
     try w.writeAll("digraph {\n");
+    try writeHeader(w);
+    const circle = circleSize(sheet);
 
     // 1. Nodes, zone by zone, each inside its owner's cluster.
     for (0..ir.zones.len) |z| {
@@ -57,7 +66,9 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
         for (node_zone, 0..) |owner, n| {
             if (owner != zone) continue;
             try w.print("{s}n{d}", .{ indent, n });
-            try writeNodeAttrs(sheet.nodes[n], @fromBackingInt(@as(u32, @intCast(n))), w, notes);
+            const index: fab.Ir.NodeIndex = @fromBackingInt(@as(u32, @intCast(n)));
+            const sizes: Sizes = .{ .circle = circle, .branches = branches(ir, index) };
+            try writeNodeAttrs(sheet.nodes[n], index, sizes, w, notes);
             try w.writeAll("\n");
         }
         if (grouped) try w.writeAll("  }\n");
@@ -76,6 +87,51 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
     for (0..ir.cells.len) |c| {
         try notes.add(.{ .tag = .cell_not_drawn, .subject = .{ .cell = @fromBackingInt(@as(u32, @intCast(c))) } });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Defaults and sizes
+
+const font = "Helvetica";
+const font_italic = "Helvetica-Oblique";
+
+/// Graph-wide defaults, so that each node and edge lists only what differs.
+fn writeHeader(w: *Writer) Writer.Error!void {
+    const t = Theme.default;
+    try w.print("  graph [fontname=\"{s}\", fontsize=11, nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{font});
+    try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\"]\n", .{ font, t.ink, t.ink });
+    try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\", arrowsize=0.6]\n", .{ font, t.soft, t.ink });
+}
+
+/// What a node's size depends on, beyond its own style.
+const Sizes = struct {
+    /// The diameter of every circle in the diagram, in inches.
+    circle: f32,
+    /// For bars: the branches on the busier side.
+    branches: usize,
+};
+
+/// One diameter for every circle, wide enough for the longest label inside
+/// one. An estimate: about 0.085 in per character at 11 pt, plus a margin.
+fn circleSize(sheet: *const Sheet) f32 {
+    var longest: usize = 0;
+    for (sheet.nodes) |style| {
+        if (style.shape != .circle and style.shape != .double_circle) continue;
+        const chars = std.unicode.utf8CountCodepoints(style.label) catch style.label.len;
+        longest = @max(longest, chars);
+    }
+    return @max(0.35, 0.085 * @as(f32, @floatFromInt(longest)) + 0.2);
+}
+
+/// The larger of a node's in- and out-degree.
+fn branches(ir: *const fab.Ir, n: fab.Ir.NodeIndex) usize {
+    var in: usize = 0;
+    var out: usize = 0;
+    for (ir.edges.items(.source), ir.edges.items(.target)) |s, t| {
+        out += @intFromBool(s == n);
+        in += @intFromBool(t == n);
+    }
+    return @max(in, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +167,12 @@ const Attrs = struct {
         try a.w.print("{s}={s}", .{ key, value });
     }
 
+    /// `key=1.25`: inches, to two decimals.
+    fn inches(a: *Attrs, key: []const u8, value: f32) Writer.Error!void {
+        try a.sep();
+        try a.w.print("{s}={d:.2}", .{ key, value });
+    }
+
     fn color(a: *Attrs, key: []const u8, c: Style.Color) Writer.Error!void {
         try a.sep();
         try a.w.print("{s}=\"", .{key});
@@ -141,11 +203,21 @@ const Attrs = struct {
 const ShapeRealization = struct {
     shape: []const u8,
     rounded: bool = false,
-    /// A small fixed size, in inches; the label goes beside it as `xlabel`.
-    small: ?struct { []const u8, []const u8 } = null,
-    /// Filled with the stroke colour: a solid mark, such as a bar.
+    size: Size = .free,
+    /// Filled with the stroke colour: a solid mark, such as a bar or a dot.
     solid: bool = false,
     approximated: bool = false,
+
+    const Size = union(enum) {
+        /// DOT sizes it around its label.
+        free,
+        /// The diagram's one circle size; the label inside.
+        circle,
+        /// A small mark of fixed width and height; any label goes beside it.
+        mark: struct { f32, f32 },
+        /// A bar: one unit of width per branch.
+        bar,
+    };
 };
 
 fn realizeShape(shape: Style.Shape) ShapeRealization {
@@ -153,26 +225,26 @@ fn realizeShape(shape: Style.Shape) ShapeRealization {
         .none => .{ .shape = "plaintext" },
         .box => .{ .shape = "box" },
         .round => .{ .shape = "box", .rounded = true },
-        .circle => .{ .shape = "circle" },
-        .double_circle => .{ .shape = "doublecircle" },
+        .circle => .{ .shape = "circle", .size = .circle },
+        .double_circle => .{ .shape = "doublecircle", .size = .circle },
         .ellipse => .{ .shape = "ellipse" },
         .stadium => .{ .shape = "box", .rounded = true, .approximated = true },
-        .diamond => .{ .shape = "diamond" },
+        .diamond => .{ .shape = "diamond", .size = .{ .mark = .{ 0.32, 0.32 } } },
         .hexagon => .{ .shape = "hexagon" },
         .parallelogram => .{ .shape = "parallelogram" },
         .cylinder => .{ .shape = "cylinder" },
         .document => .{ .shape = "note", .approximated = true },
-        .bar => .{ .shape = "box", .small = .{ "0.5", "0.06" }, .solid = true },
-        .point => .{ .shape = "point" },
-        .terminal => .{ .shape = "circle", .small = .{ "0.15", "0.15" } },
-        .bullseye => .{ .shape = "doublecircle", .small = .{ "0.2", "0.2" } },
+        .bar => .{ .shape = "box", .size = .bar, .solid = true },
+        .point => .{ .shape = "circle", .size = .{ .mark = .{ 0.14, 0.14 } }, .solid = true },
+        .terminal => .{ .shape = "circle", .size = .{ .mark = .{ 0.15, 0.15 } } },
+        .bullseye => .{ .shape = "doublecircle", .size = .{ .mark = .{ 0.1, 0.1 } }, .solid = true },
     };
 }
 
-fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, w: *Writer, notes: *Note.List) Error!void {
+fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, sizes: Sizes, w: *Writer, notes: *Note.List) Error!void {
     const r = realizeShape(style.shape);
     if (r.approximated) try notes.add(.{ .tag = .shape_approximated, .subject = .{ .node = n } });
-    const beside = r.small != null or style.shape == .point;
+    const beside = r.size == .mark or r.size == .bar;
 
     var a: Attrs = .begin(w);
     if (beside) {
@@ -182,18 +254,31 @@ fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, w: *Writer, notes: *Note.Li
         try a.text("label", style.label);
     }
     try a.raw("shape", r.shape);
-    if (r.small) |size| {
-        const width, const height = size;
-        try a.raw("width", width);
-        try a.raw("height", height);
-        try a.raw("fixedsize", "true");
+    switch (r.size) {
+        .free => {},
+        .circle => {
+            try a.inches("width", sizes.circle);
+            try a.inches("height", sizes.circle);
+            try a.raw("fixedsize", "true");
+        },
+        .mark => |size| {
+            const width, const height = size;
+            try a.inches("width", width);
+            try a.inches("height", height);
+            try a.raw("fixedsize", "true");
+        },
+        .bar => {
+            try a.inches("width", @max(0.6, 0.38 * @as(f32, @floatFromInt(sizes.branches))));
+            try a.inches("height", 0.05);
+            try a.raw("fixedsize", "true");
+        },
     }
-    if (style.italic) try a.text("fontname", "Times-Italic");
+    if (style.italic) try a.text("fontname", font_italic);
     if (style.ink) |c| try a.color("fontcolor", c);
     if (style.stroke) |c| try a.color("color", c);
     if (r.solid) {
         a.flag("filled");
-        try a.color("fillcolor", style.stroke orelse style.fill orelse .{ .rgb = 0x000000 });
+        try a.color("fillcolor", style.stroke orelse style.fill orelse .{ .rgb = Theme.default.ink });
     } else if (style.fill) |c| {
         a.flag("filled");
         try a.color("fillcolor", c);
@@ -208,11 +293,11 @@ fn writeEdgeAttrs(style: Style, directed: bool, e: fab.Ir.EdgeIndex, w: *Writer,
     var a: Attrs = .begin(w);
     try a.text("label", style.label);
     if (!directed) try a.raw("dir", "none");
-    if (style.italic) try a.text("fontname", "Times-Italic");
+    if (style.italic) try a.text("fontname", font_italic);
     if (style.ink) |c| try a.color("fontcolor", c);
     if (style.line == .double) {
         // Two parallel lines: the colour, a gap, the colour.
-        const c = style.stroke orelse Style.Color{ .rgb = 0x000000 };
+        const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
         try a.sep();
         try w.writeAll("color=\"");
         try writeColor(w, c);
@@ -290,15 +375,9 @@ fn lineFlags(a: *Attrs, line: Style.Line, subject: fab.Ir.Subject, notes: *Note.
 // ---------------------------------------------------------------------------
 // Values
 
-/// The theme, as DOT realizes it.
+/// A colour as DOT writes it: `#rrggbb`, tokens resolved by the theme.
 fn writeColor(w: *Writer, c: Style.Color) Writer.Error!void {
-    switch (c) {
-        .rgb => |rgb| try w.print("#{x:0>6}", .{rgb}),
-        .token => |t| try w.writeAll(switch (t) {
-            .muted => "#888888",
-            .accent => "#1f6feb",
-        }),
-    }
+    try w.print("#{x:0>6}", .{Theme.default.rgb(c)});
 }
 
 /// A DOT string. Backslashes are escaped too, so that DOT's own escapes

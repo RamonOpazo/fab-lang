@@ -33,24 +33,32 @@ fn expectNodes(source: []const u8, expected: []const Expected) !void {
 const muted: ?Style.Color = .{ .token = .muted };
 
 test "labels: a name without its #, else the canonical end, in the canonical class" {
-    try expectNodes("G :: #A f #B? g", &.{
-        .{ "A", false, null, .none },
-        .{ "B", false, null, .diamond },
-        .{ "g+", true, muted, .none },
+    try expectNodes("G :: #A f #B g", &.{
+        .{ "A", false, null, .circle },
+        .{ "B", false, null, .circle },
+        .{ "g+", true, muted, .circle },
     });
     try expectNodes("G :: f", &.{
-        .{ "+f", true, muted, .none },
-        .{ "f+", true, muted, .none },
+        .{ "+f", true, muted, .circle },
+        .{ "f+", true, muted, .circle },
     });
 }
 
-test "kind defaults: choice, parallel, null and plain" {
+test "kind defaults: plain circles, and marks with no label, even when named" {
     // `(g, h)?` merges both branches' ends into one choice node.
-    try expectNodes("G :: *f! (g, h)? k", &.{
-        .{ "+f", true, muted, .terminal },
-        .{ "f+", true, muted, .bar },
-        .{ "g+", true, muted, .diamond },
-        .{ "k+", true, muted, .none },
+    try expectNodes("G :: *f #Fork! (g, h)? #Pick k", &.{
+        .{ "", false, null, .point },
+        .{ "", false, null, .bar },
+        .{ "", false, null, .diamond },
+        .{ "k+", true, muted, .circle },
+    });
+}
+
+test "a null node is a start if nothing arrives at it, else an end" {
+    try expectNodes("G :: *f g*", &.{
+        .{ "", false, null, .point },
+        .{ "f+", true, muted, .circle },
+        .{ "", false, null, .bullseye },
     });
 }
 
