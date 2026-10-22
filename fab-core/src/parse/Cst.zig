@@ -187,15 +187,15 @@ pub fn deinit(cst: *Cst, gpa: std.mem.Allocator) void {
 // Access
 
 pub fn tag(cst: Cst, node: Node.Index) Node.Tag {
-    return cst.nodes.items(.tag)[@intFromEnum(node)];
+    return cst.nodes.items(.tag)[@backingInt(node)];
 }
 
 pub fn mainToken(cst: Cst, node: Node.Index) TokenIndex {
-    return cst.nodes.items(.main_token)[@intFromEnum(node)];
+    return cst.nodes.items(.main_token)[@backingInt(node)];
 }
 
 pub fn data(cst: Cst, node: Node.Index) Node.Data {
-    return cst.nodes.items(.data)[@intFromEnum(node)];
+    return cst.nodes.items(.data)[@backingInt(node)];
 }
 
 pub fn tokenTag(cst: Cst, token: TokenIndex) Token.Tag {
@@ -213,7 +213,7 @@ pub fn list(cst: Cst, start: u32, end: u32) []const Node.Index {
 
 /// The `Braced` list stored in `extra` at `index`.
 pub fn braced(cst: Cst, index: ExtraIndex) Braced {
-    const i = @intFromEnum(index);
+    const i = @backingInt(index);
     return .{ .start = cst.extra[i], .end = cst.extra[i + 1], .close = cst.extra[i + 2] };
 }
 
@@ -226,9 +226,9 @@ pub fn children(cst: Cst, node: Node.Index) []const Node.Index {
             const b = cst.braced(d.extra);
             break :blk cst.list(b.start, b.end);
         },
-        .relations, .layer, .prefix, .postfix, .qualified => (&cst.nodes.items(.data)[@intFromEnum(node)].node)[0..1],
-        .group, .cells => (&cst.nodes.items(.data)[@intFromEnum(node)].node_token[0])[0..1],
-        .slash, .entry, .equation, .interp => &cst.nodes.items(.data)[@intFromEnum(node)].nodes,
+        .relations, .layer, .prefix, .postfix, .qualified => (&cst.nodes.items(.data)[@backingInt(node)].node)[0..1],
+        .group, .cells => (&cst.nodes.items(.data)[@backingInt(node)].node_token[0])[0..1],
+        .slash, .entry, .equation, .interp => &cst.nodes.items(.data)[@backingInt(node)].nodes,
         .leaf, .class, .card, .invalid => &.{},
     };
 }
@@ -354,7 +354,7 @@ fn expectDump(cst: Cst, expected: []const u8) !void {
 }
 
 fn idx(i: u32) Node.Index {
-    return @enumFromInt(i);
+    return @fromBackingInt(@intCast(i));
 }
 
 test "G :: f g" {
@@ -421,7 +421,7 @@ test "a layer: G :format { +f :label $R$ }" {
     var cst = try build("G :format { +f :label $R$ }", &.{
         .{ .tag = .root, .main_token = 0, .data = .{ .range = .{ .start = 0, .end = 1 } } },
         .{ .tag = .layer, .main_token = 1, .data = .{ .node = idx(2) } },
-        .{ .tag = .block, .main_token = 2, .data = .{ .extra = @enumFromInt(1) } },
+        .{ .tag = .block, .main_token = 2, .data = .{ .extra = @fromBackingInt(@intCast(1)) } },
         .{ .tag = .entry, .main_token = 3, .data = .{ .nodes = .{ idx(4), idx(6) } } },
         .{ .tag = .prefix, .main_token = 3, .data = .{ .node = idx(5) } },
         .{ .tag = .leaf, .main_token = 4, .data = .{ .none = {} } },

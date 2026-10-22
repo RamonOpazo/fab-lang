@@ -6,7 +6,14 @@
 //! node, owned by the zone that created it.
 //!
 //! The IR is self-contained: it never points into the source. Names are
-//! copied into `strings`. It is produced only for programs without errors.
+//! copied into `strings`.
+//!
+//! The IR is produced for every program, valid or not. Where part of a program
+//! failed, the graph has a hole: a node standing for the part that could not
+//! be elaborated. Problems are recorded in `issues`, a table beside the graph
+//! rather than in it: an issue has no name, so no fAB syntax can create,
+//! address, format or hide one. Only the analyser writes issues, and only
+//! renderers read them.
 //!
 //! Format attributes and proof facts are added when those passes exist.
 
@@ -18,6 +25,7 @@ zones: std.MultiArrayList(Zone).Slice,
 nodes: std.MultiArrayList(Node).Slice,
 edges: std.MultiArrayList(Edge).Slice,
 cells: std.MultiArrayList(Cell).Slice,
+issues: std.MultiArrayList(Issue).Slice,
 strings: []const u8,
 
 pub const ZoneIndex = enum(u32) { _ };
@@ -52,6 +60,7 @@ pub const Node = struct {
         choice, // ◇, from ?
         parallel, // ‖, from !
         null_node, // ⊙, from *
+        hole, // ◌, a part of the program that failed
     };
 };
 
@@ -79,11 +88,27 @@ pub const Cell = struct {
     zone: ZoneIndex,
 };
 
+/// Any element of the graph.
+pub const Subject = union(enum) {
+    node: NodeIndex,
+    edge: EdgeIndex,
+    cell: CellIndex,
+    zone: ZoneIndex,
+};
+
+/// A problem attached to an element of the graph: what a renderer marks.
+pub const Issue = struct {
+    subject: Subject,
+    /// The error it comes from: an index into the analyser's error list.
+    err: u32,
+};
+
 pub fn deinit(ir: *Ir, gpa: std.mem.Allocator) void {
     ir.zones.deinit(gpa);
     ir.nodes.deinit(gpa);
     ir.edges.deinit(gpa);
     ir.cells.deinit(gpa);
+    ir.issues.deinit(gpa);
     gpa.free(ir.strings);
     ir.* = undefined;
 }
@@ -101,6 +126,7 @@ pub const Builder = struct {
     nodes: std.MultiArrayList(Node) = .empty,
     edges: std.MultiArrayList(Edge) = .empty,
     cells: std.MultiArrayList(Cell) = .empty,
+    issues: std.MultiArrayList(Issue) = .empty,
     strings: std.ArrayList(u8) = .empty,
 
     pub fn init(gpa: std.mem.Allocator) Builder {
@@ -113,6 +139,7 @@ pub const Builder = struct {
         b.nodes.deinit(b.gpa);
         b.edges.deinit(b.gpa);
         b.cells.deinit(b.gpa);
+        b.issues.deinit(b.gpa);
         b.strings.deinit(b.gpa);
     }
 
@@ -124,22 +151,26 @@ pub const Builder = struct {
 
     pub fn addZone(b: *Builder, zone: Zone) !ZoneIndex {
         try b.zones.append(b.gpa, zone);
-        return @enumFromInt(b.zones.len - 1);
+        return @fromBackingInt(@intCast(b.zones.len - 1));
     }
 
     pub fn addNode(b: *Builder, node: Node) !NodeIndex {
         try b.nodes.append(b.gpa, node);
-        return @enumFromInt(b.nodes.len - 1);
+        return @fromBackingInt(@intCast(b.nodes.len - 1));
     }
 
     pub fn addEdge(b: *Builder, edge: Edge) !EdgeIndex {
         try b.edges.append(b.gpa, edge);
-        return @enumFromInt(b.edges.len - 1);
+        return @fromBackingInt(@intCast(b.edges.len - 1));
     }
 
     pub fn addCell(b: *Builder, cell: Cell) !CellIndex {
         try b.cells.append(b.gpa, cell);
-        return @enumFromInt(b.cells.len - 1);
+        return @fromBackingInt(@intCast(b.cells.len - 1));
+    }
+
+    pub fn addIssue(b: *Builder, issue: Issue) !void {
+        try b.issues.append(b.gpa, issue);
     }
 
     /// Hands the tables over to an Ir. The builder is empty afterwards.
@@ -150,14 +181,15 @@ pub const Builder = struct {
             .nodes = b.nodes.toOwnedSlice(),
             .edges = b.edges.toOwnedSlice(),
             .cells = b.cells.toOwnedSlice(),
+            .issues = b.issues.toOwnedSlice(),
             .strings = strings,
         };
     }
 };
 
 // ---------------------------------------------------------------------------
-// Dump: zone by zone, its nodes, then its edges, then its cells. The format of
-// `fab ir` and of the golden files in test/cases/ir/.
+// Dump: zone by zone, its nodes, then its edges, then its cells; issues last.
+// The format of `fab ir` and of the golden files in test/cases/ir/.
 //
 //   zone G own n0
 //     node n0 canon +f
@@ -165,17 +197,18 @@ pub const Builder = struct {
 //     edge f n0 -> n1          directed
 //     edge g n1 -- n2          undirected
 //     cell α f => g
+//   issue e0 node n1           error 0 marks node n1
 
 pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     for (0..ir.zones.len) |z| {
         const zone = ir.zones.get(z);
         try w.print("zone {s}", .{ir.string(zone.name)});
-        if (zone.own) |own| try w.print(" own n{d}", .{@intFromEnum(own)});
+        if (zone.own) |own| try w.print(" own n{d}", .{@backingInt(own)});
         try w.writeAll("\n");
 
         for (0..ir.nodes.len) |n| {
             const node = ir.nodes.get(n);
-            if (@intFromEnum(node.zone) != z) continue;
+            if (@backingInt(node.zone) != z) continue;
             try w.print("  node n{d}", .{n});
             if (node.kind != .plain) try w.print(" {s}", .{@tagName(node.kind)});
             if (node.name) |name| try w.print(" {s}", .{ir.string(name)});
@@ -184,17 +217,17 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
         }
         for (0..ir.edges.len) |e| {
             const edge = ir.edges.get(e);
-            if (@intFromEnum(edge.zone) != z) continue;
+            if (@backingInt(edge.zone) != z) continue;
             try w.print("  edge {s} n{d} {s} n{d}\n", .{
                 ir.string(edge.name),
-                @intFromEnum(edge.source),
+                @backingInt(edge.source),
                 if (edge.directed) "->" else "--",
-                @intFromEnum(edge.target),
+                @backingInt(edge.target),
             });
         }
         for (0..ir.cells.len) |c| {
             const cell = ir.cells.get(c);
-            if (@intFromEnum(cell.zone) != z) continue;
+            if (@backingInt(cell.zone) != z) continue;
             try w.print("  cell {s} {s} => {s}\n", .{
                 ir.string(cell.name),
                 ir.edgeName(cell.source),
@@ -202,10 +235,20 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
             });
         }
     }
+    for (0..ir.issues.len) |i| {
+        const issue = ir.issues.get(i);
+        try w.print("issue e{d} ", .{issue.err});
+        switch (issue.subject) {
+            .node => |n| try w.print("node n{d}\n", .{@backingInt(n)}),
+            .edge => |e| try w.print("edge {s}\n", .{ir.edgeName(e)}),
+            .cell => |c| try w.print("cell {s}\n", .{ir.string(ir.cells.items(.name)[@backingInt(c)])}),
+            .zone => |z| try w.print("zone {s}\n", .{ir.string(ir.zones.items(.name)[@backingInt(z)])}),
+        }
+    }
 }
 
 fn edgeName(ir: Ir, e: EdgeIndex) []const u8 {
-    return ir.string(ir.edges.items(.name)[@intFromEnum(e)]);
+    return ir.string(ir.edges.items(.name)[@backingInt(e)]);
 }
 
 /// `+f` for a domain, `f+` for a codomain, as the format layer writes them.
@@ -245,8 +288,8 @@ test "a decision with an undirected edge: G :: #Valid? (f, g/)" {
     const f_name = try b.addString("f");
     const g_name = try b.addString("g");
     const n0 = try b.addNode(.{ .kind = .choice, .name = try b.addString("#Valid"), .zone = g, .canonical = null });
-    const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = g, .canonical = .{ .edge = @enumFromInt(0), .side = .cod } });
-    const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = g, .canonical = .{ .edge = @enumFromInt(1), .side = .cod } });
+    const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = g, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .cod } });
+    const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = g, .canonical = .{ .edge = @fromBackingInt(@intCast(1)), .side = .cod } });
     _ = try b.addEdge(.{ .name = f_name, .source = n0, .target = n1, .directed = true, .zone = g });
     _ = try b.addEdge(.{ .name = g_name, .source = n0, .target = n2, .directed = false, .zone = g });
 
@@ -270,14 +313,14 @@ test "two zones sharing a node, and a 2-cell" {
     errdefer b.deinit();
 
     const a = try b.addZone(.{ .name = try b.addString("A"), .own = null });
-    const n0 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @enumFromInt(0), .side = .dom } });
-    const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @enumFromInt(0), .side = .cod } });
+    const n0 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .dom } });
+    const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = n0, .target = n1, .directed = true, .zone = a });
     const g = try b.addEdge(.{ .name = try b.addString("g"), .source = n0, .target = n1, .directed = true, .zone = a });
     _ = try b.addCell(.{ .name = try b.addString("α"), .source = f, .target = g, .zone = a });
 
     const zb = try b.addZone(.{ .name = try b.addString("B"), .own = null });
-    const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = zb, .canonical = .{ .edge = @enumFromInt(2), .side = .dom } });
+    const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = zb, .canonical = .{ .edge = @fromBackingInt(@intCast(2)), .side = .dom } });
     _ = try b.addEdge(.{ .name = try b.addString("h"), .source = n2, .target = n1, .directed = true, .zone = zb });
 
     var ir = try b.finish();
@@ -306,7 +349,7 @@ test "a zone with an own node: User :: @ (id T.#UUID7)" {
     const uuid = try b.addNode(.{ .kind = .plain, .name = try b.addString("#UUID7"), .zone = t, .canonical = null });
     const user = try b.addZone(.{ .name = try b.addString("User"), .own = null });
     const at = try b.addNode(.{ .kind = .plain, .name = null, .zone = user, .canonical = null });
-    b.zones.items(.own)[@intFromEnum(user)] = at;
+    b.zones.items(.own)[@backingInt(user)] = at;
     _ = try b.addEdge(.{ .name = try b.addString("id"), .source = at, .target = uuid, .directed = true, .zone = user });
 
     var ir = try b.finish();

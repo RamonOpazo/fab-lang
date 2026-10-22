@@ -49,7 +49,7 @@ tight      = unit { ~ slash ~ unit } [ ~ slash ] ;     (* back edge         f/g 
 
 unit       = { prefix ~ } atom { ~ postfix } ;
 prefix     = plus | star ;                             (* +f  *f  *(f, g)            *)
-postfix    = plus | star | quod | bang ;               (* f+  f*  f?  f!  (g, h)!    *)
+postfix    = plus | star | quid | bang ;               (* f+  f*  f?  f!  (g, h)!    *)
 
 atom       = edge_id                                   (* f, h', α                   *)
            | node_id                                   (* #A                         *)
@@ -115,7 +115,7 @@ interp     = l_brace unit attr r_brace ;               (* {.edge+ :snakecase}   
    star    else touching the right   prefix            +f  *f
            touching neither          error node        + f
 
-   quod,   must touch the left       postfix           f?  f!
+   quid,   must touch the left       postfix           f?  f!
    bang
 
    dot     must touch both sides                       A.+f  .node.id

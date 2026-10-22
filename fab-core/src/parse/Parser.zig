@@ -87,9 +87,12 @@ fn parseRoot(p: *Parser) Error!void {
     p.skipEols();
     while (p.cur() != .eof) {
         const start = p.tok_i;
+        const scratch_top = p.scratch.items.len;
         const statement = p.parseStatement() catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ParseError => blk: {
+                // Lists left half-built by the failure must not leak into ours.
+                p.scratch.shrinkRetainingCapacity(scratch_top);
                 p.recover(false);
                 break :blk try p.addLeafLike(.invalid, start);
             },
@@ -258,9 +261,12 @@ fn parseBlock(p: *Parser) Error!Node.Index {
     p.skipEols();
     while (p.cur() != .r_brace and p.cur() != .eof) {
         const start = p.tok_i;
+        const scratch_top = p.scratch.items.len;
         const entry = p.parseEntry() catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             error.ParseError => blk: {
+                // Lists left half-built by the failure must not leak into ours.
+                p.scratch.shrinkRetainingCapacity(scratch_top);
                 p.recover(true);
                 break :blk try p.addLeafLike(.invalid, start);
             },
@@ -449,7 +455,7 @@ fn startsUnit(p: *Parser) bool {
 // building nodes
 
 fn addNode(p: *Parser, tag: Node.Tag, main_token: TokenIndex, data: Node.Data) Error!Node.Index {
-    const index: Node.Index = @enumFromInt(p.nodes.len);
+    const index: Node.Index = @fromBackingInt(@intCast(p.nodes.len));
     try p.nodes.append(p.gpa, .{ .tag = tag, .main_token = main_token, .data = data });
     return index;
 }
@@ -471,7 +477,7 @@ fn listFrom(p: *Parser, top: usize) Error!Cst.Range {
 /// A list with a closing token: block, attr_block.
 fn addBraced(p: *Parser, tag: Node.Tag, open: TokenIndex, top: usize, close: TokenIndex) Error!Node.Index {
     const range = try p.listFrom(top);
-    const index: Cst.ExtraIndex = @enumFromInt(p.extra.items.len);
+    const index: Cst.ExtraIndex = @fromBackingInt(@intCast(p.extra.items.len));
     try p.extra.appendSlice(p.gpa, &.{ range.start, range.end, close });
     return p.addNode(tag, open, .{ .extra = index });
 }
@@ -864,6 +870,16 @@ test "recovery: one bad statement doesn't hide the next" {
     try testing.expectEqual(Node.Tag.invalid, cst.tag(statements[1]));
     try testing.expectEqual(Node.Tag.relations, cst.tag(statements[2]));
     try testing.expectEqualStrings("J", cst.tokenText(cst.mainToken(statements[2])));
+}
+
+test "recovery: a failure inside a nested list leaves no stray nodes" {
+    // The path inside the group fails at `.#B`, half-built.
+    var cst = try parse(testing.allocator, "G :: f* @ (id #A.#B, g)\nH :: k");
+    defer cst.deinit(testing.allocator);
+    const statements = cst.children(.root);
+    try testing.expectEqual(@as(usize, 2), statements.len);
+    try testing.expectEqual(Node.Tag.invalid, cst.tag(statements[0]));
+    try testing.expectEqual(Node.Tag.relations, cst.tag(statements[1]));
 }
 
 test "recovery inside a block keeps the other entries" {

@@ -1,0 +1,5 @@
+Sq   :: f h, +f/g k/h+          // commutative square: f;h and g;k from A to D
+Tri  :: f g, +f/h/g+            // triangle: f;g and h from A to C
+Iso  :: f/g                     // f : A → B, g : B → A
+Endo :: f/f                     // f : A → A
+Pair :: f, +f/g/f+              // parallel pair f, g : A ⇉ B

@@ -1,0 +1,17 @@
+.{
+    .name = .fab_cli,
+    .version = "0.0.0",
+    .fingerprint = 0x7189c9a949662d0c, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .fab_core = .{ .path = "../fab-core" },
+        .fab_render = .{ .path = "../fab-render" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

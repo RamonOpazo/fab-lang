@@ -1,0 +1,29 @@
+Repo :: (
+  *init readme #Fork (fix #Main, login session #Feature),
+  (#Main merge, #Feature merge') #Merged bump #V1 (hotfix #Head, spike #Spike)
+)
+
+Repo :format {
+  Repo :layout layered  :direction right
+  .node :shape point
+  .ref  :shape round  :fill muted
+  #Head    :class ref  :label "main"
+  #Feature :class ref  :label "feature/auth"
+  #V1      :class ref  :label "v1.0"
+  #Spike   :class ref  :label "spike/cache"
+  init    :label "a1f3 init"
+  readme  :label "b27c add readme"
+  fix     :label "c90e fix typo"
+  login   :label "d4a1 login form"
+  session :label "e5b2 sessions"
+  merge   :label "f6c3 merge feature/auth"
+  merge'  :arrow -->
+  bump    :label "0a7d bump to 1.0"
+  hotfix  :label "1b8e hotfix"
+  spike   :label "2c9f try cache"
+}
+
+Repo :proof {
+  fix merge = login session merge'     // both paths from the fork reach the same state
+  #Merged :pushout                      // the merge is clean: the least common state
+}

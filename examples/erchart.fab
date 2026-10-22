@@ -1,0 +1,40 @@
+T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
+
+User         :: @ (id T.#UUID7, email T.#String, nick T.#String, name T.#String, created_at T.#DTZ)
+Organization :: @ (id T.#UUID7, name T.#String)
+Membership   :: @ (id T.#UUID7, user_id T.#UUID7, org_id T.#UUID7, admin T.#Bool)
+Project      :: @ (id T.#UUID7, org_id T.#UUID7, name T.#String)
+Document     :: @ (id T.#UUID7, project_id T.#UUID7, author_id T.#UUID7, title T.#String, body T.#JSONB)
+Comment      :: @ (id T.#UUID7, document_id T.#UUID7, author_id T.#UUID7, parent_id T.#UUID7, text T.#Text)
+Tag          :: @ (id T.#UUID7, label T.#String)
+Tagging      :: @ (id T.#UUID7, document_id T.#UUID7, tag_id T.#UUID7)
+
+Db :: (
+  Membership (member User, within Organization),
+  Project under Organization,
+  Document (in_project Project, author User),
+  Comment (on Document, writer User, reply_to Comment),
+  Tagging (tagged Document, tag Tag)
+)
+
+Db :proof {
+  .node.id :pk
+  .edge :by {.edge+ :snakecase}_id  :card 0..* 1
+
+  User.(email, nick)! :unique
+  Tag.label :unique
+  Membership.(user_id, org_id)! :unique
+  Tagging.(document_id, tag_id)! :unique
+  Comment.parent_id :nullable
+
+  within     :by org_id
+  under      :by org_id
+  author     :by author_id
+  writer     :by author_id
+  reply_to   :by parent_id  :card 0..* 0..1
+
+  reply_to on = on      // a reply is on the same document as its parent
+}
+
+User :format { User :label "users"  :fill muted }
+Db :format   { Db :layout layered  :direction right }

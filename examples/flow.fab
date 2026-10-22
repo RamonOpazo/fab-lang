@@ -1,0 +1,5 @@
+If    :: f? (fg g, fh h)? k              // decision, two branches, merge
+While :: f? (b/f+, e)                    // body b returns to the test; e exits
+Exit  :: f? (fg g*, fh h) k              // g's branch stops; only h continues to k
+Loop  :: f? (fg g/g, fh h/h' k/+f)       // k : N4 → dom(f)
+Par   :: *s! (a, b)! t*                  // start, fork, two parallel branches, join, stop

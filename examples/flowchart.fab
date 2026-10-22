@@ -1,0 +1,21 @@
+Order :: *receive #Received validate #Valid? (
+    yes #Accepted! (
+        charge #Charged? (paid, declined #Waiting retry/charge+)
+      , reserve #InStock? (reserved, short #Backorder restock/reserve+)
+    )! #Ready ship #Shipped close*
+  , no #Rejected notify*
+)
+
+Order :format {
+  #Received  :label "Order received"
+  #Valid     :label "Valid?"
+  #Charged   :label "Payment accepted?"
+  #Waiting   :label "Wait 10 min"
+  #InStock   :label "In stock?"
+  #Backorder :label "Backorder"
+  #Shipped   :label "Shipped"
+  #Rejected  :label "Rejected"
+  yes, paid, reserved  :label "yes"
+  no, declined, short  :label "no"
+  retry, restock       :arrow -->  :label "retry"
+}
