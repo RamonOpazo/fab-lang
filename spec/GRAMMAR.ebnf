@@ -1,0 +1,137 @@
+(* fAB grammar: the language the parser accepts.
+
+   This is a deliberate superset of valid fAB. The parser builds a tree for
+   anything with a recognisable shape; the analyser rejects what the spec
+   forbids (bare references in relations, prefix /, a path used as a key, …).
+
+   Terminals are Token.Tag names: edge_id, slash, l_paren, …
+   Comments (//) and whitespace are trivia and never appear here.
+
+   Notation
+     a b       a then b
+     a | b     a or b
+     [ a ]     optional
+     { a }     zero or more
+     a ~ b     b touches a: it starts exactly where a ends, with no whitespace
+               or comment between. Where ~ is not written, whitespace is free.
+
+   Newlines
+     Inside ( ) and [ ] the parser skips eol tokens, so a term may span lines.
+     Everywhere else eol is significant and is written explicitly below.
+*)
+
+
+(* ---------------------------------------------------------------- program *)
+
+program    = { eol } [ statement { eols statement } ] { eol } eof ;
+eols       = eol { eol } ;
+
+statement  = zone_id decl term                         (* relations   G :: f g h      *)
+           | zone_id attr_id block                     (* a layer     G :format { … } *)
+           ;                                           (*             G :proof  { … } *)
+
+(* A layer is an attribute of its zone whose value is a block. The dot is
+   kept for qualification only: G.format would be the edge format in G. *)
+
+
+(* ------------------------------------------------------------------ terms *)
+
+(* Precedence, loosest first: comma, juxtaposition, tight operators, dot. *)
+
+term       = path { comma path } ;                     (* disjoint union    s, t     *)
+path       = tight { tight } ;                         (* juxtaposition     s t      *)
+
+tight      = unit { ~ slash ~ unit } [ ~ slash ] ;     (* back edge         f/g      *)
+                                                       (* left to right: +f/h/g+ is
+                                                          (+f/h)/g+                  *)
+                                                       (* trailing slash:   f/  is
+                                                          an undirected edge         *)
+
+unit       = { prefix ~ } atom { ~ postfix } ;
+prefix     = plus | star ;                             (* +f  *f  *(f, g)            *)
+postfix    = plus | star | quod | bang ;               (* f+  f*  f?  f!  (g, h)!    *)
+
+atom       = edge_id                                   (* f, h', α                   *)
+           | node_id                                   (* #A                         *)
+           | at                                        (* @                          *)
+           | zone_id [ ~ dot ~ unit ]                  (* User, A.+f, T.#UUID7,
+                                                          User.@, User.(a, b)!       *)
+           | class                                     (* .iso, .edge, .node.id      *)
+           | l_paren term r_paren                      (* a group                    *)
+           | l_brack term r_brack                      (* edge-to-edge relations;
+                                                          they nest: [[ … ]]         *)
+           ;
+
+class      = dot ~ edge_id { ~ dot ~ edge_id } ;
+
+
+(* ----------------------------------------------------------------- layers *)
+
+(* One grammar serves both layers. Which entries make sense in which layer,
+   and which attribute names (:format, :proof) open a layer at all, is the
+   analyser's concern. *)
+
+block      = l_brace { eol } [ entry { eols entry } ] { eol } r_brace ;
+
+entry      = term attrs                                (* f, g :stroke muted         *)
+           | term relation term                        (* f h == g k                 *)
+           ;
+relation   = iden | cong ;                             (* ==  ~=                     *)
+
+attrs      = attr { attr }                             (* inline:  f :label "x"      *)
+           | l_brace { attr | eol } r_brace ;          (* block:   +f { … }          *)
+
+attr       = attr_id { value } ;
+
+value      = number                                    (* 30, 0.5, 0xc0392b          *)
+           | card                                      (* 0..*, 0..1                 *)
+           | string                                    (* "Order received"           *)
+           | math                                      (* $\cong$                    *)
+           | arrow                                     (* [->>]                      *)
+           | ref                                       (* left, double-circle,
+                                                          user_id, User.id,
+                                                          {.edge+ :snakecase}_id     *)
+           ;
+
+card       = number ~ range ~ ( number | star ) ;
+
+ref        = segment { ~ segment } ;
+segment    = unit | interp ;
+interp     = l_brace unit attr r_brace ;               (* {.edge+ :snakecase}        *)
+
+
+(* ------------------------------------------------------ attachment rules *)
+
+(* The ~ marks above fix how tight operators attach. Where a token could
+   attach either way, these rules decide:
+
+   slash   touching both sides       binary            f/g
+           touching the left only    postfix           f/ g    (undirected f)
+           touching the right only   error node        f /g    (/ has no prefix
+                                                                 form)
+           touching neither          error node        f / g
+
+   plus,   touching the left         postfix           f+  f*
+   star    else touching the right   prefix            +f  *f
+           touching neither          error node        + f
+
+   quod,   must touch the left       postfix           f?  f!
+   bang
+
+   dot     must touch both sides                       A.+f  .node.id
+
+   When plus or star touches both sides, postfix wins: f+g reads as f+ g,
+   which the analyser then rejects as a bare reference.
+
+   A postfix operator that also touches what follows does not join it:
+   f?(g, h) is f? (g, h), as the spec requires.
+*)
+
+
+(* ------------------------------------------------------------- still open *)
+
+(* header     The spec's header (kind, strictness, boundary) has no syntax yet.
+   defn       The := token is lexed but appears in no production yet.
+   cong       ~= is accepted in entries; its meaning (isomorphism of objects,
+              or commuting up to an invertible 2-cell) is not yet fixed.
+*)
