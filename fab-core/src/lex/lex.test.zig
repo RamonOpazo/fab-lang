@@ -74,26 +74,24 @@ test "whitespace decides attachment" {
 }
 
 test "names are classified by their first character" {
-    const source = "h' merge' user_id α double-circle _id #UUID7 #A User T A'";
+    const source = "h' merge' user_id α _id #UUID7 #A User T A'";
     try expectTags(source, &.{
-        .edge_id, .edge_id, .edge_id, .edge_id, .edge_id, .edge_id,
+        .edge_id, .edge_id, .edge_id, .edge_id, .edge_id,
         .node_id, .node_id, .zone_id, .zone_id, .zone_id,
     });
-    try expectTexts(source, &.{
-        "h'",            "merge'", "user_id",
-        "α",
-        "double-circle", "_id",    "#UUID7",
-        "#A",            "User",   "T",
-        "A'",
-    });
+    try expectTexts(source, &.{ "h'", "merge'", "user_id", "α", "_id", "#UUID7", "#A", "User", "T", "A'" });
+}
+
+test "an edge name ends at a hyphen" {
+    try expectTags("double-circle", &.{ .edge_id, .invalid, .edge_id });
 }
 
 test "a # not followed by an uppercase letter is invalid" {
-    try expectTags("#a # #1", &.{ .invalid, .edge_id, .invalid, .invalid, .number });
+    try expectTags("#a # #1", &.{ .invalid, .edge_id, .invalid, .invalid, .invalid });
 }
 
 test "an & not followed by a lowercase letter is invalid" {
-    try expectTags("&a &A & &1", &.{ .class_id, .invalid, .zone_id, .invalid, .invalid, .number });
+    try expectTags("&a &A & &1", &.{ .class_id, .invalid, .zone_id, .invalid, .invalid, .invalid });
 }
 
 test "classes" {
@@ -108,28 +106,27 @@ test "colons" {
     try expectTexts(":label :label-start", &.{ ":label", ":label-start" });
 }
 
-test "arrows and 2-cells" {
-    try expectTags("[->>] [||-0{] [<@>-] [-/->] [..]", &.{ .arrow, .arrow, .arrow, .arrow, .arrow });
-    try expectTexts("[||-0{] [(->]", &.{ "[||-0{]", "[(->]" });
-
-    // 2-cells: brackets around names
-    try expectTags("[f α g]", &.{ .l_brack, .edge_id, .edge_id, .edge_id, .r_brack });
-    try expectTags("[*f]", &.{ .l_brack, .star, .edge_id, .r_brack });
-
-    // not arrows: empty brackets, whitespace inside
-    try expectTags("[]", &.{ .l_brack, .r_brack });
-    try expectTags("[- >]", &.{ .l_brack, .invalid, .invalid, .r_brack });
+test "a value is one token" {
+    try expectTags("[red] [0..*/1] [/dashed/>] [||-0{] [2] [#ff0000]", &.{ .val, .val, .val, .val, .val, .val });
+    try expectTexts("[0..*/0..1] [(->]", &.{ "[0..*/0..1]", "[(->]" });
 }
 
-test "an arrow's braces don't disturb bracket matching" {
-    try expectTags("f { :arrow [||-0{] }", &.{ .edge_id, .l_cur, .attr_id, .arrow, .r_cur });
+test "not a value: an empty bracket, whitespace, a [ inside, no ]" {
+    try expectTags("[]", &.{ .invalid, .invalid });
+    try expectTags("[- >]", &.{ .invalid, .invalid, .invalid, .invalid });
+    try expectTags("[f α g]", &.{ .invalid, .edge_id, .edge_id, .edge_id, .invalid });
+    try expectTags("[a[b]", &.{ .invalid, .edge_id, .val });
+    try expectTags("[red", &.{ .invalid, .edge_id });
 }
 
-test "numbers and ranges" {
-    try expectTags("0..* 0..1 0.5 30 0xc0392b", &.{
-        .number, .range, .star, .number, .range, .number, .number, .number, .number,
-    });
-    try expectTexts("0.5 0xc0392b 0x", &.{ "0.5", "0xc0392b", "0", "x" });
+test "a value's braces don't disturb brace matching" {
+    try expectTags("f { :arrow [||-0{] }", &.{ .edge_id, .l_cur, .attr_id, .val, .r_cur });
+}
+
+test "a number outside a value is invalid" {
+    try expectTags("30 0.5 1abc", &.{ .invalid, .invalid, .dot, .invalid, .invalid });
+    try expectTexts("30 1abc", &.{ "30", "1abc" });
+    try expectTags("0..*", &.{ .invalid, .dot, .dot, .star });
 }
 
 test "strings and math" {
@@ -154,11 +151,11 @@ test "comments and newlines" {
 }
 
 test "every operator" {
-    try expectTags("/ + * ? ! @ . .. == ~= , | ( ) ] { }", &.{
-        .slash, .plus, .star,  .quid,  .bang,    .at,    .dot,   .range, .iden, .cong,
-        .comma, .bar,  .l_par, .r_par, .r_brack, .l_cur, .r_cur,
+    try expectTags("/ + * ? ! @ . == ~= , | ( ) { }", &.{
+        .slash, .plus,  .star, .quid,  .bang,  .at,    .dot,   .iden,
+        .cong,  .comma, .bar,  .l_par, .r_par, .l_cur, .r_cur,
     });
-    try expectTags("= ~ - ; %", &.{ .invalid, .invalid, .invalid, .invalid, .invalid });
+    try expectTags("= ~ - ; % ]", &.{ .invalid, .invalid, .invalid, .invalid, .invalid, .invalid });
 }
 
 test "eof repeats" {
@@ -170,33 +167,106 @@ test "eof repeats" {
 
 test "the spec's larger examples lex with no invalid tokens" {
     const examples = [_][:0]const u8{
-        \\Order :: *receive #Received validate #Valid? (
-        \\    yes #Accepted! (
-        \\        charge #Charged? (paid, declined #Waiting retry/charge+)
-        \\      , reserve #InStock? (reserved, short #Backorder restock/reserve+)
-        \\    )! #Ready ship #Shipped close*
-        \\  , no #Rejected notify*
-        \\)
+        \\Order :: {
+        \\  */receive/#Received validate ?(
+        \\      yes/#Accepted fork !(
+        \\          charge ?(paid, declined/#Waiting/retry)
+        \\        , reserve ?(reserved, short/#Backorder/restock)
+        \\      )! ready/#Ready ship/#Shipped close/*
+        \\    , no/#Rejected notify/*
+        \\  )
+        \\}
         \\
-        \\Order.format {
-        \\  #Received  :label "Order received"
-        \\  retry, restock       :arrow [-->]  :label "retry"
+        \\Order :style := {
+        \\  #Received  :label "Order received",
+        \\  validate+  :label "Valid?",
+        \\  charge+    :label "Payment accepted?",
+        \\  #Waiting   :label "Wait 10 min",
+        \\  reserve+   :label "In stock?",
+        \\  #Shipped   :label "Shipped",
+        \\  #Rejected  :label "Rejected",
+        \\  (yes, paid, reserved)  :label "yes",
+        \\  (no, declined, short)  :label "no",
+        \\  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
         \\}
         ,
-        \\Db.proof {
-        \\  .node.id :pk
-        \\  .edge :by {.edge+ :snakecase}_id  :card 0..* 1
-        \\  User.(email, nick)! :unique
-        \\  reply_to   :by parent_id  :card 0..* 0..1
-        \\  reply_to on == on
+        \\T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
+        \\
+        \\User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+        \\Organization :: @/(id/T.#UUID7, name/T.#String)
+        \\Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
+        \\Project      :: @/(id/T.#UUID7, name/T.#String)
+        \\Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+        \\Comment      :: @/(id/T.#UUID7, text/T.#Text)
+        \\Tag          :: @/(id/T.#UUID7, label/T.#String)
+        \\Tagging      :: @/(id/T.#UUID7)
+        \\
+        \\Db :: {
+        \\  Membership/(user/User, org/Organization),
+        \\  Project/owner/Organization,
+        \\  Document/(project/Project, author/User),
+        \\  Comment/(document/Document, writer/User, parent/Comment),
+        \\  Tagging/(doc/Document, tag/Tag)
+        \\}
+        \\
+        \\Db :kind := [schema]
+        \\
+        \\Db :prove := {
+        \\  &node.id :pk,
+        \\  &edge :card [0..*/1],
+        \\
+        \\  User.(email, nick)! :uk,
+        \\  Tag.label :uk,
+        \\  (user, org)! :uk,
+        \\  (doc, tag)! :uk,
+        \\
+        \\  parent :nullable :card [0..*/0..1],
+        \\  parent document == document         // a reply is on the same document as its parent
+        \\}
+        \\
+        \\Db :style := writer :label "author_id"
+        \\User :style := :label "users"  :fill [muted]
+        ,
+        \\Repo :: {
+        \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
+        \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
+        \\}
+        \\
+        \\:ref := :shape [round]  :fill [muted]
+        \\
+        \\Repo :style := {
+        \\  &node :shape [point],
+        \\  #Head    :ref  :label "main",
+        \\  #Feature :ref  :label "feature/auth",
+        \\  #V1      :ref  :label "v1.0",
+        \\  #Spike   :ref  :label "spike/cache",
+        \\  init    :label "a1f3 init",
+        \\  readme  :label "b27c add readme",
+        \\  fix     :label "c90e fix typo",
+        \\  login   :label "d4a1 login form",
+        \\  session :label "e5b2 sessions",
+        \\  merge   :label "f6c3 merge feature/auth",
+        \\  merge'  :arrow [/dashed/>],
+        \\  bump    :label "0a7d bump to 1.0",
+        \\  hotfix  :label "1b8e hotfix",
+        \\  spike   :label "2c9f try cache"
+        \\}
+        \\
+        \\Repo :prove := {
+        \\  fix merge == login session merge',   // both paths from the fork reach the same state
+        \\  #Merged :pushout                      // the merge is clean: the least common state
         \\}
         ,
-        \\Nat :: f, +f/g/f+, [f α g]
-        \\Sq.format {
-        \\  .iso { :arrow [->]  :label $\cong$ }
-        \\  f    :class iso
-        \\  g, k :stroke 0x888888
-        \\}
+        \\Sq   :: +(f h, g k)+              // a square: f;h and g;k from A to D
+        \\Tri  :: +(f g, h)+                // a triangle: f;g and h from A to C
+        \\Iso  :: f/g                       // f : A → B, g : B → A
+        \\Endo :: f/f                       // f : A → A
+        \\Und  :: f/                        // f connects A and B, in no direction
+        \\Cyc  :: f/g/h                     // a directed triangle: f, g, then h back to A
+        \\Pair :: +(f, g)+                  // a parallel pair f, g : A ⇉ B
+        \\Nat  :: +(f, g)+ | f/α/g          // a natural transformation α : f ⇒ g
+        \\Eq   :: +(f, g)+ | f/α/g/β        // α : f ⇒ g and β : g ⇒ f
+        \\Pr   :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)   // the universal property of a product
         ,
     };
     for (examples) |source| {

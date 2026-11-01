@@ -186,6 +186,9 @@ test "every circle has the size of the longest label" {
 }
 
 test "cells are left out, with one note each" {
+    // Cells are written with `|` from step 7 (CLAUDE.md); until then no
+    // source makes one. The test comes back then, with `Iso :: +(f, g)+ | f/α/g/β`.
+    if (true) return error.SkipZigTest;
     var c = try fab.Compilation.init(testing.allocator, "Iso :: f, +f/g/f+, [f α/β g]", preview);
     defer c.deinit();
     const sheet = (try c.sheet()).?;

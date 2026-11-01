@@ -215,7 +215,6 @@ fn parseAtom(p: *Parser) Error!Node.Index {
         },
         .dot => return p.parseClass(),
         .l_par => return p.parseEnclosed(.group, .r_par),
-        .l_brack => return p.parseEnclosed(.cells, .r_brack),
         else => return p.fail(.expected_atom, .invalid),
     }
 }
@@ -335,29 +334,15 @@ fn parseAttr(p: *Parser) Error!Node.Index {
 
 fn startsValue(p: *Parser) bool {
     return switch (p.cur()) {
-        .number, .str, .math, .arrow, .l_cur => true,
+        .str, .math, .val, .l_cur => true,
         else => p.startsUnit(),
     };
 }
 
-/// value = number | card | string | math | arrow | ref
+/// value = str | math | val | ref
 fn parseValue(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .number => {
-            const number = p.next();
-            if (p.cur() != .range or !p.touchesPrev()) return p.addLeafLike(.leaf, number);
-            // card = number ~ range ~ ( number | star )
-            _ = p.next();
-            switch (p.cur()) {
-                .number, .star => if (p.touchesPrev()) {
-                    _ = p.next();
-                    return p.addLeafLike(.card, number);
-                },
-                else => {},
-            }
-            return p.fail(.expected_token, .number);
-        },
-        .str, .math, .arrow => return p.addLeafLike(.leaf, p.next()),
+        .str, .math, .val => return p.addLeafLike(.leaf, p.next()),
         else => return p.parseRef(),
     }
 }
@@ -445,7 +430,7 @@ fn touchesNext(p: *Parser) bool {
 /// Could the current token begin a unit?
 fn startsUnit(p: *Parser) bool {
     return switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .at, .dot, .l_par, .l_brack => true,
+        .edge_id, .node_id, .zone_id, .at, .dot, .l_par => true,
         .plus, .star => p.touchesNext(),
         else => false,
     };
@@ -529,8 +514,8 @@ fn recover(p: *Parser, stop_at_r_cur: bool) void {
         switch (p.tags[p.tok_i]) {
             .eof => return,
             .eol => if (depth == 0) return,
-            .l_par, .l_brack, .l_cur => depth += 1,
-            .r_par, .r_brack, .r_cur => |t| {
+            .l_par, .l_cur => depth += 1,
+            .r_par, .r_cur => |t| {
                 if (depth > 0) {
                     depth -= 1;
                 } else if (stop_at_r_cur and t == .r_cur) {

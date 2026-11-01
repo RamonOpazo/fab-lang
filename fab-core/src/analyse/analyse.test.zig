@@ -200,25 +200,6 @@ test "a cross-zone reference reaches into another zone's node" {
     );
 }
 
-test "edge-to-edge relations" {
-    try expectIr("Nat :: f, +f/g/f+, [f α g]\nIso :: f, +f/g/f+, [f α/β g]",
-        \\zone Nat
-        \\  node n0 canon +f
-        \\  node n1 canon f+
-        \\  edge f n0 -> n1
-        \\  edge g n0 -> n1
-        \\  cell α f => g
-        \\zone Iso
-        \\  node n2 canon +f
-        \\  node n3 canon f+
-        \\  edge f n2 -> n3
-        \\  edge g n2 -> n3
-        \\  cell α f => g
-        \\  cell β g => f
-        \\
-    );
-}
-
 test "the spec's flowchart" {
     try expectIr(
         \\Order :: *receive #Received validate #Valid? (
@@ -311,10 +292,4 @@ test "errors: names and own nodes" {
     try expectError("G :: #A #B", .node_named_twice, "#B");
     try expectError("G :: @ f @", .two_own_nodes, "@");
     try expectError("G :: .iso f", .class_in_relations, ".");
-}
-
-test "errors: edge-to-edge relations" {
-    try expectError("Sq :: f h, +f/g k/h+, [f α h]", .cells_not_parallel, "α");
-    try expectError("G :: f, +f/g/f+, [α β]", .inner_node_not_an_edge, "α");
-    try expectError("G :: f, +f/g/f+, [f g]", .two_edges_in_one_node, "g");
 }

@@ -165,30 +165,6 @@ test "qualified names, named nodes and the own node" {
     );
 }
 
-test "edge-to-edge relations" {
-    try expectDump("Nat :: f, +f/g/f+, [f α/β g]",
-        \\root
-        \\  relations Nat
-        \\    sum
-        \\      leaf edge_id f
-        \\      slash /
-        \\        slash /
-        \\          prefix +
-        \\            leaf edge_id f
-        \\          leaf edge_id g
-        \\        postfix +
-        \\          leaf edge_id f
-        \\      cells
-        \\        path
-        \\          leaf edge_id f
-        \\          slash /
-        \\            leaf edge_id α
-        \\            leaf edge_id β
-        \\          leaf edge_id g
-        \\
-    );
-}
-
 test "newlines inside parentheses are insignificant" {
     try expectDump(
         \\G :: f? (
@@ -216,7 +192,7 @@ test "a format layer" {
     try expectDump(
         \\G :format {
         \\  .iso { :arrow [->]  :label $\cong$ }
-        \\  f, g :class iso  :bend left 30
+        \\  f, g :class iso  :bend left [30]
         \\  +f {
         \\    :label $\mathbb{R}$
         \\  }
@@ -229,7 +205,7 @@ test "a format layer" {
         \\        class .iso
         \\        attr_block
         \\          attr :arrow
-        \\            leaf arrow [->]
+        \\            leaf val [->]
         \\          attr :label
         \\            leaf math $\cong$
         \\      entry
@@ -241,7 +217,7 @@ test "a format layer" {
         \\            leaf edge_id iso
         \\          attr :bend
         \\            leaf edge_id left
-        \\            leaf number 30
+        \\            leaf val [30]
         \\      entry
         \\        prefix +
         \\          leaf edge_id f
@@ -255,7 +231,7 @@ test "a format layer" {
 test "a proof layer" {
     try expectDump(
         \\Db :proof {
-        \\  .edge :by {.edge+ :snakecase}_id  :card 0..* 1
+        \\  .edge :by {.edge+ :snakecase}_id  :card [0..*/1]
         \\  User.(email, nick)! :unique
         \\  reply_to on == on
         \\}
@@ -274,8 +250,7 @@ test "a proof layer" {
         \\                attr :snakecase
         \\              leaf edge_id _id
         \\          attr :card
-        \\            card 0..*
-        \\            leaf number 1
+        \\            leaf val [0..*/1]
         \\      entry
         \\        qualified User
         \\          postfix !
@@ -314,7 +289,6 @@ test "other syntax errors" {
     try expectErrors("f :: g", &.{.{ .expected_statement, "f" }});
     try expectErrors("G :: (f g", &.{.{ .expected_token, "" }});
     try expectErrors("G :format {\n  f\n}", &.{.{ .expected_attrs_or_relation, "\n" }});
-    try expectErrors("G :format {\n  f :card 0..\n}", &.{.{ .expected_token, "\n" }});
 }
 
 test "recovery: one bad statement doesn't hide the next" {
@@ -393,10 +367,10 @@ test "the spec's larger examples parse with no errors" {
         \\
         \\Db :proof {
         \\  .node.id :pk
-        \\  .edge :by {.edge+ :snakecase}_id  :card 0..* 1
+        \\  .edge :by {.edge+ :snakecase}_id  :card [0..*/1]
         \\  Membership.(user_id, org_id)! :unique
         \\  Comment.(post_id, photo_id)? :required
-        \\  reply_to   :by parent_id  :card 0..* 0..1
+        \\  reply_to   :by parent_id  :card [0..*/0..1]
         \\  reply_to on == on
         \\}
         \\

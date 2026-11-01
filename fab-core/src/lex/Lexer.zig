@@ -44,7 +44,7 @@ pub fn next(self: *Lexer) Token {
         '\n' => self.one(.eol),
 
         // names
-        'a'...'z', '_', 0x80...0xff => self.name(.edge_id, true),
+        'a'...'z', '_', 0x80...0xff => self.name(.edge_id, false),
         'A'...'Z' => self.name(.zone_id, false),
         '#' => if (isUpper(self.peek(1))) blk: {
             self.index += 1;
@@ -64,11 +64,13 @@ pub fn next(self: *Lexer) Token {
             else => self.one(.invalid),
         },
 
+        // a name can't start with a digit, so a number outside a value is invalid
+        '0'...'9' => self.name(.invalid, false),
+
         // literals
-        '0'...'9' => self.number(),
         '"' => self.delimited('"', .str),
         '$' => self.delimited('$', .math),
-        '[' => self.bracket(),
+        '[' => self.value(),
 
         // operators
         '/' => self.one(.slash),
@@ -77,7 +79,7 @@ pub fn next(self: *Lexer) Token {
         '?' => self.one(.quid),
         '!' => self.one(.bang),
         '@' => self.one(.at),
-        '.' => if (self.peek(1) == '.') self.two(.range) else self.one(.dot),
+        '.' => self.one(.dot),
         '=' => if (self.peek(1) == '=') self.two(.iden) else self.one(.invalid),
         '~' => if (self.peek(1) == '=') self.two(.cong) else self.one(.invalid),
 
@@ -86,7 +88,6 @@ pub fn next(self: *Lexer) Token {
         '|' => self.one(.bar),
         '(' => self.one(.l_par),
         ')' => self.one(.r_par),
-        ']' => self.one(.r_brack),
         '{' => self.one(.l_cur),
         '}' => self.one(.r_cur),
 
@@ -122,29 +123,13 @@ fn two(self: *Lexer, tag: Tag) Tag {
 }
 
 /// A name whose first character has already been checked by the caller.
-/// Edge and attribute names may also contain `-` (`double-circle`, `:label-start`).
+/// Attribute names may also contain `-` (`:label-start`).
 fn name(self: *Lexer, tag: Tag, allow_hyphen: bool) Tag {
     self.index += 1;
     while (true) {
         const c = self.peek(0);
         if (isNameBody(c) or (allow_hyphen and c == '-')) self.index += 1 else return tag;
     }
-}
-
-/// `20`, `0.5`, `0xc0392b`. A `.` is taken only when a digit follows,
-/// so `0..1` is `0`, `..`, `1`.
-fn number(self: *Lexer) Tag {
-    if (self.peek(0) == '0' and (self.peek(1) == 'x' or self.peek(1) == 'X') and isHex(self.peek(2))) {
-        self.index += 2;
-        while (isHex(self.peek(0))) self.index += 1;
-        return .number;
-    }
-    while (isDigit(self.peek(0))) self.index += 1;
-    if (self.peek(0) == '.' and isDigit(self.peek(1))) {
-        self.index += 1;
-        while (isDigit(self.peek(0))) self.index += 1;
-    }
-    return .number;
 }
 
 /// `"…"` and `$…$`. A backslash escapes the next character, so `\"`, `\$`
@@ -163,18 +148,21 @@ fn delimited(self: *Lexer, close: u8, tag: Tag) Tag {
     }
 }
 
-/// At `[`: if only arrow glyphs follow, up to a `]`, the whole bracket is one
-/// `.arrow` token. Otherwise this is an ordinary `[`, as in `[f α g]`.
-/// Arrow glyphs never include letters, and every 2-cell term contains a name,
-/// so the two cases can't be confused.
-fn bracket(self: *Lexer) Tag {
+/// At `[`: a value, `[red]`, `[0..*/1]`, `[/dashed/>]`, is one token up to
+/// the first `]`. Its contents are read later, by the attribute that takes it.
+/// Whitespace, a `[`, an empty bracket or a missing `]` make the `[` invalid.
+fn value(self: *Lexer) Tag {
     var i = self.index + 1;
-    while (isArrowGlyph(self.at(i))) i += 1;
-    if (i > self.index + 1 and self.at(i) == ']') {
-        self.index = i + 1;
-        return .arrow;
-    }
-    return self.one(.l_brack);
+    while (true) : (i += 1) switch (self.at(i)) {
+        ']' => {
+            if (i == self.index + 1) break;
+            self.index = i + 1;
+            return .val;
+        },
+        0, ' ', '\t', '\r', '\n', '[' => break,
+        else => {},
+    };
+    return self.one(.invalid);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,21 +193,10 @@ fn isDigit(c: u8) bool {
     return c >= '0' and c <= '9';
 }
 
-fn isHex(c: u8) bool {
-    return isDigit(c) or (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F');
-}
-
 /// Letters, digits, `_`, `'`, and any non-ASCII byte, so UTF-8 names like `α`
 /// lex as one name without Unicode tables.
 fn isNameBody(c: u8) bool {
     return std.ascii.isAlphanumeric(c) or c == '_' or c == '\'' or c >= 0x80;
-}
-
-fn isArrowGlyph(c: u8) bool {
-    return switch (c) {
-        '-', '=', '~', '.', '>', '<', '|', '0', '@', '*', '(', ')', '{', '}', '/', '\\' => true,
-        else => false,
-    };
 }
 
 test {

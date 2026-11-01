@@ -20,15 +20,14 @@ pub const Tag = enum(u8) {
     // names, classified by their first character only
     zone_id, // Uppercase first:        G, User, T, A'
     node_id, // # then uppercase first: #A, #UUID7
-    edge_id, // lowercase, _ or non-ASCII first: f, h', user_id, α, double-circle
+    edge_id, // lowercase, _ or non-ASCII first: f, h', user_id, α
     attr_id, // : then lowercase first: :label, :label-start
     class_id, // & then lowercase first: &node, &edge
 
     // literals
-    number, // 20, 0.5, 0xffffff
     str, // "..."
     math, // $...$
-    arrow, // [...]: arrow glyphs only, enclosed in brackets, no whitespace
+    val, // [...]: one opaque token: no whitespace, [ or ] inside
 
     // operators
     slash, // /
@@ -38,7 +37,6 @@ pub const Tag = enum(u8) {
     bang, // !
     at, // @
     dot, // .
-    range, // ..
     iden, // == (for identity.)
     cong, // ~= (for congruency.)
     decl, // :: (for any declaration.)
@@ -49,8 +47,6 @@ pub const Tag = enum(u8) {
     bar, // | (between levels.)
     l_par, // (
     r_par, // )
-    l_brack, // [
-    r_brack, // ]
     l_cur, // {
     r_cur, // }
 };

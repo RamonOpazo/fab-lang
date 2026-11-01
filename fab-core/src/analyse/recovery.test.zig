@@ -160,31 +160,6 @@ test "local fixes: juxtaposition that glues nothing keeps the pieces apart" {
     );
 }
 
-test "cells: a block that fails is dropped, a non-parallel cell is kept and marked" {
-    try expectRecovery("G :: f, +f/g/f+, [α β]", &.{ .inner_node_not_an_edge, .inner_node_not_an_edge },
-        \\zone G
-        \\  node n0 canon +f
-        \\  node n1 canon f+
-        \\  edge f n0 -> n1
-        \\  edge g n0 -> n1
-        \\
-    );
-    try expectRecovery("Sq :: f h, +f/g k/h+, [f α h]", &.{.cells_not_parallel},
-        \\zone Sq
-        \\  node n0 canon +f
-        \\  node n1 canon f+
-        \\  node n2 canon h+
-        \\  node n3 canon g+
-        \\  edge f n0 -> n1
-        \\  edge h n1 -> n2
-        \\  edge g n0 -> n3
-        \\  edge k n3 -> n2
-        \\  cell α f => h
-        \\issue e0 cell α
-        \\
-    );
-}
-
 test "statements with syntax errors are skipped, and the rest is analysed" {
     // The parser reports `/` and keeps `H :: g`; J is unaffected.
     try expectRecovery("G :: f\nH :: g /k\nJ :: m", &.{},

@@ -17,7 +17,7 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 | `fab-render/` | Pure backends from the styled IR to bytes (DOT for now)                       |
 | `fab-cli/`    | The `fab` command, the only package that does I/O                             |
 | `fab-lsp/`, `docs/` | Empty, for later                                                        |
-| `examples/`   | `.fab` programs, still in the old (22 October) syntax                         |
+| `examples/`   | `.fab` programs: the spec's Examples section, in the new syntax               |
 | `spec/`       | The language: spec, grammar and decision notes                                |
 
 Each package is a plain Zig project that depends only on the ones above it.
@@ -60,8 +60,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 0    | Spec cleanup                              | done    |
 | 1    | Grammar                                   | done    |
 | 2    | Conformance corpus                        | done    |
-| 3    | Lexer                                     | next    |
-| 4    | Parser and CST                            |         |
+| 3    | Lexer                                     | done    |
+| 4    | Parser and CST                            | next    |
 | 5    | Analyser: level 1                         |         |
 | 6    | IR, JSON, renderer for level 1; examples  |         |
 | 7    | Levels                                    |         |
@@ -121,7 +121,7 @@ Done when every level-1 relations case passes.
 **6. IR, JSON and renderer for level 1; examples.**
 - The IR carries undirected edges, null nodes split into `&start` and `&end`, and holes; `emit/json.zig` follows it.
 - fab-render draws undirected edges without heads, and starts, ends, choices and bars by kind default.
-- `examples/` rewritten to the new syntax, relations only.
+- Every file in `examples/` compiles, and its relations draw; styling may still be reported as not applied.
 
 Done when `fab render` draws every example and the JSON tests pass.
 
@@ -130,7 +130,7 @@ Done when `fab render` draws every example and the JSON tests pass.
 **7. Levels.**
 - The IR's `Cell` generalises from 2-cells to level k, with source and target in level k−1.
 - The analyser elaborates `|` levels with the level-1 rules one dimension up. Sides are single named cells; there are no anonymous or undirected cells; cells sit only between parallel cells.
-- The renderer keeps its note that Graphviz doesn't draw cells.
+- The renderer keeps its note that Graphviz doesn't draw cells. The two tests skipped since step 3 come back, written with `|`: fab-render's "cells are left out, with one note each" and fab-cli's "notes follow the diagnostics, and never change the exit code".
 
 Done when every level case passes.
 
@@ -160,7 +160,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 **12. CLI, README, examples.**
 - `fab show` stages follow the new CST, along with help text and messages.
 - The README covers the new syntax, the `:style` layer and the status.
-- `examples/` are styled again, with one example per section of the spec.
+- `examples/` grow to one example per section of the spec.
 
 ### Open decisions
 
