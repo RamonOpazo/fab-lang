@@ -80,10 +80,11 @@ test "names are classified by their first character" {
         .node_id, .node_id, .zone_id, .zone_id, .zone_id,
     });
     try expectTexts(source, &.{
-        "h'",     "merge'",        "user_id",
-        "α",     "double-circle", "_id",
-        "#UUID7", "#A",            "User",
-        "T",      "A'",
+        "h'",            "merge'", "user_id",
+        "α",
+        "double-circle", "_id",    "#UUID7",
+        "#A",            "User",   "T",
+        "A'",
     });
 }
 
