@@ -174,4 +174,5 @@ fn addDiagnostic(c: *Compilation, d: Diagnostic) error{OutOfMemory}!void {
 
 test {
     _ = @import("compilation.test.zig");
+    _ = @import("conformance.test.zig");
 }
