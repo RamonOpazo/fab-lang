@@ -23,7 +23,7 @@
 //!
 //! Sections, in order: statements; recovery; terms (fragments, composition,
 //! back edges and references, markers); names; edge-to-edge relations; gluing;
-//! building the IR. The tests are in analyse_test.zig and recovery.test.zig.
+//! building the IR. The tests are in analyse.test.zig and recovery.test.zig.
 //!
 //! The format and proof layers are only checked for placement here (the zone
 //! exists, the layer name is known, each layer appears once). Their contents
@@ -1045,6 +1045,6 @@ fn buildIr(a: *Analyser) error{OutOfMemory}!Ir {
 
 test {
     _ = @import("union_find.test.zig");
-    _ = @import("analyser.test.zig");
+    _ = @import("analyse.test.zig");
     _ = @import("recovery.test.zig");
 }
