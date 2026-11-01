@@ -59,8 +59,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | ---- | ----------------------------------------- | ------- |
 | 0    | Spec cleanup                              | done    |
 | 1    | Grammar                                   | done    |
-| 2    | Conformance corpus                        | next    |
-| 3    | Lexer                                     |         |
+| 2    | Conformance corpus                        | done    |
+| 3    | Lexer                                     | next    |
 | 4    | Parser and CST                            |         |
 | 5    | Analyser: level 1                         |         |
 | 6    | IR, JSON, renderer for level 1; examples  |         |

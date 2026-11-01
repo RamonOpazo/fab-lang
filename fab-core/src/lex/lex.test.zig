@@ -113,7 +113,7 @@ test "arrows and 2-cells" {
 }
 
 test "an arrow's braces don't disturb bracket matching" {
-    try expectTags("f { :arrow [||-0{] }", &.{ .edge_id, .l_brace, .attr_id, .arrow, .r_brace });
+    try expectTags("f { :arrow [||-0{] }", &.{ .edge_id, .l_cur, .attr_id, .arrow, .r_cur });
 }
 
 test "numbers and ranges" {
@@ -126,10 +126,10 @@ test "numbers and ranges" {
 test "strings and math" {
     try expectTags(
         \\"Order received" "a \"b\"" $\mathbb{R}$ $\{x\}$ $a\$b$
-    , &.{ .string, .string, .math, .math, .math });
+    , &.{ .str, .str, .math, .math, .math });
 
     // math may contain braces without closing the format block
-    try expectTags("+f { :label $\\}$ }", &.{ .plus, .edge_id, .l_brace, .attr_id, .math, .r_brace });
+    try expectTags("+f { :label $\\}$ }", &.{ .plus, .edge_id, .l_cur, .attr_id, .math, .r_cur });
 }
 
 test "unterminated strings and math are invalid" {
@@ -146,8 +146,8 @@ test "comments and newlines" {
 
 test "every operator" {
     try expectTags("/ + * ? ! @ . .. == ~= , ( ) ] { }", &.{
-        .slash, .plus,    .star,    .quid,    .bang,    .at,      .dot, .range, .iden, .cong,
-        .comma, .l_paren, .r_paren, .r_brack, .l_brace, .r_brace,
+        .slash, .plus,  .star,  .quid,    .bang,  .at,    .dot, .range, .iden, .cong,
+        .comma, .l_par, .r_par, .r_brack, .l_cur, .r_cur,
     });
     try expectTags("= ~ - ; %", &.{ .invalid, .invalid, .invalid, .invalid, .invalid });
 }

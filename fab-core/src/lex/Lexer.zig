@@ -62,7 +62,7 @@ pub fn next(self: *Lexer) Token {
 
         // literals
         '0'...'9' => self.number(),
-        '"' => self.delimited('"', .string),
+        '"' => self.delimited('"', .str),
         '$' => self.delimited('$', .math),
         '[' => self.bracket(),
 
@@ -79,11 +79,11 @@ pub fn next(self: *Lexer) Token {
 
         // structure
         ',' => self.one(.comma),
-        '(' => self.one(.l_paren),
-        ')' => self.one(.r_paren),
+        '(' => self.one(.l_par),
+        ')' => self.one(.r_par),
         ']' => self.one(.r_brack),
-        '{' => self.one(.l_brace),
-        '}' => self.one(.r_brace),
+        '{' => self.one(.l_cur),
+        '}' => self.one(.r_cur),
 
         else => self.one(.invalid),
     };

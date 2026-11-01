@@ -25,7 +25,7 @@ pub const Tag = enum(u8) {
 
     // literals
     number, // 20, 0.5, 0xffffff
-    string, // "..."
+    str, // "..."
     math, // $...$
     arrow, // [...]: arrow glyphs only, enclosed in brackets, no whitespace
 
@@ -45,12 +45,12 @@ pub const Tag = enum(u8) {
 
     // structure
     comma, // ,
-    l_paren, // (
-    r_paren, // )
+    l_par, // (
+    r_par, // )
     l_brack, // [
     r_brack, // ]
-    l_brace, // {
-    r_brace, // }
+    l_cur, // {
+    r_cur, // }
 };
 
 /// The token's text.

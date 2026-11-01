@@ -214,7 +214,7 @@ fn parseAtom(p: *Parser) Error!Node.Index {
             return p.addNode(.qualified, zone, .{ .node = unit });
         },
         .dot => return p.parseClass(),
-        .l_paren => return p.parseEnclosed(.group, .r_paren),
+        .l_par => return p.parseEnclosed(.group, .r_par),
         .l_brack => return p.parseEnclosed(.cells, .r_brack),
         else => return p.fail(.expected_atom, .invalid),
     }
@@ -248,9 +248,9 @@ fn parseEnclosed(p: *Parser, tag: Node.Tag, close: Token.Tag) Error!Node.Index {
 // ---------------------------------------------------------------------------
 // layers
 
-/// block = l_brace { eol } [ entry { eols entry } ] { eol } r_brace
+/// block = l_cur { eol } [ entry { eols entry } ] { eol } r_cur
 fn parseBlock(p: *Parser) Error!Node.Index {
-    const open = try p.expect(.l_brace);
+    const open = try p.expect(.l_cur);
     const saved = p.skip_eol;
     p.skip_eol = false;
     defer p.skip_eol = saved;
@@ -259,7 +259,7 @@ fn parseBlock(p: *Parser) Error!Node.Index {
 
     const top = p.scratch.items.len;
     p.skipEols();
-    while (p.cur() != .r_brace and p.cur() != .eof) {
+    while (p.cur() != .r_cur and p.cur() != .eof) {
         const start = p.tok_i;
         const scratch_top = p.scratch.items.len;
         const entry = p.parseEntry() catch |err| switch (err) {
@@ -275,7 +275,7 @@ fn parseBlock(p: *Parser) Error!Node.Index {
 
         switch (p.cur()) {
             .eol => p.skipEols(),
-            .r_brace, .eof => {},
+            .r_cur, .eof => {},
             else => {
                 try p.warn(.expected_token, .eol);
                 p.recover(true);
@@ -283,7 +283,7 @@ fn parseBlock(p: *Parser) Error!Node.Index {
             },
         }
     }
-    const close = try p.expect(.r_brace);
+    const close = try p.expect(.r_cur);
     return p.addBraced(.block, open, top, close);
 }
 
@@ -292,7 +292,7 @@ fn parseEntry(p: *Parser) Error!Node.Index {
     const start = p.tok_i;
     const subject = try p.parseTerm();
     switch (p.cur()) {
-        .attr_id, .l_brace => {
+        .attr_id, .l_cur => {
             const attrs = try p.parseAttrs();
             return p.addNode(.entry, start, .{ .nodes = .{ subject, attrs } });
         },
@@ -305,10 +305,10 @@ fn parseEntry(p: *Parser) Error!Node.Index {
     }
 }
 
-/// attrs = attr { attr } | l_brace { attr | eol } r_brace
+/// attrs = attr { attr } | l_cur { attr | eol } r_cur
 fn parseAttrs(p: *Parser) Error!Node.Index {
     const top = p.scratch.items.len;
-    if (p.cur() == .l_brace) {
+    if (p.cur() == .l_cur) {
         const open = p.next();
         p.open += 1;
         defer p.open -= 1;
@@ -317,7 +317,7 @@ fn parseAttrs(p: *Parser) Error!Node.Index {
             .attr_id => try p.scratch.append(p.gpa, try p.parseAttr()),
             else => break,
         };
-        const close = try p.expect(.r_brace);
+        const close = try p.expect(.r_cur);
         return p.addBraced(.attr_block, open, top, close);
     }
     const first = p.tok_i;
@@ -335,7 +335,7 @@ fn parseAttr(p: *Parser) Error!Node.Index {
 
 fn startsValue(p: *Parser) bool {
     return switch (p.cur()) {
-        .number, .string, .math, .arrow, .l_brace => true,
+        .number, .str, .math, .arrow, .l_cur => true,
         else => p.startsUnit(),
     };
 }
@@ -357,7 +357,7 @@ fn parseValue(p: *Parser) Error!Node.Index {
             }
             return p.fail(.expected_token, .number);
         },
-        .string, .math, .arrow => return p.addLeafLike(.leaf, p.next()),
+        .str, .math, .arrow => return p.addLeafLike(.leaf, p.next()),
         else => return p.parseRef(),
     }
 }
@@ -375,18 +375,18 @@ fn parseRef(p: *Parser) Error!Node.Index {
 }
 
 fn continuesRef(p: *Parser) bool {
-    return p.touchesPrev() and (p.cur() == .l_brace or p.startsUnit());
+    return p.touchesPrev() and (p.cur() == .l_cur or p.startsUnit());
 }
 
-/// segment = unit | interp;  interp = l_brace unit attr r_brace
+/// segment = unit | interp;  interp = l_cur unit attr r_cur
 fn parseSegment(p: *Parser) Error!Node.Index {
-    if (p.cur() != .l_brace) return p.parseUnit();
+    if (p.cur() != .l_cur) return p.parseUnit();
     const open = p.next();
     p.open += 1;
     defer p.open -= 1;
     const unit = try p.parseUnit();
     const attr = try p.parseAttr();
-    _ = try p.expect(.r_brace);
+    _ = try p.expect(.r_cur);
     return p.addNode(.interp, open, .{ .nodes = .{ unit, attr } });
 }
 
@@ -445,7 +445,7 @@ fn touchesNext(p: *Parser) bool {
 /// Could the current token begin a unit?
 fn startsUnit(p: *Parser) bool {
     return switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .at, .dot, .l_paren, .l_brack => true,
+        .edge_id, .node_id, .zone_id, .at, .dot, .l_par, .l_brack => true,
         .plus, .star => p.touchesNext(),
         else => false,
     };
@@ -523,17 +523,17 @@ fn refine(p: *Parser, tag: Cst.Error.Tag) Cst.Error.Tag {
 /// the depth where it began, the end of input, or (inside a block) the
 /// block's closing brace. Brackets opened inside the failed construct are
 /// skipped with it.
-fn recover(p: *Parser, stop_at_r_brace: bool) void {
+fn recover(p: *Parser, stop_at_r_cur: bool) void {
     var depth = p.fail_open - p.open;
     while (true) {
         switch (p.tags[p.tok_i]) {
             .eof => return,
             .eol => if (depth == 0) return,
-            .l_paren, .l_brack, .l_brace => depth += 1,
-            .r_paren, .r_brack, .r_brace => |t| {
+            .l_par, .l_brack, .l_cur => depth += 1,
+            .r_par, .r_brack, .r_cur => |t| {
                 if (depth > 0) {
                     depth -= 1;
-                } else if (stop_at_r_brace and t == .r_brace) {
+                } else if (stop_at_r_cur and t == .r_cur) {
                     return;
                 }
             },
