@@ -1,0 +1,119 @@
+# fAB grammar, Go-style EBNF. A permissive superset of fAB: the analyser
+# rejects what spec.md forbids. spec.md is the truth.
+#
+#   a ~ b   b touches a        a _ b   whitespace or a comment between
+#
+# Precedence, loosest first: |  ,  _  ~/~  prefix  juxtafix  postfix.
+# EOL is whitespace inside { }, and ends the statement everywhere else.
+
+
+program
+    = [ statement ] { EOL [ statement ] } EOF
+    ;
+
+statement
+    = ( primitive DECL | subject DEFN ) ( levels | block )
+    ;
+
+primitive
+    = ZONE_ID
+    | NODE_ID
+    | EDGE_ID
+    ;
+
+subject
+    = atom [ ATTR_ID ]
+    | ATTR_ID
+    ;
+
+block
+    = L_CUR levels R_CUR
+    ;
+
+levels
+    = items { BAR items }
+    ;
+
+items
+    = item { COMMA item }
+    ;
+
+item
+    = [ chain ] ( attr { attr } | block )
+    | chain { ( IDEN | CONG ) chain }
+    ;
+
+attr
+    = ATTR_ID [ literal ]
+    ;
+
+literal
+    = STR
+    | MATH
+    | VAL
+    ;
+
+chain
+    = atom { infix atom }
+    ;
+
+infix
+    = ~ SLASH ~
+    | _
+    ;
+
+atom
+    = prefix
+    | juxtafix
+    | postfix
+    ;
+
+prefix
+    = marker ~ atom
+    ;
+
+juxtafix
+    = postfix ~ DOT ~ atom
+    ;
+
+# A SLASH touching only its left is postfix: f/ g, #A/f/#B/.
+# A marker touching the primary before it is postfix: f?(g, h) is f? (g, h).
+postfix
+    = primary [ ~ marker | ~ SLASH ]
+    ;
+
+marker
+    = PLUS
+    | QUID
+    | BANG
+    ;
+
+primary
+    = EDGE_ID
+    | NODE_ID
+    | ZONE_ID
+    | CLASS_ID
+    | AT
+    | STAR
+    | literal
+    | L_PAR items R_PAR
+    ;
+
+
+# Tokens
+#
+#   ZONE_ID   G, User, A'          uppercase first
+#   NODE_ID   #A, #UUID7           # then uppercase
+#   EDGE_ID   f, h', user_id, α    lowercase, _ or non-ASCII first
+#   ATTR_ID   :label, :label-start : then lowercase; - allowed
+#   CLASS_ID  &node                & then lowercase
+#   STR       "…"                  one line, \ escapes
+#   MATH      $…$                  one line, \ escapes
+#   VAL       [red], [/solid/>]    one opaque token; no whitespace, [ or ]
+#
+#   SLASH /   PLUS +   QUID ?   BANG !   STAR *   AT @   DOT .   BAR |
+#   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )
+#   L_CUR {   R_CUR }  EOL      EOF
+#
+# Name bodies: letters, digits, _, ' and non-ASCII. Trivia: // comments,
+# spaces, tabs, carriage returns. Anything else is INVALID.
