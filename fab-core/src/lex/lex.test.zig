@@ -92,6 +92,15 @@ test "a # not followed by an uppercase letter is invalid" {
     try expectTags("#a # #1", &.{ .invalid, .edge_id, .invalid, .invalid, .number });
 }
 
+test "an & not followed by a lowercase letter is invalid" {
+    try expectTags("&a &A & &1", &.{ .class_id, .invalid, .zone_id, .invalid, .invalid, .number });
+}
+
+test "classes" {
+    try expectTags("&node.id &edge :label", &.{ .class_id, .dot, .edge_id, .class_id, .attr_id });
+    try expectTexts("&node &edge_end", &.{ "&node", "&edge_end" });
+}
+
 test "colons" {
     try expectTags(":label :label-start :: := : :A", &.{
         .attr_id, .attr_id, .decl, .defn, .invalid, .invalid, .zone_id,
@@ -145,9 +154,9 @@ test "comments and newlines" {
 }
 
 test "every operator" {
-    try expectTags("/ + * ? ! @ . .. == ~= , ( ) ] { }", &.{
-        .slash, .plus,  .star,  .quid,    .bang,  .at,    .dot, .range, .iden, .cong,
-        .comma, .l_par, .r_par, .r_brack, .l_cur, .r_cur,
+    try expectTags("/ + * ? ! @ . .. == ~= , | ( ) ] { }", &.{
+        .slash, .plus, .star,  .quid,  .bang,    .at,    .dot,   .range, .iden, .cong,
+        .comma, .bar,  .l_par, .r_par, .r_brack, .l_cur, .r_cur,
     });
     try expectTags("= ~ - ; %", &.{ .invalid, .invalid, .invalid, .invalid, .invalid });
 }

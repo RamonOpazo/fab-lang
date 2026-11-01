@@ -22,6 +22,7 @@ pub const Tag = enum(u8) {
     node_id, // # then uppercase first: #A, #UUID7
     edge_id, // lowercase, _ or non-ASCII first: f, h', user_id, α, double-circle
     attr_id, // : then lowercase first: :label, :label-start
+    class_id, // & then lowercase first: &node, &edge
 
     // literals
     number, // 20, 0.5, 0xffffff
@@ -45,6 +46,7 @@ pub const Tag = enum(u8) {
 
     // structure
     comma, // ,
+    bar, // | (between levels.)
     l_par, // (
     r_par, // )
     l_brack, // [

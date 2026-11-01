@@ -50,6 +50,10 @@ pub fn next(self: *Lexer) Token {
             self.index += 1;
             break :blk self.name(.node_id, false);
         } else self.one(.invalid),
+        '&' => if (isLower(self.peek(1))) blk: {
+            self.index += 1;
+            break :blk self.name(.class_id, false);
+        } else self.one(.invalid),
         ':' => switch (self.peek(1)) {
             ':' => self.two(.decl),
             '=' => self.two(.defn),
@@ -79,6 +83,7 @@ pub fn next(self: *Lexer) Token {
 
         // structure
         ',' => self.one(.comma),
+        '|' => self.one(.bar),
         '(' => self.one(.l_par),
         ')' => self.one(.r_par),
         ']' => self.one(.r_brack),
@@ -190,6 +195,10 @@ fn at(self: *const Lexer, i: u32) u8 {
 
 fn isUpper(c: u8) bool {
     return c >= 'A' and c <= 'Z';
+}
+
+fn isLower(c: u8) bool {
+    return c >= 'a' and c <= 'z';
 }
 
 fn isDigit(c: u8) bool {
