@@ -20,7 +20,9 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 | `examples/`   | `.fab` programs, still in the old (22 October) syntax                         |
 | `spec/`       | The language: spec, grammar and decision notes                                |
 
-Each package is a plain Zig project that depends only on the ones above it. Tests live beside the source as `*.test.zig`.
+Each package is a plain Zig project that depends only on the ones above it.
+
+**Tests** are separate from the code, beside it: `Lexer.zig` is tested by `lexer.test.zig` (the source's name, snake_case), which the source pulls in with a trailing `test { _ = @import("lexer.test.zig"); }`. Tests go file by file. Files with a logical dependency share one test file, named after their stage (its folder): a file built only by another is tested with it, so `lex.test.zig` covers Lexer and Token, `parse.test.zig` Parser and Cst, `analyse.test.zig` the analyser, `format.test.zig` the style pass. A behaviour can have its own file, as `recovery.test.zig` does. A test file sees only `pub` declarations.
 
 ### spec/
 
@@ -73,7 +75,11 @@ Steps 0 and 1 are recorded in `joining.md` and `statements.md` §12–13, and st
 
 ### A. The spec as a contract
 
-**2. Conformance corpus.** A directory of small `.fab` cases from the spec, each with its expected outcome: accepted (with the graph it denotes, in a compact text form) or rejected (with the diagnostic). One case per example line, one per error-table row. A runner in fab-core walks the directory, so adding a case needs no Zig. Done when the corpus runs, with every case failing or skipped for the right reason.
+**2. Conformance corpus.** One test file, `fab-core/src/compile/conformance.test.zig`, shaped like `recovery.test.zig`: a helper, and the cases defined beside it. Each case is a spec snippet and its expected outcome: the diagnostics it reports, by tag (checked at compile time), and the graph it denotes, as `recovery.test.zig`'s IR dump. One case per example line, one per error-table row, named after the spec section. Each case names the plan step that makes it pass; the file's `done` is the last step finished, and later cases are skipped (`error.SkipZigTest`). Step 2 brings the machinery, the accepted programs and the rows whose tags exist; each later step brings its new tags, their messages and their rows. Finishing a step bumps `done`.
+
+First, the tests follow the convention: the inline tests move out (Lexer and Token → `lex.test.zig`, Parser and Cst → `parse.test.zig`, Ir → `ir.test.zig`), and `analyser.test.zig` becomes `analyse.test.zig`.
+
+Done when the corpus runs, with every case failing or skipped for the right reason.
 
 ### B. Level 1, end to end
 
@@ -160,7 +166,6 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
-| Where the corpus lives, and its expected-outcome format         | step 2             |
 | The prelude's contents                                          | step 8             |
 | The header's attributes (`:kind`, strictness, boundary)         | step 7             |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
