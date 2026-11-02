@@ -47,6 +47,8 @@ pub const Tag = enum(u8) {
     node_beside_space,
     /// `f? (g, h)`, `k +f`, `f+ g`.
     pinched_edge_beside_space,
+    /// `#A/#B`, `+g/+f`, `#A/?`, `f/#A/#B/g`.
+    slash_between_nodes,
     /// `*/f/*`.
     both_ends_null,
     /// `*`, `f/*/g`, `*/f/g`.

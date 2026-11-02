@@ -819,7 +819,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Self-reference outside `f/f`      | `(f g)/f`                                       | A loop needs a single edge on the left                                     |
 | Redundant self-attachment         | `f/+f`                                          | Same graph as `f/f`                                                        |
 | Vacuous self-attachment           | `f/f+`                                          | Glues an end to itself                                                     |
-| `/` between nodes only            | `+g/+f`, `#A/#B`                                | `/` needs an edge between its sides                                        |
+| `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`           | `/` needs an edge between its sides                                        |
 | Cycle that does not close         | `#A/f/#B/g/#C`, `+f/m/n/g+`                     | A chain of two or more edges ends where it began                           |
 | Reference not declared            | `gg/α/g` with gg undeclared                     | A reference needs its edge declared before it                              |
 | Forward reference                 | `+f/g f`                                        | References point left only                                                 |

@@ -174,6 +174,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A pinched single edge is a reference to the node at that end, and a node is attached with `/`. To pinch a group, the marker goes on the group.",
             .hint = "Move the marker to the group: `f/? +(g, h)`, or attach the reference: `g/+f`.",
         },
+        .slash_between_nodes => .{
+            .message = "A `/` between two nodes",
+            .explanation = "`/` attaches a node to an edge, so it needs an edge on one side at least. Two nodes side by side have nothing between them.",
+            .hint = "Put the edge between them: `#A/f/#B`.",
+        },
         .both_ends_null => .{
             .message = "An edge from a null node to a null node",
             .explanation = "A null node is a start or a stop. An edge from nothing to nothing says nothing.",

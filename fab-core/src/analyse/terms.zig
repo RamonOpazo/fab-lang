@@ -78,13 +78,21 @@ fn markerOperand(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     if (sort.of(a.cst, node) == .edges) try term(a, node);
 }
 
-/// `a/b/…`. A `*` is private to one end, so it stands at either end of a
-/// one-edge chain. A kind marks where flow arrives, so it stands last, right
-/// after the chain's one edge.
+/// `a/b/…`. A `/` needs an edge on one side at least. A `*` is private to one
+/// end, so it stands at either end of a one-edge chain. A kind marks where
+/// flow arrives, so it stands last, right after the chain's one edge.
 fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const links = cst.children(node);
     const last = links.len - 1;
+
+    // Checked first: with two nodes side by side, nothing else in the chain
+    // can be judged.
+    for (links[0..last], links[1..]) |left, right| {
+        if (sort.of(cst, left) == .node and sort.of(cst, right) == .node)
+            return a.failTerm(.slash_between_nodes, node, cst.lastToken(left) + 1);
+    }
+
     var edges: usize = 0;
     for (links) |link| edges += @intFromBool(sort.of(cst, link) == .edges);
 
@@ -107,8 +115,8 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     }
 }
 
-/// What a kind node may follow: an edge being declared. A node before it is
-/// a slash between nodes, for rule 3.
+/// What a kind node may follow: an edge being declared. A node before it was
+/// already reported, as a slash between nodes.
 fn kindAfter(a: *Analyser, before: Node.Index, kind: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const token = cst.mainToken(kind);

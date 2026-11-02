@@ -367,6 +367,22 @@ test "Proofs: different operators, grouped" {
 // ---------------------------------------------------------------------------
 // Sorts (rule 1)
 
+test "Relations: / between two named nodes" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: #A/#B", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
+test "Relations: / between two references" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f, g, +g/+f", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
+test "Relations: / between a node and a kind" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: #A/?", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
+test "Relations: / between nodes inside a chain" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/#A/#B/g", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
 test "Relations: a node beside a space" {
     try check(.{ .step = 5, .rule = 1, .source = "G :: #A f", .codes = &.{.{ .analysis = .node_beside_space }} });
 }

@@ -121,6 +121,15 @@ test "each step of a chain is judged on its own" {
     try expectTags("G :: #A f #B", &.{ .node_beside_space, .node_beside_space });
 }
 
+test "a slash between nodes is reported at the slash, and nothing else in the chain" {
+    // `*` would also be a null node in a chain with no edge.
+    var a = try analyse("G :: f/#A/#B/*");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.slash_between_nodes}, a.tags());
+    try testing.expectEqual(@as(Cst.TokenIndex, 5), a.result.errors[0].token);
+    try testing.expectEqualStrings("/", a.cst.tokenText(a.result.errors[0].token));
+}
+
 test "a term with an error is not looked into" {
     // `f?` is also a kind on a reference; beside a space, that is all it is.
     try expectTags("G :: f? (g, h), (*) f", &.{ .pinched_edge_beside_space, .node_beside_space });
