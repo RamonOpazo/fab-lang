@@ -17,8 +17,6 @@ fn message(c: *Compilation, d: Diagnostic) ![]u8 {
 }
 
 test "a valid program: an IR under any tolerance, and status ok" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     for ([_]Compilation.Tolerance{ strict, preview }) |tolerance| {
         var c = try Compilation.init(testing.allocator, "G :: f g", tolerance);
         defer c.deinit();

@@ -28,8 +28,6 @@ fn expectContains(haystack: []const u8, needle: []const u8) !void {
 }
 
 test "a valid program, in full" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(

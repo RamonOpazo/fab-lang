@@ -150,6 +150,53 @@ test "ends that don't match are reported at the step after the space" {
     try testing.expectEqualStrings("(", a.cst.tokenText(a.result.errors[0].token));
 }
 
+// ---------------------------------------------------------------------------
+// Elaboration
+
+fn expectGraph(source: [:0]const u8, want: []const u8) !void {
+    var a = try analyse(source);
+    defer a.deinit();
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try a.result.ir.dump(&out.writer);
+    try testing.expectEqualStrings(want, out.written());
+}
+
+test "a join that doesn't match is a hole holding both sides, and the path goes on" {
+    try expectGraph("G :: f (g, h) k",
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 hole canon f+
+        \\  node n2 hole canon g+
+        \\  node n3 canon k+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n2
+        \\  edge h n1 -> n2
+        \\  edge k n2 -> n3
+        \\
+    );
+}
+
+test "a failed link is a hole, and the edges beside it stay declared" {
+    try expectGraph("G :: (a, b)/?, +a/x",
+        \\zone G
+        \\  node n0 canon +a
+        \\  node n1 hole canon a+
+        \\  node n2 canon +b
+        \\  node n3 canon x+
+        \\  edge a n0 -> n1
+        \\  edge b n2 -> n1
+        \\  edge x n0 -> n3
+        \\
+    );
+}
+
+test "a reserved head is checked, but not drawn" {
+    var a = try analyse("review :: a b");
+    defer a.deinit();
+    try testing.expectEqual(@as(usize, 0), a.result.ir.edges.len);
+}
+
 test "a term with an error is not looked into" {
     // `f?` is also a kind on a reference; beside a space, that is all it is.
     try expectTags("G :: f? (g, h), (*) f", &.{ .pinched_edge_beside_space, .node_beside_space });

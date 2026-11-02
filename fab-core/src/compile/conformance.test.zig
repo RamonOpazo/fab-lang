@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 2 };
+const done: Progress = .{ .step = 5, .rule = 3 };
 
 const Progress = struct {
     step: u8,
@@ -81,7 +81,7 @@ fn check(case: Case) !void {
 // Composition
 
 test "Composition: two edges in a path" {
-    try check(.{ .step = 5, .rule = 7, .source = "G :: f g", .ir =
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f g", .ir =
         \\zone G
         \\  node n0 canon +f
         \\  node n1 canon f+
@@ -133,7 +133,13 @@ test "Slash: attached at the end" {
 }
 
 test "Slash: attached at both ends" {
-    try check(.{ .step = 5, .source = "G :: #A/f/#B" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B", .ir =
+        \\zone G
+        \\  node n0 #A
+        \\  node n1 #B canon f+
+        \\  edge f n0 -> n1
+        \\
+    });
 }
 
 test "Slash: starting at dom(f), ending at cod(f)" {
@@ -141,7 +147,14 @@ test "Slash: starting at dom(f), ending at cod(f)" {
 }
 
 test "Slash: parallel to f" {
-    try check(.{ .step = 5, .source = "G :: f, +f/g/f+" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f, +f/g/f+", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\
+    });
 }
 
 test "Slash: null nodes at the start and the end" {
@@ -156,11 +169,23 @@ test "Slash: a node continues with a space" {
 // The slash: two or more edges, cycles
 
 test "Cycles: two edges" {
-    try check(.{ .step = 5, .source = "G :: f/g" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/g", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n0
+        \\
+    });
 }
 
 test "Cycles: a loop" {
-    try check(.{ .step = 5, .source = "G :: f/f" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/f", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  edge f n0 -> n0
+        \\
+    });
 }
 
 test "Cycles: a directed triangle" {
@@ -180,11 +205,29 @@ test "Cycles: the pair" {
 }
 
 test "Cycles: a path, then back" {
-    try check(.{ .step = 5, .source = "G :: (f g)/h" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f g)/h", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  node n2 canon g+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n2
+        \\  edge h n2 -> n0
+        \\
+    });
 }
 
 test "Cycles: a cycle exposes its start on the left" {
-    try check(.{ .step = 5, .source = "G :: h f/g" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: h f/g", .ir =
+        \\zone G
+        \\  node n0 canon +h
+        \\  node n1 canon h+
+        \\  node n2 canon f+
+        \\  edge h n0 -> n1
+        \\  edge f n1 -> n2
+        \\  edge g n2 -> n1
+        \\
+    });
 }
 
 test "Cycles: a pinch gathers a cycle by its start" {
@@ -199,7 +242,17 @@ test "Cycles: continuing from another node of the cycle" {
 // The slash: distribution
 
 test "Distribution: over a group, from a node" {
-    try check(.{ .step = 5, .source = "G :: #X/(g1, f, g2)" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #X/(g1, f, g2)", .ir =
+        \\zone G
+        \\  node n0 #X
+        \\  node n1 canon g1+
+        \\  node n2 canon f+
+        \\  node n3 canon g2+
+        \\  edge g1 n0 -> n1
+        \\  edge f n0 -> n2
+        \\  edge g2 n0 -> n3
+        \\
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +271,13 @@ test "Undirected: attached at one end" {
 }
 
 test "Undirected: between two named nodes" {
-    try check(.{ .step = 5, .source = "G :: #A/f/#B/" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/", .ir =
+        \\zone G
+        \\  node n0 #A
+        \\  node n1 #B canon f+
+        \\  edge f n0 -- n1
+        \\
+    });
 }
 
 test "Undirected: attached, then continued" {
@@ -229,7 +288,14 @@ test "Undirected: attached, then continued" {
 // Node kinds and pinching
 
 test "Pinches: a parallel pair" {
-    try check(.{ .step = 5, .source = "Pair :: +(f, g)+" });
+    try check(.{ .step = 5, .rule = 3, .source = "Pair :: +(f, g)+", .ir =
+        \\zone Pair
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\
+    });
 }
 
 test "Pinches: a square" {
@@ -237,7 +303,18 @@ test "Pinches: a square" {
 }
 
 test "Pinches: decision and merge" {
-    try check(.{ .step = 5, .source = "G :: f/? +(g, h)? k" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/? +(g, h)? k", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 choice canon f+
+        \\  node n2 choice canon g+
+        \\  node n3 canon k+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n2
+        \\  edge h n1 -> n2
+        \\  edge k n2 -> n3
+        \\
+    });
 }
 
 test "Pinches: fork and join" {
@@ -249,7 +326,19 @@ test "Pinches: a bowtie" {
 }
 
 test "Pinches: one bar that joins and forks" {
-    try check(.{ .step = 5, .source = "G :: (a, b)! +(c, d)" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (a, b)! +(c, d)", .ir =
+        \\zone G
+        \\  node n0 canon +a
+        \\  node n1 parallel canon a+
+        \\  node n2 canon +b
+        \\  node n3 canon c+
+        \\  node n4 canon d+
+        \\  edge a n0 -> n1
+        \\  edge b n2 -> n1
+        \\  edge c n1 -> n3
+        \\  edge d n1 -> n4
+        \\
+    });
 }
 
 test "Where nodes meet: a fan out of a named node" {
@@ -260,7 +349,17 @@ test "Where nodes meet: a fan out of a named node" {
 // Null nodes
 
 test "Null nodes: a path from a start to a stop" {
-    try check(.{ .step = 5, .source = "G :: */f g h/*" });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: */f g h/*", .ir =
+        \\zone G
+        \\  node n0 null_node
+        \\  node n1 canon f+
+        \\  node n2 canon g+
+        \\  node n3 null_node canon h+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n2
+        \\  edge h n2 -> n3
+        \\
+    });
 }
 
 test "Null nodes: two starts, joined" {
