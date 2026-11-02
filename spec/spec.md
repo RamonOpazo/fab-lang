@@ -334,9 +334,9 @@ Every term has a left side and a right side. Each side holds what a neighbour ca
 | `#A`, `@`, `User` alone            | a lone node: it may stand as a whole branch, never beside a space |                         |
 
 - **One to one.** `f (g, h)` and `(f, g) h` are errors: pinch the group, `f +(g, h)`, `(f, g)+ h`.
-- **Ending a branch.** A branch ends with `*` (a stop) or with a cycle, and then exposes nothing on that side. Those branches are skipped when ends are counted, so `(f/*, g) h` attaches h to g only. A cycle still exposes its start on the left, so a pinch gathers it: in `f/? +(b/b, e)`, b loops on the decision. A branch that ends on a node (`k/+f`, `x/#Done`) still exposes that node.
+- **Ending a branch.** A branch ends with `*` (a stop) or with a cycle, and then exposes nothing on that side. Those branches are skipped when ends are counted, so `(f/*, g) h` attaches h to g only; it warns, because the space reads as joining the group. Write `f/*, g h`. A cycle still exposes its start on the left, so a pinch gathers it: in `f/? +(b/b, e)`, b loops on the decision. A branch that ends on a node (`k/+f`, `x/#Done`) still exposes that node.
 - **Nothing to join.** A space with nothing on one side is an error: `f/g h`, `f/* g`, `(f/*) g`. Use a comma for separate pieces.
-- **Lone nodes.** `T :: #UUID7, #DTZ` is a discrete diagram: nodes and no edges.
+- **Lone nodes.** `T :: #UUID7, #DTZ` is a discrete diagram: nodes and no edges. In a group, a lone node exposes nothing on either side, so a space beside the group warns as for a stop: `(f, #A) g` is `f g, #A`.
 
 ## Named nodes and diagrams as nodes
 
@@ -826,6 +826,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Node beside a space               | `#A f`, `* f`, `@ (…)`, `f User`                | A node is attached to an edge with `/`                                     |
 | Ends don't match                  | `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`         | A space joins one end to one end; pinch the group: `f +(g, h)`             |
 | Nothing to join                   | `f/g h`, `f/* g`                                | One side exposes nothing; write `,` for separate pieces                    |
+| Warning: a space reaches one branch of several | `(f/*, g) h`, `(f, #A) g`, `+(g/*, h) k` | The other branches expose nothing there; move the step into the branch: `f/*, g h` |
 | Pinch of declared edges           | `f g, h k, +(f, h)`                             | A pinch with several branches declares them                                |
 | Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |
 | Single edge pinched on both sides | `+f+`, `+(f)+`                                  | A pinched edge is one node; it has one side                                |
@@ -839,7 +840,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Kinds disagree                    | `(a/?, b/!)+`, `validate/? #Valid/yes`          | A node has one kind, and a named node is plain                             |
 | Two names for one node            | `a/#A #B/b`                                     | One node, one name                                                         |
 | Reference to a null node          | `k f/*, j/f+`                                   | A null node is private to its edge end                                     |
-| `*` not on exactly one end        | `*`, `*/(f, g)`, `(f, g)/*`, `f/*/g`            | A null node holds exactly one edge end; write `(*/f, */g)`                 |
+| `*` not on exactly one end        | `*`, `*/(f, g)`, `(f, g)/*`, `*/+(f, g)`, `f/*/g` | A null node holds exactly one edge end; write `(*/f, */g)`                 |
 | Both ends null                    | `*/f/*`                                         | An edge from nothing to nothing says nothing                               |
 | Tight operator touching nothing   | `f / g`, `+ f`                                  | A tight operator attaches to what it touches                               |
 | Atoms touching                    | `f(g)`, `*f`, `#A(f)`                           | Only `/` joins what touches; write a space for a path, or `/` to attach    |
@@ -944,8 +945,8 @@ Pr   :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)   // the universal property of a pro
 
 ```
 If    :: f/? +(fg g, fh h)? k            // decision, two branches, merge
-While :: f/? +(b/b, e) k                 // body b loops on the test; e exits to k
-Exit  :: f/? +(fg g/*, fh h) k           // g's branch stops; only h continues to k
+While :: f/? +(b/b, e k)                 // body b loops on the test; e exits to k
+Exit  :: f/? +(fg g/*, fh h k)           // g's branch stops; only h continues to k
 Loop  :: f/? +(fg g, fh h k/+f)          // k : cod(h) → dom(f), back before the test
 Par   :: */s/! +(a, b)! t/*              // start, fork, two parallel branches, join, stop
 ```

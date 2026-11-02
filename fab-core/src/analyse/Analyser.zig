@@ -17,15 +17,17 @@
 //! | `Error.zig`      | the error tags, their severity, the release guard |
 //! | `sort.zig`       | what a term is, from its shape: node or edges     |
 //! | `terms.zig`      | the terms of a declaration (rules 0–1)            |
+//! | `interface.zig`  | each term's sides, and what a space joins (rule 2)|
 //! | `definitions.zig`| the heads and entries of a definition (rule 0)    |
 //!
 //! Rewritten for the 1 November spec in plan step 5 (CLAUDE.md), one rule at a
-//! time. So far, rules 0 and 1.
+//! time. So far, rules 0 to 2.
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
 const Ir = @import("Ir.zig");
 const terms = @import("terms.zig");
+const interface = @import("interface.zig");
 const definitions = @import("definitions.zig");
 
 const Analyser = @This();
@@ -145,6 +147,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
         try a.fail(.unsupported_levels, cst.mainToken(body));
     }
     try terms.items(a, first, .item);
+    try interface.items(a, first);
 }
 
 /// A diagram is declared once. A second declaration is still drawn, as a zone

@@ -130,6 +130,26 @@ test "a slash between nodes is reported at the slash, and nothing else in the ch
     try testing.expectEqualStrings("/", a.cst.tokenText(a.result.errors[0].token));
 }
 
+// ---------------------------------------------------------------------------
+// Interfaces
+
+test "a failed term is a hole, and the space beside it reports nothing" {
+    // Read as a cycle, `f/?/g` would expose nothing on its right.
+    try expectTags("G :: f/?/g h", &.{.kind_on_the_left});
+}
+
+test "a failed branch makes its group's side a hole" {
+    // Counted, the group would hold two ends on the right.
+    try expectTags("G :: (f, (a, b)/?) h", &.{.kind_after_group});
+}
+
+test "ends that don't match are reported at the step after the space" {
+    var a = try analyse("G :: f (g, h)");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.ends_dont_match}, a.tags());
+    try testing.expectEqualStrings("(", a.cst.tokenText(a.result.errors[0].token));
+}
+
 test "a term with an error is not looked into" {
     // `f?` is also a kind on a reference; beside a space, that is all it is.
     try expectTags("G :: f? (g, h), (*) f", &.{ .pinched_edge_beside_space, .node_beside_space });

@@ -1,6 +1,6 @@
 # fAB design decisions, 2026-11-01: the grammar of joining
 
-Decided in the design session of 1 November 2026. This note settles how terms join: what a space does, what `/` does, what pinches do, and where nodes may meet. It replaces parts of [`statements.md`](statements.md) (section 5 and parts of 4 and 7), listed at the end. The spec ([`spec.md`](spec.md), revision of 1 November) was rewritten from this note. The code does not implement it yet. Section 12, an addendum of 2 November, revises null nodes and moves kinds to the right (`f/? +(a, b)`).
+Decided in the design session of 1 November 2026. This note settles how terms join: what a space does, what `/` does, what pinches do, and where nodes may meet. It replaces parts of [`statements.md`](statements.md) (section 5 and parts of 4 and 7), listed at the end. The spec ([`spec.md`](spec.md), revision of 1 November) was rewritten from this note. The code does not implement it yet. Section 12, an addendum of 2 November, revises null nodes, moves kinds to the right (`f/? +(a, b)`), and makes a space that reaches one branch of several a warning.
 
 Status words as before: **Decided**, **Open**, **Rejected**.
 
@@ -28,7 +28,7 @@ And the guiding view of category theory: "CT fixes on the edges, and the nodes c
 - **What meets at a space is edges.** Each side is an edge end, possibly already sitting on a node: a pinch, or a named node attached by `/`. So `receive/#Received validate` is a path through Received, and `f ?(a, b)` puts a choice node at cod(f).
 - **A node on its own never stands beside a space.** `#A f`, `* f`, `@ (…)`, `k +f` are errors.
 - **A space with nothing on one side is an error:** `f/g h` (a cycle exposes nothing on its right), `(f/*) g`.
-- **Closed branches are skipped when counting:** `(f/*, g) h` attaches h to g only. A branch ending on a node (`k/+f`) still exposes that node.
+- **Closed branches are skipped when counting:** `(f/*, g) h` attaches h to g only. A branch ending on a node (`k/+f`) still exposes that node. (Since §12.3, this warns.)
 
 Mathematically: terms are cospans of finite sets; a space is composition along one point (a pushout over a point). "Juxtaposition always merges; fAB has no arities" is replaced by this arity check.
 
@@ -206,7 +206,18 @@ Consequences:
 - **Kinds meet less.** At a space only the left term's right side can bring a kind, so two kinds meet only through a pinch of kinded branches, `(a/?, b/!)+`, and a kind meets a name as in `f/? #A/g`.
 - **Not a node term: `+`.** `f/+` would be `f`, and `+/f` would read like the reference `+f` and mean something else: "redundant and confusing".
 
-### 12.3 Rejected
+### 12.3 A space that reaches one branch of several
+
+**Decided.** Skipping closed branches stays: `(f/*, g) h` is valid and attaches h to g only. So is a lone node in a group, `(f, #A) g`: it exposes nothing on either side, and a discrete piece beside a path is a correct diagram. But both read as if the space joined the group, so they **warn**, with the clearer spelling as the hint.
+
+- **The rule.** A space warns when one of its sides is a group's side with several branches, unpinched, where every branch but one exposes nothing: a stop, a cycle's right side, a lone node. The space really joins that one branch, so the step belongs inside it.
+- **The rewrites.** `(f/*, g) h` is `f/*, g h`; `(f, #A) g` is `f g, #A`; `f/? +(b/b, e) k` is `f/? +(b/b, e k)`. The spec's `While` and `Exit` examples are rewritten so.
+- **A pinch is quiet.** `(a, b/b)! k` gathers the branches into one node first, so the space joins that node, not a branch. A pinch that gathers one end only is a question for pinches.
+- **An interface check.** It needs the count of branches on a side, so it belongs with the arity errors (`ends_dont_match`, `nothing_to_join`), not with sorts. A side with a hole in it is unknown, and stays quiet.
+
+**Rejected.** A lone node in a group as an error ("isolated nodes join nothing"): the ontology says it is a correct diagram, so the language warns instead of refusing.
+
+### 12.4 Rejected
 
 - **Markers on groups as `/` to an anonymous node** (`?(a, b)` = `?/(a, b)`): coherent, but it gave a decision four spellings. With kinds on the right, the pinch stays a primitive.
 - **`+` as a node term,** for the reasons above.

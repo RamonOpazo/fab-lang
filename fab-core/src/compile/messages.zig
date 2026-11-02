@@ -219,6 +219,21 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A group of one is its item, so this is the kind after that edge.",
             .hint = "Drop the parentheses: `f/?`.",
         },
+        .ends_dont_match => .{
+            .message = "The space before {} joins several ends",
+            .explanation = "A space joins exactly one end to exactly one end. Several ends become one only through a pinch.",
+            .hint = "Pinch the group: `f +(g, h)`, `(f, g)+ h`.",
+        },
+        .nothing_to_join => .{
+            .message = "The space before {} has nothing on one side",
+            .explanation = "A stop (`*`) and a cycle expose nothing on their right, so there is no end for the space to join.",
+            .hint = "Write `,` for separate pieces: `f/*, g`.",
+        },
+        .space_reaches_one_branch => .{
+            .message = "The space before {} joins one branch of several",
+            .explanation = "The other branches of the group expose nothing on this side (a stop, a cycle, a lone node), so the space joins only one of them, though it reads as joining the group.",
+            .hint = "Move the step into the branch it joins: `f/*, g h`.",
+        },
         .reserved_node_or_edge_declaration => .{
             .message = "Declaring {} is reserved",
             .explanation = "Only diagrams are declared today. What declaring a node or an edge on its own means is still open in the spec, so it is an error until it is decided.",

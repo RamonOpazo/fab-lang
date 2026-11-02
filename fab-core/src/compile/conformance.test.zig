@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 1 };
+const done: Progress = .{ .step = 5, .rule = 2 };
 
 const Progress = struct {
     step: u8,
@@ -274,12 +274,67 @@ test "Null nodes: two starts, two paths, one end" {
 // ---------------------------------------------------------------------------
 // Interfaces
 
-test "Interfaces: a stopped branch is skipped when ends are counted" {
-    try check(.{ .step = 5, .source = "G :: (f/*, g) h" });
+test "Interfaces: a stopped branch is written apart" {
+    try check(.{ .step = 5, .source = "G :: f/*, g h" });
+}
+
+test "Interfaces: a cycle's branch is gathered by a pinch" {
+    try check(.{ .step = 5, .source = "G :: f/? +(b/b, e k)" });
 }
 
 test "Interfaces: lone nodes" {
     try check(.{ .step = 5, .source = "T :: #UUID7, #DTZ" });
+}
+
+// ---------------------------------------------------------------------------
+// Interfaces (rule 2)
+
+test "Relations: ends don't match, one against two" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: f (g, h)", .codes = &.{.{ .analysis = .ends_dont_match }} });
+}
+
+test "Relations: ends don't match, two against one" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (f, g) h", .codes = &.{.{ .analysis = .ends_dont_match }} });
+}
+
+test "Relations: ends don't match, two against two" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (a, b) (c, d)", .codes = &.{.{ .analysis = .ends_dont_match }} });
+}
+
+test "Relations: nothing to join after a cycle" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: f/g h", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: nothing to join after a stop" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: f/* g", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: nothing to join after a group of a stop" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (f/*) g", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: * beside a group" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: */(f, g)", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: a group beside *" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (f, g)/*", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: * beside a pinch" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: */+(f, g)", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: warning, a space reaches one branch past a stop" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (f/*, g) h", .codes = &.{.{ .analysis = .space_reaches_one_branch }} });
+}
+
+test "Relations: warning, a space reaches one branch past a lone node" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: (f, #A) g", .codes = &.{.{ .analysis = .space_reaches_one_branch }} });
+}
+
+test "Relations: warning, a space reaches one branch of a pinch" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: +(g/*, h) k", .codes = &.{.{ .analysis = .space_reaches_one_branch }} });
 }
 
 // ---------------------------------------------------------------------------
@@ -573,8 +628,8 @@ test "Examples: mathematical diagrams" {
 test "Examples: flows" {
     try check(.{ .step = 5, .source =
         \\If    :: f/? +(fg g, fh h)? k            // decision, two branches, merge
-        \\While :: f/? +(b/b, e) k                 // body b loops on the test; e exits to k
-        \\Exit  :: f/? +(fg g/*, fh h) k           // g's branch stops; only h continues to k
+        \\While :: f/? +(b/b, e k)                 // body b loops on the test; e exits to k
+        \\Exit  :: f/? +(fg g/*, fh h k)           // g's branch stops; only h continues to k
         \\Loop  :: f/? +(fg g, fh h k/+f)          // k : cod(h) → dom(f), back before the test
         \\Par   :: */s/! +(a, b)! t/*              // start, fork, two parallel branches, join, stop
     });

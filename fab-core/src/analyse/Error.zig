@@ -51,7 +51,7 @@ pub const Tag = enum(u8) {
     slash_between_nodes,
     /// `*/f/*`.
     both_ends_null,
-    /// `*`, `f/*/g`, `*/f/g`.
+    /// `*`, `f/*/g`, `*/f/g`; with rule 2, `*/(f, g)`, `*/+(f, g)`.
     null_not_on_one_end,
     /// `?(g, h)`, `!f`, `?/f`, `f/?/g`.
     kind_on_the_left,
@@ -65,6 +65,15 @@ pub const Tag = enum(u8) {
     kind_after_group,
     /// Warning. `(f)/?`.
     kind_after_group_of_one,
+
+    // -- interfaces (rule 2) -------------------------------------------------
+
+    /// `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`.
+    ends_dont_match,
+    /// `f/g h`, `f/* g`, `(f/*) g`.
+    nothing_to_join,
+    /// Warning. `(f/*, g) h`, `(f, #A) g`.
+    space_reaches_one_branch,
 
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
@@ -80,7 +89,7 @@ pub const Tag = enum(u8) {
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
-            .chain_broken_across_lines, .kind_after_group_of_one => .warning,
+            .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch => .warning,
             .unsupported_levels, .unsupported_definition => .unsupported,
             else => .@"error",
         };
