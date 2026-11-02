@@ -3,7 +3,8 @@
 #
 #   a ~ b   b touches a        a _ b   whitespace or a comment between
 #
-# Precedence, loosest first: |  ,  _  ~/~  prefix  juxtafix  postfix.
+# Precedence, loosest first: |  ,  operator  _  ~/~  prefix  juxtafix  postfix.
+# Operators share one level, left to right; different ones need a group.
 # EOL is whitespace inside { }, and ends the statement everywhere else.
 
 
@@ -40,7 +41,12 @@ items
 
 item
     = [ chain ] ( attr { attr } | block )
-    | chain { ( IDEN | CONG ) chain }
+    | chain { operator chain }
+    ;
+
+operator
+    = IDEN
+    | CONG
     ;
 
 attr
@@ -77,7 +83,8 @@ juxtafix
     ;
 
 # A SLASH touching only its left is postfix: f/ g, #A/f/#B/.
-# A marker touching the primary before it is postfix: f?(g, h) is f? (g, h).
+# A marker touching the primary before it is postfix; touching both sides is
+# an error: f?(g, h). Atoms that touch need a / between them.
 postfix
     = primary [ ~ marker | ~ SLASH ]
     ;

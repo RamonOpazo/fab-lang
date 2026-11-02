@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges     |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -95,9 +95,8 @@ Done when the tests cover every terminal and the corpus's lexical cases pass.
 **4. Parser and CST** (`fab-core/src/parse/`). Only fab-core drives the plan from here; fab-render and fab-cli are redone later, and their tests may be skipped meanwhile. The analyser is rewritten, not adapted (step 5), so step 4 replaces the parser in place, in increments:
 
 - **4a.** The old analyser goes. A skeleton keeps its interface (`analyse(gpa, cst) → Result`, an empty IR, no errors yet), so fab-core builds. The old analyser tests go with it; tests that need an analysed program are skipped until step 5.
-- **4b.** The new CST, and the parser for declarations: statements, levels, items, blocks, lines, chains and atoms.
-- **4c.** The definition side: entries, attributes, equations.
-- **4d.** Recovery.
+- **4b.** The new CST and the whole parser, one function per grammar rule (recursive descent, no Pratt parser): statements, lines, levels, items, blocks, entries, attributes, operator runs, chains, atoms; the syntax errors, with their corpus rows; `parse.test.zig` in the new syntax.
+- **4c.** Recovery.
 
 The CST:
 
@@ -108,7 +107,7 @@ The CST:
 | `levels`, `items` | two or more, separated by `\|` or `,` |
 | `block` | `{ levels }` |
 | `entry`, `attr` | `[chain] attr…` or `chain block`; `ATTR_ID [literal]` |
-| `equation` | `chain (== \| ~=) chain …`, chained |
+| `operation` | `chain operator chain …`, a flat run; the operators are the tokens between the operands |
 | `o_chain`, `c_chain` | two or more, joined by space or by `/`; both flat |
 | `prefix`, `postfix`, `juxtafix` | a marker or a trailing `/`; `a.b` |
 | `leaf`, `group`, `invalid` | one-token primaries (names, `@`, `*`, `&class`, literals); `( items )`; recovery |
@@ -119,7 +118,7 @@ A single element is its own node, never a list of one. An absent child is index 
 - EOL ends a statement at the top level, even inside `( )`; inside `{ }`, at any depth, it is skipped.
 - Items replace `entry`, `attrs`, `attr_block`, `equation`, `card`, `ref` and `interp`.
 - `|` only at the top of a right side; inside a group it is a parse error.
-- Chains are flat over `/` and space, grouped by precedence climbing. `*` becomes a node primary, not a marker. `[ … ]` cells go. Classes become `&class`. Literals are primaries, so the analyser can say "value in a declaration".
+- Chains are flat over `/` and space, one function per grammar rule. Operators between chains (`==`, `~=`, later more) share one level and read left to right, so an item is a loop, not a Pratt parser. `*` becomes a node primary, not a marker. `[ … ]` cells go. Classes become `&class`. Literals are primaries, so the analyser can say "value in a declaration".
 - One group node, `( items )`, for terms, subjects and propositions alike.
 - Touching errors (prefix `/`, an operator touching nothing, a detached dot, a marker touching both sides) stay in the parser: the grammar can't derive them, so they are syntax errors.
 - Recovery: an `invalid` node, then skip to the next statement at the top level, or to the next `,` or `}` at the same depth inside braces.
@@ -141,7 +140,7 @@ Also back in step 5: the tests skipped in 4a ("Needs an analysed program"), and 
 
 One rule at a time, in order, each with its corpus rows and its messages in `compile/messages.zig`:
 
-0. **Statements and items.** Declarations hold terms; definitions hold entries and equations. `|` only in a declaration, a lone literal only in a definition. A declaration's head is a zone (nodes and edges are open). The warning for a chain broken across lines. The Statements error table.
+0. **Statements and items.** Declarations hold terms; definitions hold entries and equations. An operation mixing different operators without a group is an error. `|` only in a declaration, a lone literal only in a definition. A declaration's head is a zone (nodes and edges are open). The warning for a chain broken across lines. The Statements error table.
 1. **Node terms take a slash.** `#A`, `@`, diagram names, `+f`, `f+`, `*`. A node beside a space is an error. `*` is fresh and private to one end: `*/(f, g)`, `f/* g`, `*/f/*` are errors.
 2. **Interfaces.** Every term computes a left and a right side. A space joins one to one; closed branches (a stop, a cycle's right side) are skipped when counting; nothing on a side is an error.
 3. **Slash chains.** One edge attaches to the nodes beside it; two or more close a cycle, which exposes its start on the left. `/` distributes over a group. A trailing `/` makes a one-edge chain undirected.

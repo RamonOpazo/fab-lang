@@ -144,7 +144,7 @@ G :: f (g, h)       // error: one end on the left, two on the right
 
 **What meets at a space is edges.** Each side of a space is an edge end, possibly already sitting on a node: a pinch, or a named node attached by `/`. The node where they meet carries what each side brings: at most one name, and kinds that agree (see Where nodes meet). A node on its own (`#A`, `*`, `@`, a diagram name) never stands beside a space: `#A f` is an error, written `#A/f`.
 
-**Precedence,** tightest first: postfix markers, then the juxtafix `.`, then prefix markers, then the infixes `/` and juxtaposition, then the separator `,`, then `|`. A group isolates what it holds and stands as one element. So `A.f+` is `A.(f+)`, `+A.f` is `+(A.f)`, `f g/h` is `f (g/h)`, and `+f/α β/g+` is `(+f/α) (β/g+)`: a path through a fresh node. Within a chain of `/`, reading is left to right.
+**Precedence,** tightest first: postfix markers, then the juxtafix `.`, then prefix markers, then the infixes `/` and juxtaposition, then the operators between chains (`==`, `~=`), then the separator `,`, then `|`. A group isolates what it holds and stands as one element. So `A.f+` is `A.(f+)`, `+A.f` is `+(A.f)`, `f g/h` is `f (g/h)`, and `+f/α β/g+` is `(+f/α) (β/g+)`: a path through a fresh node. Within a chain of `/`, reading is left to right.
 
 **Line breaks.** A declaration spans lines only in braces (see Items and lines). Inside them a newline is a space, so a chain may continue on the next line. The analyser warns when a newline falls between two closed chains of an open chain, unless a group stands on either side of it: `(f g)` then `(h k)` on the next line is quiet.
 
@@ -740,6 +740,7 @@ Sq :prove := {
 ```
 
 - **Chains of equations** state each step: `f h == g k == d` is `f h == g k` and `g k == d`.
+- **One level, no precedence.** The operators between chains, `==` and `~=` today and any the layer adds later, share one level and read left to right. A run may repeat one operator; different operators need a group: `(f == g) ~= h`, never `f == g ~= h`.
 - **Groups organise.** A proposition, or several, may be grouped: `(f h == g k, +f :pullback)`. The group changes nothing.
 
 - **Equations** relate two paths, written with juxtaposition in diagrammatic order. Both sides must be existing paths with the same start and end. Equations are not settled: they are written `==`, and `~=` is reserved for a weaker relation whose meaning is open (see Open questions).
@@ -826,6 +827,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | `*` holding several ends          | `*/(f, g)`, `(f, g)/*`, `f/* g`                 | A null node holds exactly one edge end; write `(*/f, */g)`                 |
 | Both ends null                    | `*/f/*`                                         | An edge from nothing to nothing says nothing                               |
 | Tight operator touching nothing   | `f / g`, `+ f`                                  | A tight operator attaches to what it touches                               |
+| Atoms touching                    | `f(g)`, `*f`, `#A(f)`                           | Only `/` joins what touches; write a space for a path, or `/` to attach    |
 | Prefix `/`                        | `f /g`                                          | `/` is binary or postfix only                                              |
 
 ### Levels
@@ -901,6 +903,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Error                               | Example                                 | Why                                                     |
 | ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
 | Equation between non-parallel paths | `f == g` in `f g`                       | Both paths must have the same start and end             |
+| Different operators without a group | `f == g ~= h`                           | Operators share one level; group the parts: `(f == g) ~= h` |
 | Ambiguous universal property        | `+f :pullback` with two squares at `+f` | The cone must be determined; give the square explicitly |
 
 ## Examples

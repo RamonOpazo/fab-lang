@@ -2,7 +2,7 @@
 
 Decisions taken in the design sessions of 22-23 October 2026, after `fab render` first worked end to end. They change the grammar in six places: statements and bindings, values, cells (levels), the `/` operator, pinching (with the split between flow and fusion), and subjects (classes). This note is the record of what was decided and why; the code does not implement it yet.
 
-> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
+> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
 
 **The spec doc ([`spec.md`](spec.md)) was rewritten from this note and [`style.md`](style.md) on the evening of 23 October. Where this note and the spec differ, the spec wins.** Three corrections were made while writing it, and are applied below: repeated node names glue in flows (5.1); `*` is not a pinch (5.3); `?` and `!` stay postfix only (5.3). Two decisions followed the same evening, both in 5.3: **`*` is a nameless node term, written alone, private to one edge end**, which replaced the seal; and **a pinched single edge resolves as a reference node, so it is pinched on one side only**, with redundant pinches allowed. The bracket reading and arrow literals of section 2 were refined in the style document (lowercase names, `[tail/line/head]` arrows).
 
@@ -545,3 +545,24 @@ Decided in the same session, while closing the open schema question of 8.3. It r
 - **`:fk`:** the header kind already says it.
 - **Interpolated default names** (`{.edge+ :snakecase}_id`): braces open blocks; the foreign-key row's default label replaces it.
 - **Foreign keys only to the `:pk`:** SQL allows a unique key, and `:refs` states it as a proof, without touching the declaration.
+
+---
+
+## 14. Operators between chains, 2026-11-02
+
+Decided while planning the parser (plan step 4). The proof layer will add operators between chains beside `==` and `~=`, mostly infix (connectives, perhaps an order), with a prefix not; about 6 to 10 of them is a realistic ceiling. What they mean stays open, as equations do; this section only settles how they are read.
+
+### 14.1 Decided
+
+- **One level, strict left to right.** All operators between chains share one precedence level, looser than the chain infixes and tighter than `,`. There is no precedence among them.
+- **Same is fine, different needs a group.** A run may repeat one operator: `f == g == h`. Different operators without a group are an error: `f == g ~= h` is rejected, `(f == g) ~= h` is not. Carbon and Pony do the same. The parser reads any run; the analyser rejects mixed ones.
+- **A prefix takes the operand after it:** a future not on `a == b` is written with a group, `not (a == b)`.
+- **Recursive descent, no Pratt parser.** With one level there is nothing for binding powers to resolve: an item is a loop, `chain { operator chain }`, like the chains themselves. Adding an operator adds a token and a message.
+- **One flat CST node** for a run, its operands in a list and its operators the tokens between them, as with chains. It replaces the `equation` node.
+
+### 14.2 Rejected
+
+- **A Pratt parser with a precedence table:** worth it for many operators at many levels; here it would resolve nothing, and its binary trees would have to be flattened again.
+- **Plain left to right, mixing allowed:** unambiguous, but `a == b implies c == d` would read `((a == b) implies c) == d`.
+- **Precedence among the connectives** (not over and over or over implies): a rule every reader has to remember; a group says the same thing in the program.
+
