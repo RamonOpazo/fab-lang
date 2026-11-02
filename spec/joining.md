@@ -212,7 +212,7 @@ Consequences:
 
 - **The rule.** A space warns when one of its sides is a group's side with several branches, unpinched, where every branch but one exposes nothing: a stop, a cycle's right side, a lone node. The space really joins that one branch, so the step belongs inside it.
 - **The rewrites.** `(f/*, g) h` is `f/*, g h`; `(f, #A) g` is `f g, #A`; `f/? +(b/b, e) k` is `f/? +(b/b, e k)`. The spec's `While` and `Exit` examples are rewritten so.
-- **A pinch is quiet.** `(a, b/b)! k` gathers the branches into one node first, so the space joins that node, not a branch. A pinch that gathers one end only is a question for pinches.
+- **A pinch is quiet here.** In `(a, b/b)! k` the pinch gathers the branches into one node first, so the space joins that node, not a branch. The pinch itself gathers one end only, and warns as a pinch of one end (rule 4): `a/! k, b/b`. A pinch of nothing is an error.
 - **An interface check.** It needs the count of branches on a side, so it belongs with the arity errors (`ends_dont_match`, `nothing_to_join`), not with sorts. A side with a hole in it is unknown, and stays quiet.
 
 **Rejected.** A lone node in a group as an error ("isolated nodes join nothing"): the ontology says it is a correct diagram, so the language warns instead of refusing.

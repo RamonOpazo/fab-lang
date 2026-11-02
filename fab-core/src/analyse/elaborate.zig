@@ -89,8 +89,8 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 
 /// A bare edge name declares the edge: two fresh ends. Declared again, it is
 /// a hole, and the first declaration keeps its shape; inside the same chain,
-/// outside `f/f`, it is a self-reference. A name a failed term declared is
-/// quiet.
+/// outside `f/f`, it is a self-reference; inside a pinch, a pinch of declared
+/// edges. A name a failed term declared is quiet.
 fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const text = a.cst.tokenText(token);
     const gop = try a.scope.edges.getOrPut(a.arena.allocator(), text);
@@ -99,7 +99,12 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
             .edge => |first| {
                 const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
                 try a.errors.append(a.gpa, .{
-                    .tag = if (in_chain) .self_reference_outside_loop else .edge_declared_twice,
+                    .tag = if (in_chain)
+                        .self_reference_outside_loop
+                    else if (a.scope.pinches > 0)
+                        .pinch_of_declared_edges
+                    else
+                        .edge_declared_twice,
                     .token = token,
                     .related = first.token,
                 });
@@ -213,7 +218,10 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     }
     if (sort.isPinchedEdge(cst, node)) return one(a, try reference(a, node, if (cst.tag(node) == .prefix) .dom else .cod));
 
+    // A pinch with several branches declares them.
+    a.scope.pinches += 1;
     const p = try term(a, operand);
+    a.scope.pinches -= 1;
     if (cst.tag(node) == .prefix) return .{ .left = try pinch(a, p.left, null), .right = p.right };
     const kind: ?Ir.Node.Kind = switch (tag) {
         .quid => .choice,

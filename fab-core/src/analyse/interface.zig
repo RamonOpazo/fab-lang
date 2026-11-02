@@ -145,15 +145,30 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     }
     if (sort.of(cst, node) == .node) return .node;
     const t = try of(a, cst.data(node).node);
-    // A marker on a node is a question for pinches (rule 4).
+    // A marker on a node failed in rule 1.
     if (t == .node) return hole;
-    return switch (cst.tag(node)) {
-        .prefix => .{ .sides = .{ .left = one_node, .right = t.right() } },
-        else => switch (cst.tokenTag(cst.mainToken(node))) {
-            .slash => t,
-            else => .{ .sides = .{ .left = t.left(), .right = one_node } },
+    const prefix = cst.tag(node) == .prefix;
+    if (!try pinchCount(a, node, if (prefix) t.left() else t.right())) return hole;
+    return if (prefix)
+        .{ .sides = .{ .left = one_node, .right = t.right() } }
+    else
+        .{ .sides = .{ .left = t.left(), .right = one_node } };
+}
+
+/// A pinch merges several into one. Nothing to merge is an error; one is a
+/// pinch that does nothing, and warns.
+fn pinchCount(a: *Analyser, node: Node.Index, side: ?Side) error{OutOfMemory}!bool {
+    const s = side orelse return true;
+    const token = a.cst.mainToken(node);
+    switch (s.total()) {
+        0 => {
+            try a.failTerm(.pinch_of_nothing, node, token);
+            return false;
         },
-    };
+        1 => try a.fail(.pinch_of_one_end, token),
+        else => {},
+    }
+    return true;
 }
 
 /// `a/b/…`. One edge exposes what is beside it: a node, nothing beside `*`,

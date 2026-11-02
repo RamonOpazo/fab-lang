@@ -89,6 +89,8 @@ const Scope = struct {
     end: TokenIndex = 0,
     /// The outermost closed chain being elaborated, first and last token.
     chain: ?[2]TokenIndex = null,
+    /// How many pinches the term being elaborated is inside.
+    pinches: u32 = 0,
 };
 
 const Zone = struct {

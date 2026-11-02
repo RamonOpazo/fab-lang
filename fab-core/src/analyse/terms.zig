@@ -59,23 +59,38 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
         .c_chain => try closedChain(a, node),
         .prefix => switch (cst.tokenTag(main)) {
             .quid, .bang => try a.failTerm(.kind_on_the_left, node, main),
-            else => try markerOperand(a, cst.data(node).node),
+            else => try markerOperand(a, node),
         },
         .postfix => switch (cst.tokenTag(main)) {
             .quid, .bang => if (sort.isSingleEdge(cst, cst.data(node).node)) {
                 try a.failTerm(.kind_on_reference, node, main);
-            } else try markerOperand(a, cst.data(node).node),
-            else => try markerOperand(a, cst.data(node).node),
+            } else try markerOperand(a, node),
+            // A trailing `/` is judged with its chain (rule 2).
+            .slash => if (sort.of(cst, cst.data(node).node) == .edges) try term(a, cst.data(node).node),
+            else => try markerOperand(a, node),
         },
         .invalid => {},
         else => for (cst.children(node)) |child| try term(a, child),
     }
 }
 
-/// The operand of a marker. A marker on a node is a question for pinches
-/// (rule 4), so only edges are looked into.
-fn markerOperand(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
-    if (sort.of(a.cst, node) == .edges) try term(a, node);
+/// The operand of a marker (rule 4). A pinched single edge is one node, so
+/// it can't be pinched again; a marker on any other node has nothing to
+/// pinch.
+fn markerOperand(a: *Analyser, marker: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const main = cst.mainToken(marker);
+    const operand = ofOne(cst, cst.data(marker).node);
+    if (sort.isPinchedEdge(cst, operand)) return a.failTerm(.single_edge_pinched_twice, marker, main);
+    if (sort.of(cst, operand) == .node) return a.failTerm(.pinch_of_a_node, marker, main);
+    try term(a, operand);
+}
+
+/// A group of one is its item.
+fn ofOne(cst: *const Cst, node: Node.Index) Node.Index {
+    if (cst.tag(node) != .group) return node;
+    const inner = cst.children(node)[0];
+    return if (cst.tag(inner) == .items) node else ofOne(cst, inner);
 }
 
 /// `a/b/…`. A `/` needs an edge on one side at least. A `*` is private to one

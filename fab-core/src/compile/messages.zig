@@ -274,6 +274,31 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "References point left only: the edge must be declared before it is referred to.",
             .hint = "Move the declaration first: `f, +f/g`.",
         },
+        .pinch_of_declared_edges => .{
+            .message = "The edge {} is already declared; a pinch declares its branches",
+            .explanation = "A pinch with several branches declares new edges. It never merges existing nodes by surprise: joining existing things is the job of `/`.",
+            .hint = "Attach with a slash to the ends you mean: `+f/h`, or give the branch a new name.",
+        },
+        .single_edge_pinched_twice => .{
+            .message = "{} pinches a single edge that is already pinched",
+            .explanation = "A pinched single edge is a reference to one node, and a node has no sides to pinch. A term can't be both ends of an edge.",
+            .hint = "Keep one side: `+f` or `f+`. A group may be pinched on both sides: `+(f, g)+`.",
+        },
+        .pinch_of_a_node => .{
+            .message = "{} pinches a node",
+            .explanation = "A pinch merges the ends of the branches of a group into one node. A node is already one, with no ends of its own to merge.",
+            .hint = "Attach the node with a slash: `#A/f`.",
+        },
+        .pinch_of_nothing => .{
+            .message = "{} pinches nothing",
+            .explanation = "Every branch exposes nothing on this side (a stop, a cycle's right side, a lone node), so there are no ends to merge.",
+            .hint = "Drop the pinch, or end the branches where they can meet.",
+        },
+        .pinch_of_one_end => .{
+            .message = "{} pinches a single end",
+            .explanation = "The other branches expose nothing on this side, so the pinch merges one end with nothing: it is that end.",
+            .hint = "Drop the pinch and write the pieces apart: `+(f, #A)` is `f, #A`; with a kind, `(a, b/b)! k` is `a/! k, b/b`.",
+        },
         .space_reaches_one_branch => .{
             .message = "The space before {} joins one branch of several",
             .explanation = "The other branches of the group expose nothing on this side (a stop, a cycle, a lone node), so the space joins only one of them, though it reads as joining the group.",

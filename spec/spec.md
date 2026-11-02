@@ -832,6 +832,9 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Pinch of declared edges           | `f g, h k, +(f, h)`                             | A pinch with several branches declares them                                |
 | Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |
 | Single edge pinched on both sides | `+f+`, `+(f)+`                                  | A pinched edge is one node; it has one side                                |
+| Pinch of a node                   | `+#A`, `#A?`, `(@)+`                            | A pinch merges the ends of a group; a node has none: attach it with `/`    |
+| Pinch of nothing                  | `(f/*, g/*)+`                                   | Every branch exposes nothing on that side                                  |
+| Warning: pinch of one end         | `+(f, #A)`, `(a, b/b)! k`                       | The pinch merges one end with nothing; write the pieces apart: `a/! k, b/b` |
 | Kind on the left                  | `?(g, h)`, `!f`, `?/f`, `f/?/g`                 | A kind is written where flow arrives: `f/?`, `(a, b)?`                     |
 | Kind closing a cycle              | `f/g/?`                                         | A cycle ends on its start, so the kind would sit on the left of f          |
 | Lone kind                         | `?`, `(!)`                                      | A kind marks where flow arrives, and nothing arrives here                  |

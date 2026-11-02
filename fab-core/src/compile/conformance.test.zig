@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 3 };
+const done: Progress = .{ .step = 5, .rule = 4 };
 
 const Progress = struct {
     step: u8,
@@ -299,7 +299,18 @@ test "Pinches: a parallel pair" {
 }
 
 test "Pinches: a square" {
-    try check(.{ .step = 5, .source = "Sq :: +(f h, g k)+" });
+    try check(.{ .step = 5, .rule = 4, .source = "Sq :: +(f h, g k)+", .ir =
+        \\zone Sq
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  node n2 canon h+
+        \\  node n3 canon g+
+        \\  edge f n0 -> n1
+        \\  edge h n1 -> n2
+        \\  edge g n0 -> n3
+        \\  edge k n3 -> n2
+        \\
+    });
 }
 
 test "Pinches: decision and merge" {
@@ -501,6 +512,45 @@ test "Relations: a forward reference" {
 
 test "Cycles: a cycle that ends on its start" {
     try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/g/#A" });
+}
+
+// ---------------------------------------------------------------------------
+// Pinches (rule 4)
+
+test "Relations: a pinch of declared edges" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: f g, h k, +(f, h)", .codes = &.{ .{ .analysis = .pinch_of_declared_edges }, .{ .analysis = .pinch_of_declared_edges } } });
+}
+
+test "Relations: a single edge pinched on both sides" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: f, +f+", .codes = &.{.{ .analysis = .single_edge_pinched_twice }} });
+}
+
+test "Relations: a single edge in a group, pinched on both sides" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: f, +(f)+", .codes = &.{.{ .analysis = .single_edge_pinched_twice }} });
+}
+
+test "Relations: a pinch of a named node" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: +#A", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
+}
+
+test "Relations: a kind on a named node" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: #A?", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
+}
+
+test "Relations: a pinch of the diagram's own node" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: (@)+", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
+}
+
+test "Relations: a pinch of nothing" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: (f/*, g/*)+", .codes = &.{.{ .analysis = .pinch_of_nothing }} });
+}
+
+test "Relations: warning, a pinch of one end beside a lone node" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: +(f, #A)", .codes = &.{.{ .analysis = .pinch_of_one_end }} });
+}
+
+test "Relations: warning, a pinch of one end beside a cycle" {
+    try check(.{ .step = 5, .rule = 4, .source = "G :: (a, b/b)! k", .codes = &.{.{ .analysis = .pinch_of_one_end }} });
 }
 
 // ---------------------------------------------------------------------------

@@ -96,6 +96,19 @@ pub const Tag = enum(u8) {
     /// `+f/g f`.
     forward_reference,
 
+    // -- pinches (rule 4) ----------------------------------------------------
+
+    /// `f g, h k, +(f, h)`.
+    pinch_of_declared_edges,
+    /// `+f+`, `+(f)+`.
+    single_edge_pinched_twice,
+    /// `+#A`, `#A?`, `(@)+`.
+    pinch_of_a_node,
+    /// `(f/*, g/*)+`.
+    pinch_of_nothing,
+    /// Warning. `+(f, #A)`, `(a, b/b)! k`.
+    pinch_of_one_end,
+
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
     /// `#User :: @/(id, name)`, `review :: a b`.
@@ -110,7 +123,7 @@ pub const Tag = enum(u8) {
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
-            .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch => .warning,
+            .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
             .unsupported_levels, .unsupported_definition => .unsupported,
             else => .@"error",
         };
