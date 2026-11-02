@@ -114,7 +114,71 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
 
 pub fn analysis(tag: Analyser.Error.Tag) Text {
     return switch (tag) {
-        _ => unreachable, // no tags yet
+        .entry_in_declaration => .{
+            .message = "An entry or equation in a declaration",
+            .explanation = "A declaration's items are terms: edges, nodes and groups of them. Attributes and equations are bound in definitions.",
+            .hint = "Move it to a definition: `G :style := { … }` or `G :prove := { … }`.",
+        },
+        .class_in_declaration => .{
+            .message = "The class {} in a declaration",
+            .explanation = "Classes name sets of subjects for definitions. A declaration builds structure from edges and nodes only.",
+            .hint = "Bind it in a definition: `&node :shape := [circle]`.",
+        },
+        .value_in_declaration => .{
+            .message = "The value {} in a declaration",
+            .explanation = "Strings, math and brackets are values, and values are bound in definitions. A declaration builds structure from edges and nodes only.",
+            .hint = "Remove it, or bind it in a definition: `G :style := { f :label \"x\" }`.",
+        },
+        .bare_term_in_definition => .{
+            .message = "{} binds nothing",
+            .explanation = "A definition's items are entries (`subject :attr value`) and equations. A term on its own has no attribute to bind.",
+            .hint = "Give it an attribute, or group several subjects: `(yes, paid) :label \"yes\"`.",
+        },
+        .levels_in_definition => .{
+            .message = "Levels in a definition",
+            .explanation = "`|` separates the levels of a declaration. A definition binds values, which have no levels.",
+            .hint = "Write `,` between items, or move the levels to the diagram's declaration.",
+        },
+        .bad_declaration_head => .{
+            .message = "{} cannot be declared",
+            .explanation = "A declaration builds structure, and only diagrams, nodes and edges are structure: `G :: f g`.",
+            .hint = "Use a diagram name for the head, or `:=` to define a value.",
+        },
+        .bad_definition_head => .{
+            .message = "{} is not the head of a definition",
+            .explanation = "A definition's left side is `[name]` (a value), `:attr` (a bundle) or `subject :attr` (an attribute at a subject).",
+            .hint = "Add the attribute being defined, as in `G :style := { … }`, or use `::` to declare a diagram.",
+        },
+        .mixed_operators => .{
+            .message = "{} follows a different operator",
+            .explanation = "Operators between chains share one level, with no precedence: a run may repeat one operator, and different ones need a group.",
+            .hint = "Group the parts: `(f == g) ~= h`.",
+        },
+        .zone_declared_twice => .{
+            .message = "The diagram {} is declared twice",
+            .explanation = "One declaration per diagram. References go to the first one.",
+            .hint = "Rename one of them, or merge their bodies into one declaration.",
+        },
+        .chain_broken_across_lines => .{
+            .message = "This chain continues from the line before",
+            .explanation = "Inside braces a newline is a space, so a chain on two lines is one chain: `f g` then `h k` reads `f g h k`.",
+            .hint = "Write `,` at the end of the line for two items, or group the chain to say it is one.",
+        },
+        .reserved_node_or_edge_declaration => .{
+            .message = "Declaring {} is reserved",
+            .explanation = "Only diagrams are declared today. What declaring a node or an edge on its own means is still open in the spec, so it is an error until it is decided.",
+            .hint = "Declare a diagram instead: `T :: …`.",
+        },
+        .unsupported_levels => .{
+            .message = "Levels above the first are not supported yet",
+            .explanation = "The program is valid, but this compiler does not analyse levels above the first yet. They are skipped; the first level is drawn.",
+            .hint = "Nothing to fix in the program.",
+        },
+        .unsupported_definition => .{
+            .message = "Definitions are not supported yet",
+            .explanation = "The program is valid, but this compiler only checks a definition's shape so far. Its value is not applied.",
+            .hint = "Nothing to fix in the program.",
+        },
     };
 }
 

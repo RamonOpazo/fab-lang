@@ -114,12 +114,13 @@ fn writeNote(w: *Writer, gutter: usize, label: []const u8, o: Options) Writer.Er
 }
 
 fn writeSummary(w: *Writer, diagnostics: []const Diagnostic, o: Options) Writer.Error!void {
-    var counts = [_]usize{ 0, 0, 0 };
+    var counts = [_]usize{ 0, 0, 0, 0 };
     for (diagnostics) |d| counts[@backingInt(d.severity)] += 1;
     const parts = [_]struct { usize, []const u8, []const u8, Diagnostic.Severity }{
         .{ counts[@backingInt(Diagnostic.Severity.@"error")], "error", "errors", .@"error" },
         .{ counts[@backingInt(Diagnostic.Severity.promoted)], "promoted warning", "promoted warnings", .promoted },
         .{ counts[@backingInt(Diagnostic.Severity.warning)], "warning", "warnings", .warning },
+        .{ counts[@backingInt(Diagnostic.Severity.unsupported)], "unsupported", "unsupported", .unsupported },
     };
     var first = true;
     for (parts) |part| {
@@ -255,6 +256,7 @@ fn severityColor(s: Diagnostic.Severity) []const u8 {
         .@"error" => "\x1b[31m",
         .promoted => "\x1b[35m",
         .warning => "\x1b[33m",
+        .unsupported => "\x1b[36m",
     };
 }
 
@@ -263,6 +265,7 @@ fn severityLabel(s: Diagnostic.Severity) []const u8 {
         .@"error" => "error",
         .promoted => "promoted warning",
         .warning => "warning",
+        .unsupported => "unsupported",
     };
 }
 

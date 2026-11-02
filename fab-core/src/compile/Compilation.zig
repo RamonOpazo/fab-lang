@@ -58,6 +58,7 @@ pub const Status = enum {
 
     pub fn of(severity: Diagnostic.Severity) Status {
         return switch (severity) {
+            .unsupported => .ok,
             .warning => .warning,
             .promoted => .promoted,
             .@"error" => .@"error",

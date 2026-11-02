@@ -14,7 +14,7 @@
 //!   Diagnostic:
 //!     { "code": "edge_declared_twice",
 //!       "stage": "syntax" | "analysis",
-//!       "severity": "warning" | "promoted" | "error",
+//!       "severity": "unsupported" | "warning" | "promoted" | "error",
 //!       "span": Span, "related": Span | null,
 //!       "message": "…", "explanation": "…", "hint": "…" }
 //!

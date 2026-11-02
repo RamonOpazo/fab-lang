@@ -42,15 +42,25 @@ pub const Code = union(enum) {
         };
     }
 
-    /// The severity before any promotion. Every code is an error for now.
+    /// The severity before any promotion. Syntax errors are all errors.
     pub fn defaultSeverity(code: Code) Severity {
-        _ = code;
-        return .@"error";
+        return switch (code) {
+            .syntax => .@"error",
+            .analysis => |tag| switch (tag.severity()) {
+                .warning => .warning,
+                .@"error" => .@"error",
+                .unsupported => .unsupported,
+            },
+        };
     }
 };
 
 /// Ordered from least to most severe, so the worst of several is their max.
 pub const Severity = enum(u2) {
+    /// Not a problem with the program: a construct the compiler does not
+    /// implement yet, and skips (spec/statements.md §15). Never promoted,
+    /// never part of the program's status, and never in a release build.
+    unsupported,
     warning,
     /// A warning that the program's header or the caller made an error.
     promoted,
@@ -62,7 +72,7 @@ pub const Severity = enum(u2) {
 
     /// Promoted warnings count as errors.
     pub fn isError(s: Severity) bool {
-        return s != .warning;
+        return s == .promoted or s == .@"error";
     }
 };
 

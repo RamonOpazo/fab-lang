@@ -5,18 +5,30 @@
 //! order) and, when it matters, the IR it denotes (as `Ir.dump`). Tests are
 //! named after the spec section the case comes from.
 //!
-//! Each case names the plan step (CLAUDE.md) that makes it pass. `done` is the
-//! last step finished; cases for later steps are skipped. Finishing a step
-//! bumps `done`, and its cases must then pass. Each step adds its new
-//! diagnostic codes together with their rows.
+//! Each case names the plan step (CLAUDE.md) that makes it pass, and within
+//! step 5 the analyser's rule. `done` is the last one finished; later cases
+//! are skipped. Finishing a step or a rule bumps `done`, and its cases must
+//! then pass. Each adds its new diagnostic codes together with their rows.
+//!
+//! Unsupported diagnostics are left out: the spec never mentions them
+//! (statements.md §15), and a case states what the spec says.
 
 const std = @import("std");
 const testing = std.testing;
 const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
-/// The last plan step finished.
-const done = 4;
+/// The last plan step, and rule of step 5, finished.
+const done: Progress = .{ .step = 5, .rule = 0 };
+
+const Progress = struct {
+    step: u8,
+    rule: u8 = 0,
+
+    fn after(a: Progress, b: Progress) bool {
+        return a.step > b.step or (a.step == b.step and a.rule > b.rule);
+    }
+};
 
 const Case = struct {
     source: [:0]const u8,
@@ -26,18 +38,25 @@ const Case = struct {
     ir: ?[]const u8 = null,
     /// The plan step that makes the case pass.
     step: u8,
+    /// Within step 5, the analyser's rule that makes the case pass.
+    rule: u8 = 0,
 };
 
 /// Keeps the IR of a program with errors, so a rejected case can check it too.
 const tolerance: Compilation.Tolerance = .{ .warnings = .warn, .ir = .keep };
 
 fn check(case: Case) !void {
-    if (case.step > done) return error.SkipZigTest;
+    if ((Progress{ .step = case.step, .rule = case.rule }).after(done)) return error.SkipZigTest;
 
     var c = try Compilation.init(testing.allocator, case.source, tolerance);
     defer c.deinit();
 
-    const diags = try c.diagnostics();
+    var reported: std.ArrayList(Diagnostic) = .empty;
+    defer reported.deinit(testing.allocator);
+    for (try c.diagnostics()) |d| {
+        if (d.severity != .unsupported) try reported.append(testing.allocator, d);
+    }
+    const diags = reported.items;
     const same = diags.len == case.codes.len and for (diags, case.codes) |d, want| {
         if (!std.meta.eql(d.code, want)) break false;
     } else true;
@@ -62,7 +81,7 @@ fn check(case: Case) !void {
 // Composition
 
 test "Composition: two edges in a path" {
-    try check(.{ .step = 5, .source = "G :: f g", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: f g", .ir =
         \\zone G
         \\  node n0 canon +f
         \\  node n1 canon f+
@@ -264,6 +283,88 @@ test "Interfaces: lone nodes" {
 }
 
 // ---------------------------------------------------------------------------
+// Statements (rule 0)
+
+test "Statements: a bare term in a definition" {
+    try check(.{ .step = 5, .source = "G :style := yes, paid :label \"yes\"", .codes = &.{.{ .analysis = .bare_term_in_definition }} });
+}
+
+test "Statements: an entry in a declaration" {
+    try check(.{ .step = 5, .source = "G :: f (g :label \"x\")", .codes = &.{.{ .analysis = .entry_in_declaration }} });
+}
+
+test "Statements: an equation in a declaration" {
+    try check(.{ .step = 5, .source = "G :: f == g", .codes = &.{.{ .analysis = .entry_in_declaration }} });
+}
+
+test "Statements: a class in a declaration" {
+    try check(.{ .step = 5, .source = "G :: &node f", .codes = &.{.{ .analysis = .class_in_declaration }} });
+}
+
+test "Statements: levels in a definition" {
+    try check(.{ .step = 5, .source = ":x := a | b", .codes = &.{.{ .analysis = .levels_in_definition }} });
+}
+
+test "Statements: a value as a declaration's head" {
+    try check(.{ .step = 5, .source = "[red] :: f", .codes = &.{.{ .analysis = .bad_declaration_head }} });
+}
+
+test "Statements: an entry as a declaration's head" {
+    try check(.{ .step = 5, .source = "G :style :: f", .codes = &.{.{ .analysis = .bad_declaration_head }} });
+}
+
+test "Statements: a node declared, reserved" {
+    try check(.{ .step = 5, .source = "#User :: @/(id, name)", .codes = &.{.{ .analysis = .reserved_node_or_edge_declaration }} });
+}
+
+test "Statements: an edge declared, reserved" {
+    try check(.{ .step = 5, .source = "review :: a b", .codes = &.{.{ .analysis = .reserved_node_or_edge_declaration }} });
+}
+
+test "Statements: a chain as a definition's head" {
+    try check(.{ .step = 5, .source = "f g := [red]", .codes = &.{.{ .analysis = .bad_definition_head }} });
+}
+
+test "Statements: a diagram as a definition's head" {
+    try check(.{ .step = 5, .source = "G := [red]", .codes = &.{.{ .analysis = .bad_definition_head }} });
+}
+
+test "Statements: warning, a chain broken across lines" {
+    try check(.{ .step = 5, .source = "G :: {\n  f g\n  h k\n}", .codes = &.{.{ .analysis = .chain_broken_across_lines }} });
+}
+
+test "Statements: a chain across lines in a group" {
+    try check(.{ .step = 5, .source = "G :: {\n  (f g\n  h k)\n}" });
+}
+
+test "Statements: the three forms of definition" {
+    try check(.{ .step = 5, .source =
+        \\[red] := [#ff0000]
+        \\:terminal := { :shape [circle] :fill [red] }
+        \\G :: f
+        \\&node :shape := [circle]
+        \\G :style := { f :label "x", +f { :label $P$ } }
+        \\G.f :arrow := [epi]
+    });
+}
+
+test "Relations: a diagram declared twice" {
+    try check(.{ .step = 5, .source = "G :: f\nG :: g", .codes = &.{.{ .analysis = .zone_declared_twice }} });
+}
+
+test "Definitions and values: a value in a declaration" {
+    try check(.{ .step = 5, .source = "G :: +(g1, [f], g2)", .codes = &.{.{ .analysis = .value_in_declaration }} });
+}
+
+test "Proofs: different operators without a group" {
+    try check(.{ .step = 5, .source = "G :prove := f == g ~= h", .codes = &.{.{ .analysis = .mixed_operators }} });
+}
+
+test "Proofs: different operators, grouped" {
+    try check(.{ .step = 5, .source = "G :prove := (f == g) ~= h, f == g == h" });
+}
+
+// ---------------------------------------------------------------------------
 // Syntax errors (the spec's error tables)
 
 test "Statements: a statement spanning lines" {
@@ -324,4 +425,143 @@ test "Levels: an empty level" {
 
 test "Levels: a level inside a branch" {
     try check(.{ .step = 4, .source = "G :: f (g | α)", .codes = &.{.{ .syntax = .bar_in_group }} });
+}
+
+// ---------------------------------------------------------------------------
+// Examples (examples/*.fab, and the spec's Examples section)
+
+test "Examples: the simplest program" {
+    try check(.{ .step = 5, .source =
+        \\G :: f
+    });
+}
+
+test "Examples: mathematical diagrams" {
+    try check(.{ .step = 5, .source =
+        \\Sq   :: +(f h, g k)+              // a square: f;h and g;k from A to D
+        \\Tri  :: +(f g, h)+                // a triangle: f;g and h from A to C
+        \\Iso  :: f/g                       // f : A → B, g : B → A
+        \\Endo :: f/f                       // f : A → A
+        \\Und  :: f/                        // f connects A and B, in no direction
+        \\Cyc  :: f/g/h                     // a directed triangle: f, g, then h back to A
+        \\Pair :: +(f, g)+                  // a parallel pair f, g : A ⇉ B
+        \\Nat  :: +(f, g)+ | f/α/g          // a natural transformation α : f ⇒ g
+        \\Eq   :: +(f, g)+ | f/α/g/β        // α : f ⇒ g and β : g ⇒ f
+        \\Pr   :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)   // the universal property of a product
+    });
+}
+
+test "Examples: flows" {
+    try check(.{ .step = 5, .source =
+        \\If    :: f ?(fg g, fh h)? k              // decision, two branches, merge
+        \\While :: f ?(b/b, e) k                   // body b loops on the test; e exits to k
+        \\Exit  :: f ?(fg g/*, fh h) k             // g's branch stops; only h continues to k
+        \\Loop  :: f ?(fg g, fh h k/+f)            // k : cod(h) → dom(f), back before the test
+        \\Par   :: */s !(a, b)! t/*                // start, fork, two parallel branches, join, stop
+    });
+}
+
+test "Examples: a flowchart: order fulfilment" {
+    try check(.{ .step = 5, .source =
+        \\Order :: {
+        \\  */receive/#Received validate ?(
+        \\      yes/#Accepted fork !(
+        \\          charge ?(paid, declined/#Waiting/retry)
+        \\        , reserve ?(reserved, short/#Backorder/restock)
+        \\      )! ready/#Ready ship/#Shipped close/*
+        \\    , no/#Rejected notify/*
+        \\  )
+        \\}
+        \\
+        \\Order :style := {
+        \\  #Received  :label "Order received",
+        \\  validate+  :label "Valid?",
+        \\  charge+    :label "Payment accepted?",
+        \\  #Waiting   :label "Wait 10 min",
+        \\  reserve+   :label "In stock?",
+        \\  #Shipped   :label "Shipped",
+        \\  #Rejected  :label "Rejected",
+        \\  (yes, paid, reserved)  :label "yes",
+        \\  (no, declined, short)  :label "no",
+        \\  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
+        \\}
+    });
+}
+
+test "Examples: a database schema: documents and comments" {
+    try check(.{ .step = 5, .source =
+        \\T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
+        \\
+        \\User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+        \\Organization :: @/(id/T.#UUID7, name/T.#String)
+        \\Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
+        \\Project      :: @/(id/T.#UUID7, name/T.#String)
+        \\Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+        \\Comment      :: @/(id/T.#UUID7, text/T.#Text)
+        \\Tag          :: @/(id/T.#UUID7, label/T.#String)
+        \\Tagging      :: @/(id/T.#UUID7)
+        \\
+        \\Db :: {
+        \\  Membership/(user/User, org/Organization),
+        \\  Project/owner/Organization,
+        \\  Document/(project/Project, author/User),
+        \\  Comment/(document/Document, writer/User, parent/Comment),
+        \\  Tagging/(doc/Document, tag/Tag)
+        \\}
+        \\
+        \\Db :kind := [schema]
+        \\
+        \\Db :prove := {
+        \\  &node.id :pk,
+        \\  &edge :card [0..*/1],
+        \\
+        \\  User.(email, nick)! :uk,
+        \\  Tag.label :uk,
+        \\  (user, org)! :uk,
+        \\  (doc, tag)! :uk,
+        \\
+        \\  parent :nullable :card [0..*/0..1],
+        \\  parent document == document         // a reply is on the same document as its parent
+        \\}
+        \\
+        \\Db :style := writer :label "author_id"
+        \\User :style := :label "users"  :fill [muted]
+    });
+}
+
+test "Examples: a git history: commits as arrows" {
+    try check(.{
+        .step = 5,
+        .source =
+        \\Repo :: {
+        \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
+        \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
+        \\}
+        \\
+        \\:ref := :shape [round]  :fill [muted]
+        \\
+        \\Repo :style := {
+        \\  &node :shape [point],
+        \\  #Head    :ref  :label "main",
+        \\  #Feature :ref  :label "feature/auth",
+        \\  #V1      :ref  :label "v1.0",
+        \\  #Spike   :ref  :label "spike/cache",
+        \\  init    :label "a1f3 init",
+        \\  readme  :label "b27c add readme",
+        \\  fix     :label "c90e fix typo",
+        \\  login   :label "d4a1 login form",
+        \\  session :label "e5b2 sessions",
+        \\  merge   :label "f6c3 merge feature/auth",
+        \\  merge'  :arrow [/dashed/>],
+        \\  bump    :label "0a7d bump to 1.0",
+        \\  hotfix  :label "1b8e hotfix",
+        \\  spike   :label "2c9f try cache"
+        \\}
+        \\
+        \\Repo :prove := {
+        \\  fix merge == login session merge',   // both paths from the fork reach the same state
+        \\  #Merged :pushout                      // the merge is clean: the least common state
+        \\}
+        ,
+    });
 }
