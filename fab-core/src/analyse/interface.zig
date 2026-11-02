@@ -134,10 +134,15 @@ fn space(a: *Analyser, left: ?Side, right: ?Side, after: Node.Index) error{OutOf
     if (l.skipped or r.skipped) try a.fail(.space_reaches_one_branch, token);
 }
 
-/// `+t`, `t+`, `t?`, `t!`: one pinched node on the marker's side. A trailing
-/// `/` changes nothing here. A pinched single edge is a node.
+/// `+t`, `t+`, `t?`, `t!`: one pinched node on the marker's side. A pinched
+/// single edge is a node. A trailing `/` stands on a single edge only.
 fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     const cst = a.cst;
+    if (isTrailingSlash(cst, node)) {
+        if (sort.isSingleEdge(cst, cst.data(node).node)) return of(a, cst.data(node).node);
+        try a.failTerm(.undirected_not_one_edge, node, cst.mainToken(node));
+        return hole;
+    }
     if (sort.of(cst, node) == .node) return .node;
     const t = try of(a, cst.data(node).node);
     // A marker on a node is a question for pinches (rule 4).
@@ -154,32 +159,75 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
 /// `a/b/…`. One edge exposes what is beside it: a node, nothing beside `*`,
 /// or its own side. Two or more close a cycle, which exposes its start on the
 /// left and nothing on the right. The side beside `*` is exactly one free
-/// end.
+/// end. Between edges, a `/` glues one to several: never nothing, never
+/// several to several. A trailing `/` belongs to the chain, and needs it to
+/// be one single edge.
 fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     const cst = a.cst;
-    const links = cst.children(node);
+    const all = cst.children(node);
+    const last = all.len - 1;
+    const trailing = isTrailingSlash(cst, all[last]);
+
     var edges: usize = 0;
+    var single = false;
+    for (all, 0..) |link, i| {
+        const l = unwrap(cst, link, i == last and trailing);
+        if (sort.of(cst, l) == .edges) {
+            edges += 1;
+            single = sort.isSingleEdge(cst, l);
+        }
+    }
+    if (trailing and !(edges == 1 and single)) {
+        try a.failTerm(.undirected_not_one_edge, node, cst.mainToken(all[last]));
+        return hole;
+    }
+
     var unknown = false;
     var first: Type = undefined;
     var prev: Type = undefined;
-    for (links, 0..) |link, i| {
+    for (all, 0..) |link_, i| {
+        const link = unwrap(cst, link_, i == last and trailing);
         const t = try of(a, link);
-        if (sort.of(cst, link) == .edges) edges += 1;
         if (t.isHole()) unknown = true;
         if (i == 0) {
             first = t;
         } else {
-            if (isFreeStar(a, links[i - 1]) and !try nullEnd(a, t.left(), links[i - 1])) unknown = true;
+            const before = unwrap(cst, all[i - 1], false);
+            if (isFreeStar(a, before) and !try nullEnd(a, t.left(), before)) unknown = true;
             if (isFreeStar(a, link) and !try nullEnd(a, prev.right(), link)) unknown = true;
+            if (!try slash(a, node, prev, t, cst.lastToken(all[i - 1]) + 1)) return hole;
         }
         prev = t;
     }
+    if (edges > 1 and !try slash(a, node, prev, first, cst.lastToken(all[last - 1]) + 1)) return hole;
     if (unknown or edges == 0) return hole;
     if (edges > 1) return .{ .sides = .{ .left = one_node, .right = nothing } };
     return .{ .sides = .{
-        .left = end(a, links[0], first.left()),
-        .right = end(a, links[links.len - 1], prev.right()),
+        .left = end(a, all[0], first.left()),
+        .right = end(a, unwrap(cst, all[last], trailing), prev.right()),
     } };
+}
+
+/// A `/` between two edge terms glues one to one or more; a node beside it
+/// has no sides to count. Reports and fails the chain if not.
+fn slash(a: *Analyser, chain: Node.Index, left: Type, right: Type, token: TokenIndex) error{OutOfMemory}!bool {
+    const l = left.right() orelse return true;
+    const r = right.left() orelse return true;
+    if (l.total() == 0 or r.total() == 0) {
+        try a.failTerm(.nothing_to_join, chain, token);
+    } else if (l.total() > 1 and r.total() > 1) {
+        try a.failTerm(.slash_between_groups, chain, token);
+    } else return true;
+    return false;
+}
+
+fn isTrailingSlash(cst: *const Cst, node: Node.Index) bool {
+    return cst.tag(node) == .postfix and cst.tokenTag(cst.mainToken(node)) == .slash;
+}
+
+/// The last link without its trailing `/`.
+fn unwrap(cst: *const Cst, link: Node.Index, trailing: bool) Node.Index {
+    return if (trailing) cst.data(link).node else link;
 }
 
 /// What a one-edge chain exposes at one end: nothing beside `*`, the node

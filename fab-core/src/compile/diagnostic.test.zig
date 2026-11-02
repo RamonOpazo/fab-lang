@@ -34,8 +34,6 @@ fn expectLayer(d: Diagnostic, layer: messages.Layer, source: []const u8, expecte
 }
 
 test "an analysis error: spans, related span, message and hint" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const source = "G :: f g f";
     const ds = try diagnose(source);
     defer testing.allocator.free(ds);
@@ -46,7 +44,7 @@ test "an analysis error: spans, related span, message and hint" {
     try testing.expectEqual(Diagnostic.Severity.@"error", d.severity);
     try testing.expectEqual(Diagnostic.Span{ .start = 9, .end = 10 }, d.span);
     try testing.expectEqual(Diagnostic.Span{ .start = 5, .end = 6 }, d.related.?);
-    try expectLayer(d, .message, source, "Edge `f` is declared twice");
+    try expectLayer(d, .message, source, "The edge `f` is already declared");
 }
 
 test "a syntax error: the operator is the subject" {

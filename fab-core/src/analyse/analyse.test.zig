@@ -191,6 +191,25 @@ test "a failed link is a hole, and the edges beside it stay declared" {
     );
 }
 
+test "an edge declared twice points back to its first declaration" {
+    var a = try analyse("G :: f g f");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.edge_declared_twice}, a.tags());
+    try testing.expectEqual(@as(?Cst.TokenIndex, 2), a.result.errors[0].related);
+}
+
+test "a name declared in a failed term is quiet when declared again" {
+    // `f?` fails, so f is bound to its hole; the bare f after it says nothing.
+    try expectTags("G :: f?, f", &.{.kind_on_reference});
+}
+
+test "a reference is reported at the edge's name" {
+    var a = try analyse("G :: +k/g");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.reference_not_declared}, a.tags());
+    try testing.expectEqualStrings("k", a.cst.tokenText(a.result.errors[0].token));
+}
+
 test "a reserved head is checked, but not drawn" {
     var a = try analyse("review :: a b");
     defer a.deinit();

@@ -85,6 +85,10 @@ const Scope = struct {
     edges: std.StringHashMapUnmanaged(elaborate.Binding) = .empty,
     /// Named nodes, `@` and diagram names, by name.
     names: std.StringHashMapUnmanaged(u32) = .empty,
+    /// The declaration's last token: references look ahead to it.
+    end: TokenIndex = 0,
+    /// The outermost closed chain being elaborated, first and last token.
+    chain: ?[2]TokenIndex = null,
 };
 
 const Zone = struct {
@@ -183,6 +187,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     a.scope.edges.clearRetainingCapacity();
     a.scope.names.clearRetainingCapacity();
     a.scope.zone = z;
+    a.scope.end = cst.lastToken(body);
     try elaborate.items(a, first);
 }
 

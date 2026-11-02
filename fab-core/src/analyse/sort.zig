@@ -16,7 +16,11 @@ pub fn of(cst: *const Cst, node: Node.Index) Sort {
             else => .edges,
         },
         .juxtafix => of(cst, cst.data(node).nodes[1]),
-        .prefix, .postfix => if (isPinchedEdge(cst, node)) .node else .edges,
+        // A trailing `/` changes the direction of an edge, not what a term is.
+        .postfix => if (cst.tokenTag(cst.mainToken(node)) == .slash)
+            of(cst, cst.data(node).node)
+        else if (isPinchedEdge(cst, node)) .node else .edges,
+        .prefix => if (isPinchedEdge(cst, node)) .node else .edges,
         .group => blk: {
             const inner = cst.children(node)[0];
             break :blk if (cst.tag(inner) == .items) .edges else of(cst, inner);

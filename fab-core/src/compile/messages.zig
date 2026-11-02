@@ -225,9 +225,54 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Pinch the group: `f +(g, h)`, `(f, g)+ h`.",
         },
         .nothing_to_join => .{
-            .message = "The space before {} has nothing on one side",
-            .explanation = "A stop (`*`) and a cycle expose nothing on their right, so there is no end for the space to join.",
+            .message = "Nothing to join here: one side exposes nothing",
+            .explanation = "A stop (`*`) and a cycle expose nothing on their right, so there is no end for the space or the `/` to join.",
             .hint = "Write `,` for separate pieces: `f/*, g`.",
+        },
+        .slash_between_groups => .{
+            .message = "This `/` glues several ends to several",
+            .explanation = "A `/` glues one node or end to every end on its other side. Several to several would merge them all into one node, a collapse nobody wrote.",
+            .hint = "Pinch one side first: `(f, g)+/(h, k)`.",
+        },
+        .undirected_not_one_edge => .{
+            .message = "A trailing `/` needs a single edge",
+            .explanation = "A trailing `/` makes one edge undirected, so the chain it ends must hold exactly one edge, written by its name.",
+            .hint = "Write it on each edge: `f/ g/`.",
+        },
+        .edge_declared_twice => .{
+            .message = "The edge {} is already declared",
+            .explanation = "A bare name declares an edge, once per diagram. Only `f/f` writes the same edge twice, as a loop.",
+            .hint = "Refer to one of its ends instead: `+f`, `f+`.",
+        },
+        .self_reference_outside_loop => .{
+            .message = "The edge {} refers to itself in its own chain",
+            .explanation = "A loop is written `f/f`: a single edge on the left. Anywhere else in the chain, the second name would declare the edge again.",
+            .hint = "Close the cycle on a reference: `+f/g/f+`, or write the loop `f/f`.",
+        },
+        .redundant_self_attachment => .{
+            .message = "This reference attaches {} to its own start",
+            .explanation = "Gluing the end of f to its start is a loop, which is written `f/f`.",
+            .hint = "Write `f/f`.",
+        },
+        .vacuous_self_attachment => .{
+            .message = "This reference attaches {} to its own end",
+            .explanation = "Gluing the end of f to itself says nothing.",
+            .hint = "Drop the reference: `f`.",
+        },
+        .cycle_does_not_close => .{
+            .message = "This cycle ends at {}, not where it began",
+            .explanation = "A chain of two or more edges is a cycle: it ends where it began. Ending on a node, that node must be its start.",
+            .hint = "End on the start (`#A/f/#B/g/#A`, or just `#A/f/#B/g`), or write a path with a space.",
+        },
+        .reference_not_declared => .{
+            .message = "The edge {} is not declared",
+            .explanation = "A reference to an end needs its edge declared before it, in the same diagram.",
+            .hint = "Declare the edge first: `k, +k/g`.",
+        },
+        .forward_reference => .{
+            .message = "The edge {} is declared later",
+            .explanation = "References point left only: the edge must be declared before it is referred to.",
+            .hint = "Move the declaration first: `f, +f/g`.",
         },
         .space_reaches_one_branch => .{
             .message = "The space before {} joins one branch of several",

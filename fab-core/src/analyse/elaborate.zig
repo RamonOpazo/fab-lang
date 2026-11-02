@@ -1,10 +1,11 @@
 //! Elaboration (rule 3 on): turns the terms of a declaration into elements of
 //! the union-find, whose classes become the IR's nodes, and into edges.
 //!
-//! Runs after rules 0–2, so it reports nothing on its own: every term it
-//! meets either is well typed or has failed, and the error is already said.
-//! A failed term, and a join that rule 2 rejected, become holes, so the path
-//! stays connected and nothing glued to them reports again.
+//! Runs after rules 0–2, so every term it meets is well typed or has failed.
+//! It reports only what needs names: edges declared twice, references, and
+//! cycles that don't close. A failed term, a join that rule 2 rejected, and a
+//! term with a name error become holes, so the path stays connected and
+//! nothing glued to them reports again.
 //!
 //! Each term elaborates to its ports: the elements on its left and on its
 //! right, as its interface counts them.
@@ -30,7 +31,7 @@ const Ports = struct {
 
 /// What an edge name stands for in a declaration.
 pub const Binding = union(enum) {
-    edge: struct { index: Ir.EdgeIndex, dom: Elem, cod: Elem },
+    edge: struct { index: Ir.EdgeIndex, dom: Elem, cod: Elem, token: TokenIndex },
     /// The edge was declared in a failed term.
     hole: Elem,
 };
@@ -87,11 +88,26 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 }
 
 /// A bare edge name declares the edge: two fresh ends. Declared again, it is
-/// a hole, and the first declaration keeps its shape.
+/// a hole, and the first declaration keeps its shape; inside the same chain,
+/// outside `f/f`, it is a self-reference. A name a failed term declared is
+/// quiet.
 fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const text = a.cst.tokenText(token);
     const gop = try a.scope.edges.getOrPut(a.arena.allocator(), text);
-    if (gop.found_existing) return one(a, try hole(a));
+    if (gop.found_existing) {
+        switch (gop.value_ptr.*) {
+            .edge => |first| {
+                const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
+                try a.errors.append(a.gpa, .{
+                    .tag = if (in_chain) .self_reference_outside_loop else .edge_declared_twice,
+                    .token = token,
+                    .related = first.token,
+                });
+            },
+            .hole => {},
+        }
+        return one(a, try hole(a));
+    }
 
     const index = try a.builder.addEdge(.{
         .name = try a.builder.addString(text),
@@ -103,7 +119,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const dom = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .dom }, .{});
     const cod = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .cod }, .{});
     try a.edge_ends.append(a.arena.allocator(), .{ dom, cod });
-    gop.value_ptr.* = .{ .edge = .{ .index = index, .dom = dom, .cod = cod } };
+    gop.value_ptr.* = .{ .edge = .{ .index = index, .dom = dom, .cod = cod, .token = token } };
 
     const ends = try a.arena.allocator().alloc(Elem, 2);
     ends[0] = dom;
@@ -195,7 +211,7 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         undirect(a, operand);
         return p;
     }
-    if (sort.isPinchedEdge(cst, node)) return one(a, try reference(a, operand, if (cst.tag(node) == .prefix) .dom else .cod));
+    if (sort.isPinchedEdge(cst, node)) return one(a, try reference(a, node, if (cst.tag(node) == .prefix) .dom else .cod));
 
     const p = try term(a, operand);
     if (cst.tag(node) == .prefix) return .{ .left = try pinch(a, p.left, null), .right = p.right };
@@ -221,11 +237,20 @@ fn pinch(a: *Analyser, side: []const Elem, kind: ?struct { Ir.Node.Kind, TokenIn
     return (try one(a, first)).left;
 }
 
-/// The node at one end of a declared edge. An undeclared edge is a hole
-/// until its error exists (5.3b).
-fn reference(a: *Analyser, operand: Node.Index, side: Ir.End.Side) error{OutOfMemory}!Elem {
-    const name = a.cst.tokenText(a.cst.mainToken(singleEdge(a.cst, operand)));
-    const binding = a.scope.edges.get(name) orelse return hole(a);
+/// The node at one end of a declared edge. An edge not declared yet is a
+/// hole: a forward reference if the declaration names it later, else not
+/// declared.
+fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemory}!Elem {
+    const cst = a.cst;
+    const name = cst.tokenText(cst.mainToken(singleEdge(cst, cst.data(node).node)));
+    const binding = a.scope.edges.get(name) orelse {
+        const later = for (cst.lastToken(node) + 1..a.scope.end + 1) |t| {
+            const i: TokenIndex = @intCast(t);
+            if (cst.tokenTag(i) == .edge_id and std.mem.eql(u8, cst.tokenText(i), name)) break true;
+        } else false;
+        try a.fail(if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
+        return hole(a);
+    };
     return switch (binding) {
         .edge => |e| if (side == .dom) e.dom else e.cod,
         .hole => |h| h,
@@ -252,8 +277,16 @@ fn undirect(a: *Analyser, node: Node.Index) void {
 /// and exposes nothing.
 fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     const cst = a.cst;
+    // The outermost chain's span, for self-references.
+    const outer = a.scope.chain == null;
+    if (outer) a.scope.chain = .{ cst.firstToken(node), cst.lastToken(node) };
+    defer if (outer) {
+        a.scope.chain = null;
+    };
+
     const links = cst.children(node);
     const last = links.len - 1;
+    if (try selfAttachment(a, links)) return failedTerm(a, node);
     if (isLoop(cst, links)) {
         const p = try term(a, links[0]);
         try glue(a, p.right[0], p.left[0]);
@@ -274,11 +307,17 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         }
     }
     for (ports[0..last], ports[1..]) |left, right| try slash(a, left.right, right.left);
-    if (edges > 1) try slash(a, ports[last].right, ports[0].left);
+    if (edges > 1) {
+        const end = if (trailing) cst.data(links[last]).node else links[last];
+        if (sort.of(cst, end) == .node and !closes(a, ports[last].right, ports[0].left)) {
+            try a.fail(.cycle_does_not_close, cst.firstToken(links[last]));
+        } else try slash(a, ports[last].right, ports[0].left);
+    }
 
-    for (links, ports) |link, p| if (sort.isLeaf(cst, link, .star)) {
-        (try a.uf.edit(p.left[0])).sealed = true;
-    };
+    for (links, ports, 0..) |link, p, i| {
+        const l = if (i == last and trailing) cst.data(link).node else link;
+        if (sort.isLeaf(cst, l, .star)) (try a.uf.edit(p.left[0])).sealed = true;
+    }
     if (trailing and edges == 1) undirect(a, edge);
 
     if (edges > 1) return .{ .left = ports[0].left, .right = &.{} };
@@ -286,6 +325,37 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         .left = if (sort.isLeaf(cst, links[0], .star)) &.{} else ports[0].left,
         .right = if (sort.isLeaf(cst, links[last], .star)) &.{} else ports[last].right,
     };
+}
+
+/// A cycle that ends on a node must end on its start: the same class
+/// already. A hole closes anything.
+fn closes(a: *Analyser, end: []const Elem, start: []const Elem) bool {
+    if (end.len != 1 or start.len != 1) return true;
+    if (a.uf.class(end[0]).hole or a.uf.class(start[0]).hole) return true;
+    return a.uf.find(end[0]) == a.uf.find(start[0]);
+}
+
+/// `f/+f` and `f/f+`: a chain whose one edge is declared here, then a
+/// reference to that edge. To its other end it is `f/f`; to the same end it
+/// glues the end to itself.
+fn selfAttachment(a: *Analyser, links: []const Node.Index) error{OutOfMemory}!bool {
+    const cst = a.cst;
+    const at = for (links, 0..) |link, i| {
+        if (sort.of(cst, link) == .edges) break i;
+    } else return false;
+    const edge = links[at];
+    if (!sort.isLeaf(cst, edge, .edge_id)) return false;
+    const name = cst.tokenText(cst.mainToken(edge));
+    if (a.scope.edges.contains(name)) return false;
+    for (links[at + 1 ..]) |link| {
+        if (sort.of(cst, link) == .edges) return false;
+        if (!sort.isPinchedEdge(cst, link)) continue;
+        if (!std.mem.eql(u8, cst.tokenText(cst.mainToken(singleEdge(cst, cst.data(link).node))), name)) continue;
+        const to_start = cst.tag(link) == .prefix;
+        try a.fail(if (to_start) .redundant_self_attachment else .vacuous_self_attachment, cst.mainToken(singleEdge(cst, cst.data(link).node)));
+        return true;
+    }
+    return false;
 }
 
 /// `f/f`: the second f is the first, not a new edge.

@@ -150,6 +150,8 @@ One rule at a time, in order, each with its corpus rows and its messages in `com
 6. **Cross-diagram references.** `A.+f`, `A.#X` (must exist), diagram names as nodes (need an `@`).
 7. **Canonical references.** The union-find's oldest element gives every node a canonical end from rule 3 on; this rule settles what is still open: the canonical of a named node and of a `*` (`#A/f/#B` gives #B `f+`, `*/f` gives `*` none), and nodes shared across diagrams.
 
+Then **issues**: an error with a subject (a hole, an edge, a node) is written to the IR's issues table, so renderers can mark it; the tests that need them come back (`compilation.test.zig`, `json.test.zig`, `format.test.zig`).
+
 Done when every level-1 relations case passes.
 
 **6. IR, JSON and renderer for level 1; examples.**

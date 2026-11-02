@@ -70,10 +70,31 @@ pub const Tag = enum(u8) {
 
     /// `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`.
     ends_dont_match,
-    /// `f/g h`, `f/* g`, `(f/*) g`.
+    /// `f/g h`, `f/* g`, `(f/*) g`; at a slash, `(f/*)/g`.
     nothing_to_join,
     /// Warning. `(f/*, g) h`, `(f, #A) g`.
     space_reaches_one_branch,
+    /// `(f, g)/(h, k)`.
+    slash_between_groups,
+    /// `f/g/`, `(f, g)/`, `(f g)/`, `#B/`.
+    undirected_not_one_edge,
+
+    // -- slash chains and names (rule 3) -------------------------------------
+
+    /// `f g f`.
+    edge_declared_twice,
+    /// `(f g)/f`.
+    self_reference_outside_loop,
+    /// `f/+f`.
+    redundant_self_attachment,
+    /// `f/f+`.
+    vacuous_self_attachment,
+    /// `#A/f/#B/g/#C`, `+f/m/n/g+`.
+    cycle_does_not_close,
+    /// `+k/g` with k undeclared.
+    reference_not_declared,
+    /// `+f/g f`.
+    forward_reference,
 
     // -- reserved: the spec has not decided (statements.md §15) --------------
 

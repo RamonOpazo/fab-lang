@@ -437,6 +437,73 @@ test "Relations: warning, a space reaches one branch of a pinch" {
 }
 
 // ---------------------------------------------------------------------------
+// Slash chains (rule 3)
+
+test "Relations: a slash between two groups" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f, g)/(h, k)", .codes = &.{.{ .analysis = .slash_between_groups }} });
+}
+
+test "Relations: nothing to join at a slash, after a stop" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f/*)/g", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: nothing to join at a slash, after a cycle" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f/g)/h", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Undirected: a trailing / on a cycle" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/g/", .codes = &.{.{ .analysis = .undirected_not_one_edge }} });
+}
+
+test "Undirected: a trailing / on a group" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f, g)/", .codes = &.{.{ .analysis = .undirected_not_one_edge }} });
+}
+
+test "Undirected: a trailing / on a path" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f g)/", .codes = &.{.{ .analysis = .undirected_not_one_edge }} });
+}
+
+test "Relations: / between nodes, with a trailing /" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/#B/", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
+test "Relations: an edge declared twice" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f g f", .codes = &.{.{ .analysis = .edge_declared_twice }} });
+}
+
+test "Relations: a self-reference outside f/f" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f g)/f", .codes = &.{.{ .analysis = .self_reference_outside_loop }} });
+}
+
+test "Relations: a redundant self-attachment" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/+f", .codes = &.{.{ .analysis = .redundant_self_attachment }} });
+}
+
+test "Relations: a vacuous self-attachment" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/f+", .codes = &.{.{ .analysis = .vacuous_self_attachment }} });
+}
+
+test "Relations: a cycle that does not close, between named nodes" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/g/#C", .codes = &.{.{ .analysis = .cycle_does_not_close }} });
+}
+
+test "Relations: a cycle that does not close, the old pair form" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f, g, +f/m/n/g+", .codes = &.{.{ .analysis = .cycle_does_not_close }} });
+}
+
+test "Relations: a reference not declared" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: +k/g", .codes = &.{.{ .analysis = .reference_not_declared }} });
+}
+
+test "Relations: a forward reference" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: +f/g f", .codes = &.{.{ .analysis = .forward_reference }} });
+}
+
+test "Cycles: a cycle that ends on its start" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/g/#A" });
+}
+
+// ---------------------------------------------------------------------------
 // Statements (rule 0)
 
 test "Statements: a bare term in a definition" {

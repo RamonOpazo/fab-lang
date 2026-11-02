@@ -819,13 +819,15 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Self-reference outside `f/f`      | `(f g)/f`                                       | A loop needs a single edge on the left                                     |
 | Redundant self-attachment         | `f/+f`                                          | Same graph as `f/f`                                                        |
 | Vacuous self-attachment           | `f/f+`                                          | Glues an end to itself                                                     |
-| `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`           | `/` needs an edge between its sides                                        |
+| `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`, `#A/#B/` | `/` needs an edge between its sides                                        |
+| Slash between two groups          | `(f, g)/(h, k)`                                 | Gluing many ends to many is a collapse nobody wrote; pinch one side: `(f, g)+/(h, k)` |
+| Trailing `/` not on one edge      | `f/g/`, `(f, g)/`, `(f g)/`, `#B/`              | A trailing `/` makes one edge undirected: `f/ g/`                          |
 | Cycle that does not close         | `#A/f/#B/g/#C`, `+f/m/n/g+`                     | A chain of two or more edges ends where it began                           |
-| Reference not declared            | `gg/α/g` with gg undeclared                     | A reference needs its edge declared before it                              |
+| Reference not declared            | `+k/g`, `gg/α/g` with k, gg undeclared          | A reference needs its edge declared before it                              |
 | Forward reference                 | `+f/g f`                                        | References point left only                                                 |
 | Node beside a space               | `#A f`, `* f`, `@ (…)`, `f User`                | A node is attached to an edge with `/`                                     |
 | Ends don't match                  | `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`         | A space joins one end to one end; pinch the group: `f +(g, h)`             |
-| Nothing to join                   | `f/g h`, `f/* g`                                | One side exposes nothing; write `,` for separate pieces                    |
+| Nothing to join                   | `f/g h`, `f/* g`, `(f/*)/g`                     | One side exposes nothing; write `,` for separate pieces                    |
 | Warning: a space reaches one branch of several | `(f/*, g) h`, `(f, #A) g`, `+(g/*, h) k` | The other branches expose nothing there; move the step into the branch: `f/*, g h` |
 | Pinch of declared edges           | `f g, h k, +(f, h)`                             | A pinch with several branches declares them                                |
 | Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |

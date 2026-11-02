@@ -73,8 +73,6 @@ test "issues point into the document's diagnostics, after the syntax ones" {
 }
 
 test "related spans are written" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const doc = try document("G :: f g f", preview);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"related\":{\"bytes\":[5,6],");
