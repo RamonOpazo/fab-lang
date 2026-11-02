@@ -109,6 +109,15 @@ pub const Tag = enum(u8) {
     /// Warning. `+(f, #A)`, `(a, b/b)! k`.
     pinch_of_one_end,
 
+    // -- where nodes meet (rule 5) -------------------------------------------
+
+    /// `(a/?, b/!)+`, `validate/? #Valid/yes`.
+    kinds_disagree,
+    /// `a/#A #B/b`.
+    two_names_for_one_node,
+    /// `k f/*, j/f+`.
+    reference_to_null_node,
+
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
     /// `#User :: @/(id, name)`, `review :: a b`.

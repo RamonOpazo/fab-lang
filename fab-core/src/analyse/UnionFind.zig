@@ -62,9 +62,7 @@ pub const Conflict = struct {
     pub const Tag = enum {
         /// One class is a null node, which belongs to exactly one edge end.
         sealed_end,
-        /// Both classes have the same kind: it would be declared twice.
-        same_kind,
-        /// The classes have different kinds.
+        /// The classes have different kinds. The same kind agrees.
         different_kinds,
         /// Both classes are named (`#A` or `@`).
         two_names,
@@ -133,10 +131,8 @@ pub fn unite(uf: *UnionFind, x: u32, y: u32) error{OutOfMemory}!?Conflict {
 
     if (!cx.hole and !cy.hole) {
         if (cx.sealed or cy.sealed) return .{ .tag = .sealed_end };
-        if (cx.kind != null and cy.kind != null) {
-            const tag: Conflict.Tag = if (cx.kind.? == cy.kind.?) .same_kind else .different_kinds;
-            return .{ .tag = tag, .related = cy.kind_token };
-        }
+        if (cx.kind != null and cy.kind != null and cx.kind.? != cy.kind.?)
+            return .{ .tag = .different_kinds, .related = cx.kind_token };
         if (cx.named() and cy.named()) return .{ .tag = .two_names, .related = cx.name_token };
         if (cx.outer != null and cy.outer != null and cx.outer.? != cy.outer.?) return .{ .tag = .two_outer_edges };
     }

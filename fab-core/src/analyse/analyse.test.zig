@@ -210,6 +210,26 @@ test "a reference is reported at the edge's name" {
     try testing.expectEqualStrings("k", a.cst.tokenText(a.result.errors[0].token));
 }
 
+test "two names meet where the space is, and the first name wins" {
+    var a = try analyse("G :: a/#A #B/b");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.two_names_for_one_node}, a.tags());
+    const err = a.result.errors[0];
+    try testing.expectEqualStrings("#B", a.cst.tokenText(err.token));
+    try testing.expectEqualStrings("#A", a.cst.tokenText(err.related.?));
+    const ir = a.result.ir;
+    try testing.expectEqual(@as(usize, 3), ir.nodes.len);
+    try testing.expectEqualStrings("#A", ir.string(ir.nodes.items(.name)[1].?));
+}
+
+test "kinds that disagree point back to the kind that stays" {
+    var a = try analyse("G :: (a/?, b/!)+");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.kinds_disagree}, a.tags());
+    try testing.expectEqualStrings("+", a.cst.tokenText(a.result.errors[0].token));
+    try testing.expectEqualStrings("?", a.cst.tokenText(a.result.errors[0].related.?));
+}
+
 test "a reserved head is checked, but not drawn" {
     var a = try analyse("review :: a b");
     defer a.deinit();

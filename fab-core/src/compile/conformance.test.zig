@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 4 };
+const done: Progress = .{ .step = 5, .rule = 5 };
 
 const Progress = struct {
     step: u8,
@@ -162,7 +162,15 @@ test "Slash: null nodes at the start and the end" {
 }
 
 test "Slash: a node continues with a space" {
-    try check(.{ .step = 5, .source = "G :: receive/#Received validate" });
+    try check(.{ .step = 5, .rule = 5, .source = "G :: receive/#Received validate", .ir =
+        \\zone G
+        \\  node n0 canon +receive
+        \\  node n1 #Received canon receive+
+        \\  node n2 canon validate+
+        \\  edge receive n0 -> n1
+        \\  edge validate n1 -> n2
+        \\
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +361,17 @@ test "Pinches: one bar that joins and forks" {
 }
 
 test "Where nodes meet: a fan out of a named node" {
-    try check(.{ .step = 5, .source = "G :: validate/#Valid +(yes, no)" });
+    try check(.{ .step = 5, .rule = 5, .source = "G :: validate/#Valid +(yes, no)", .ir =
+        \\zone G
+        \\  node n0 canon +validate
+        \\  node n1 #Valid canon validate+
+        \\  node n2 canon yes+
+        \\  node n3 canon no+
+        \\  edge validate n0 -> n1
+        \\  edge yes n1 -> n2
+        \\  edge no n1 -> n3
+        \\
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -551,6 +569,29 @@ test "Relations: warning, a pinch of one end beside a lone node" {
 
 test "Relations: warning, a pinch of one end beside a cycle" {
     try check(.{ .step = 5, .rule = 4, .source = "G :: (a, b/b)! k", .codes = &.{.{ .analysis = .pinch_of_one_end }} });
+}
+
+// ---------------------------------------------------------------------------
+// Where nodes meet (rule 5)
+
+test "Relations: kinds disagree in a pinch" {
+    try check(.{ .step = 5, .rule = 5, .source = "G :: (a/?, b/!)+", .codes = &.{.{ .analysis = .kinds_disagree }} });
+}
+
+test "Relations: a named node is not a decision" {
+    try check(.{ .step = 5, .rule = 5, .source = "G :: validate/? #Valid/yes", .codes = &.{.{ .analysis = .kinds_disagree }} });
+}
+
+test "Relations: two names for one node" {
+    try check(.{ .step = 5, .rule = 5, .source = "G :: a/#A #B/b", .codes = &.{.{ .analysis = .two_names_for_one_node }} });
+}
+
+test "Relations: a reference to a null node" {
+    try check(.{ .step = 5, .rule = 5, .source = "G :: k f/*, j/f+", .codes = &.{.{ .analysis = .reference_to_null_node }} });
+}
+
+test "Where nodes meet: the same kind agrees" {
+    try check(.{ .step = 5, .rule = 5, .source = "G :: (a/?, b/?)+" });
 }
 
 // ---------------------------------------------------------------------------

@@ -52,14 +52,17 @@ test "conflicts are returned and change nothing" {
     const outer_f = try uf.add(0, null, .{ .outer = 0 });
     const outer_g = try uf.add(0, null, .{ .outer = 1 });
 
-    try testing.expectEqual(UnionFind.Conflict{ .tag = .different_kinds, .related = 2 }, (try uf.unite(choice, parallel)).?);
-    try testing.expectEqual(UnionFind.Conflict{ .tag = .same_kind, .related = 3 }, (try uf.unite(choice, choice2)).?);
+    try testing.expectEqual(UnionFind.Conflict{ .tag = .different_kinds, .related = 1 }, (try uf.unite(choice, parallel)).?);
     try testing.expectEqual(UnionFind.Conflict{ .tag = .two_names, .related = 4 }, (try uf.unite(a, b)).?);
     try testing.expectEqual(UnionFind.Conflict{ .tag = .sealed_end }, (try uf.unite(a, sealed)).?);
     try testing.expectEqual(UnionFind.Conflict{ .tag = .two_outer_edges }, (try uf.unite(outer_f, outer_g)).?);
 
     // Every class is still on its own.
     for (0..uf.len()) |i| try testing.expectEqual(@as(u32, @intCast(i)), uf.find(@intCast(i)));
+
+    // The same kind agrees.
+    try testing.expectEqual(no_conflict, try uf.unite(choice, choice2));
+    try testing.expectEqual(Ir.Node.Kind.choice, uf.class(choice2).kind.?);
 }
 
 test "a hole joins with anything, and stays a hole" {

@@ -299,6 +299,21 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "The other branches expose nothing on this side, so the pinch merges one end with nothing: it is that end.",
             .hint = "Drop the pinch and write the pieces apart: `+(f, #A)` is `f, #A`; with a kind, `(a, b/b)! k` is `a/! k, b/b`.",
         },
+        .kinds_disagree => .{
+            .message = "Two different kinds meet at {}",
+            .explanation = "A node has one kind: plain, choice, parallel or null. A named node is plain, so it is never a decision or a bar.",
+            .hint = "Put an edge between them: `validate/? yes/#Valid`.",
+        },
+        .two_names_for_one_node => .{
+            .message = "Two names meet at {}",
+            .explanation = "Where ends meet they become one node, and a node has at most one name.",
+            .hint = "Put an edge between them, or keep one name.",
+        },
+        .reference_to_null_node => .{
+            .message = "This end of {} is a null node",
+            .explanation = "A null node (`*`) is private to the one edge end it holds: nothing glues to it and nothing refers to it.",
+            .hint = "Name the node instead of `*`: `f/#Done, j/#Done`.",
+        },
         .space_reaches_one_branch => .{
             .message = "The space before {} joins one branch of several",
             .explanation = "The other branches of the group expose nothing on this side (a stop, a cycle, a lone node), so the space joins only one of them, though it reads as joining the group.",

@@ -76,10 +76,11 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     const text = cst.tokenText(token);
     return switch (cst.tokenTag(token)) {
         .edge_id => declareEdge(a, token),
-        .node_id => one(a, try named(a, text, .{ .name = text, .name_token = token })),
+        // A named node is plain: it meets no kind.
+        .node_id => one(a, try named(a, text, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
         // A diagram name as a node: a named stand-in until rule 6.
-        .zone_id => one(a, try named(a, text, .{ .name = text, .name_token = token })),
-        .at => one(a, try named(a, "@", .{ .own = true, .name_token = token })),
+        .zone_id => one(a, try named(a, text, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
+        .at => one(a, try named(a, "@", .{ .own = true, .name_token = token, .kind = .plain, .kind_token = token })),
         .star => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .null_node })),
         .quid => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .choice, .kind_token = token })),
         .bang => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .parallel, .kind_token = token })),
@@ -179,7 +180,7 @@ fn openChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     var prev = first;
     for (steps[1..]) |step| {
         const next = try term(a, step);
-        try space(a, prev.right, next.left);
+        try space(a, prev.right, next.left, a.cst.firstToken(step));
         prev = next;
     }
     return .{ .left = first.left, .right = prev.right };
@@ -187,20 +188,33 @@ fn openChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 
 /// One to one is a glue. Anything else was reported by rule 2, and becomes a
 /// hole holding both sides.
-fn space(a: *Analyser, left: []const Elem, right: []const Elem) error{OutOfMemory}!void {
-    if (left.len == 1 and right.len == 1) return glue(a, left[0], right[0]);
+fn space(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenIndex) error{OutOfMemory}!void {
+    if (left.len == 1 and right.len == 1) return glue(a, left[0], right[0], token);
     try holeOf(a, &.{ left, right });
 }
 
 fn holeOf(a: *Analyser, sides: []const []const Elem) error{OutOfMemory}!void {
     const h = try hole(a);
-    for (sides) |side| for (side) |e| try glue(a, h, e);
+    for (sides) |side| for (side) |e| try glue(a, h, e, null);
 }
 
-/// Merges two classes. A conflict is rule 5's to report; until then the
-/// classes merge anyway.
-fn glue(a: *Analyser, x: Elem, y: Elem) error{OutOfMemory}!void {
-    if (try a.uf.unite(x, y) != null) try a.uf.force(x, y);
+/// Merges two classes where they meet, at `token` (rule 5). A node has at
+/// most one name and kinds that agree; on a conflict the error is reported
+/// there, and the classes merge anyway, keeping the older's name and kind.
+/// A glue with no token can't conflict: one side is a hole, or fresh.
+fn glue(a: *Analyser, x: Elem, y: Elem, token: ?TokenIndex) error{OutOfMemory}!void {
+    const conflict = try a.uf.unite(x, y) orelse return;
+    if (token) |t| {
+        const tag: Analyser.Error.Tag = switch (conflict.tag) {
+            .different_kinds => .kinds_disagree,
+            .two_names => .two_names_for_one_node,
+            .sealed_end => .reference_to_null_node,
+            // Classes stand for outer cells from plan step 7.
+            .two_outer_edges => unreachable,
+        };
+        try a.errors.append(a.gpa, .{ .tag = tag, .token = t, .related = conflict.related });
+    }
+    try a.uf.force(x, y);
 }
 
 /// `+t`, `t+`, `t?`, `t!`, and a trailing `/`. On a single edge, `+` and its
@@ -222,26 +236,21 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     a.scope.pinches += 1;
     const p = try term(a, operand);
     a.scope.pinches -= 1;
-    if (cst.tag(node) == .prefix) return .{ .left = try pinch(a, p.left, null), .right = p.right };
+    if (cst.tag(node) == .prefix) return .{ .left = try pinch(a, p.left, null, main), .right = p.right };
     const kind: ?Ir.Node.Kind = switch (tag) {
         .quid => .choice,
         .bang => .parallel,
         else => null,
     };
-    return .{ .left = p.left, .right = try pinch(a, p.right, if (kind) |k| .{ k, main } else null) };
+    return .{ .left = p.left, .right = try pinch(a, p.right, kind, main) };
 }
 
-/// Merges one side into the first branch's element, and gives it a kind.
-fn pinch(a: *Analyser, side: []const Elem, kind: ?struct { Ir.Node.Kind, TokenIndex }) error{OutOfMemory}![]const Elem {
+/// Merges one side into the first branch's element. A kind is an element of
+/// its own, glued in like any other, so it meets what is there.
+fn pinch(a: *Analyser, side: []const Elem, kind: ?Ir.Node.Kind, token: TokenIndex) error{OutOfMemory}![]const Elem {
     const first = if (side.len > 0) side[0] else try a.uf.add(@backingInt(a.zone()), null, .{});
-    for (side[@min(1, side.len)..]) |e| try glue(a, first, e);
-    if (kind) |k| {
-        const class = try a.uf.edit(first);
-        if (class.kind == null) {
-            class.kind = k[0];
-            class.kind_token = k[1];
-        }
-    }
+    for (side[@min(1, side.len)..]) |e| try glue(a, first, e, token);
+    if (kind) |k| try glue(a, first, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = k, .kind_token = token }), token);
     return (try one(a, first)).left;
 }
 
@@ -259,10 +268,17 @@ fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemor
         try a.fail(if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
         return hole(a);
     };
-    return switch (binding) {
+    const elem = switch (binding) {
         .edge => |e| if (side == .dom) e.dom else e.cod,
-        .hole => |h| h,
+        .hole => |h| return h,
     };
+    // A null node is private to the one end it holds (rule 5).
+    const class = a.uf.class(elem);
+    if (class.sealed and !class.hole) {
+        try a.fail(.reference_to_null_node, cst.mainToken(singleEdge(cst, cst.data(node).node)));
+        return hole(a);
+    }
+    return elem;
 }
 
 fn singleEdge(cst: *const Cst, node: Node.Index) Node.Index {
@@ -297,7 +313,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     if (try selfAttachment(a, links)) return failedTerm(a, node);
     if (isLoop(cst, links)) {
         const p = try term(a, links[0]);
-        try glue(a, p.right[0], p.left[0]);
+        try glue(a, p.right[0], p.left[0], null);
         return .{ .left = p.left, .right = &.{} };
     }
 
@@ -314,12 +330,12 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
             edge = l;
         }
     }
-    for (ports[0..last], ports[1..]) |left, right| try slash(a, left.right, right.left);
+    for (ports[0..last], ports[1..], links[0..last]) |left, right, link| try slash(a, left.right, right.left, cst.lastToken(link) + 1);
     if (edges > 1) {
         const end = if (trailing) cst.data(links[last]).node else links[last];
         if (sort.of(cst, end) == .node and !closes(a, ports[last].right, ports[0].left)) {
             try a.fail(.cycle_does_not_close, cst.firstToken(links[last]));
-        } else try slash(a, ports[last].right, ports[0].left);
+        } else try slash(a, ports[last].right, ports[0].left, cst.lastToken(links[last - 1]) + 1);
     }
 
     for (links, ports, 0..) |link, p, i| {
@@ -374,11 +390,11 @@ fn isLoop(cst: *const Cst, links: []const Node.Index) bool {
 
 /// One side of a `/` is one element, glued to every element on the other.
 /// Anything else is an error of its own (5.3b), and a hole.
-fn slash(a: *Analyser, left: []const Elem, right: []const Elem) error{OutOfMemory}!void {
+fn slash(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenIndex) error{OutOfMemory}!void {
     if (left.len == 1 and right.len >= 1) {
-        for (right) |e| try glue(a, left[0], e);
+        for (right) |e| try glue(a, left[0], e, token);
     } else if (right.len == 1 and left.len >= 1) {
-        for (left) |e| try glue(a, e, right[0]);
+        for (left) |e| try glue(a, e, right[0], token);
     } else try holeOf(a, &.{ left, right });
 }
 
