@@ -456,7 +456,8 @@ fn slash(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenInde
 // The graph
 
 /// Every class becomes a node, in the order of its oldest element, and every
-/// edge goes from the class of its start to the class of its end.
+/// edge goes from the class of its start to the class of its end. A node's
+/// zone is its oldest element's: the diagram that created it.
 pub fn graph(a: *Analyser) error{OutOfMemory}!void {
     const uf = &a.uf;
     const node_of = try a.arena.allocator().alloc(Ir.NodeIndex, uf.len());
@@ -469,9 +470,20 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
             .kind = if (class.hole) .hole else class.kind orelse .plain,
             .name = if (class.name) |name| try a.builder.addString(name) else null,
             .zone = zone,
-            .canonical = uf.end_of.items[e],
+            .canonical = null,
         });
         if (class.own) a.builder.zones.items(.own)[@backingInt(zone)] = node_of[e];
+    }
+
+    // Canonical references (rule 7): a name is opted into, so a named node
+    // is its name; any other node is the first end that created it, in
+    // reading order, which is the order elements are made in.
+    const canonical = a.builder.nodes.items(.canonical);
+    for (uf.end_of.items, 0..) |end_, i| {
+        const end = end_ orelse continue;
+        const root = uf.find(@intCast(i));
+        const node = @backingInt(node_of[root]);
+        if (canonical[node] == null and !uf.class(root).named()) canonical[node] = end;
     }
     const sources = a.builder.edges.items(.source);
     const targets = a.builder.edges.items(.target);

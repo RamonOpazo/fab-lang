@@ -50,8 +50,8 @@ pub const Node = struct {
     /// `#A`, if the node is named.
     name: ?String,
     zone: ZoneIndex,
-    /// The edge end that created the node, in reading order: how the format
-    /// layer refers to an unnamed node. Null when a name created the node
+    /// The first edge end that created the node, in reading order: how the
+    /// format layer refers to an unnamed node. Null when the node is named
     /// (`#A` or `@`), since a named node is referred to by its name.
     canonical: ?End,
 

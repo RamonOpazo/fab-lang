@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 6 };
+const done: Progress = .{ .step = 5, .rule = 7 };
 
 const Progress = struct {
     step: u8,
@@ -136,10 +136,10 @@ test "Slash: attached at the end" {
 }
 
 test "Slash: attached at both ends" {
-    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: #A/f/#B", .ir =
         \\zone G
         \\  node n0 #A
-        \\  node n1 #B canon f+
+        \\  node n1 #B
         \\  edge f n0 -> n1
         \\
     });
@@ -165,10 +165,10 @@ test "Slash: null nodes at the start and the end" {
 }
 
 test "Slash: a node continues with a space" {
-    try check(.{ .step = 5, .rule = 5, .source = "G :: receive/#Received validate", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: receive/#Received validate", .ir =
         \\zone G
         \\  node n0 canon +receive
-        \\  node n1 #Received canon receive+
+        \\  node n1 #Received
         \\  node n2 canon validate+
         \\  edge receive n0 -> n1
         \\  edge validate n1 -> n2
@@ -282,10 +282,10 @@ test "Undirected: attached at one end" {
 }
 
 test "Undirected: between two named nodes" {
-    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: #A/f/#B/", .ir =
         \\zone G
         \\  node n0 #A
-        \\  node n1 #B canon f+
+        \\  node n1 #B
         \\  edge f n0 -- n1
         \\
     });
@@ -364,10 +364,10 @@ test "Pinches: one bar that joins and forks" {
 }
 
 test "Where nodes meet: a fan out of a named node" {
-    try check(.{ .step = 5, .rule = 5, .source = "G :: validate/#Valid +(yes, no)", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: validate/#Valid +(yes, no)", .ir =
         \\zone G
         \\  node n0 canon +validate
-        \\  node n1 #Valid canon validate+
+        \\  node n1 #Valid
         \\  node n2 canon yes+
         \\  node n3 canon no+
         \\  edge validate n0 -> n1
@@ -381,15 +381,25 @@ test "Where nodes meet: a fan out of a named node" {
 // Null nodes
 
 test "Null nodes: a path from a start to a stop" {
-    try check(.{ .step = 5, .rule = 3, .source = "G :: */f g h/*", .ir =
+    try check(.{ .step = 5, .rule = 7, .source = "G :: */f g h/*", .ir =
         \\zone G
-        \\  node n0 null_node
+        \\  node n0 null_node canon +f
         \\  node n1 canon f+
         \\  node n2 canon g+
         \\  node n3 null_node canon h+
         \\  edge f n0 -> n1
         \\  edge g n1 -> n2
         \\  edge h n2 -> n3
+        \\
+    });
+}
+
+test "Null nodes: a start is named through its edge" {
+    try check(.{ .step = 5, .rule = 7, .source = "G :: */f", .ir =
+        \\zone G
+        \\  node n0 null_node canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
         \\
     });
 }
