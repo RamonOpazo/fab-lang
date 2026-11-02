@@ -54,8 +54,7 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     const cst = a.cst;
     return switch (cst.tag(node)) {
         .leaf => leaf(a, node),
-        // Another diagram's node or edge: a stand-in until rule 6.
-        .juxtafix => one(a, try a.uf.add(@backingInt(a.zone()), null, .{})),
+        .juxtafix => one(a, try crossReference(a, node)),
         .group => group(a, cst.children(node)[0]),
         .o_chain => openChain(a, node),
         .c_chain => closedChain(a, node),
@@ -78,8 +77,8 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         .edge_id => declareEdge(a, token),
         // A named node is plain: it meets no kind.
         .node_id => one(a, try named(a, text, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
-        // A diagram name as a node: a named stand-in until rule 6.
-        .zone_id => one(a, try named(a, text, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
+        // A diagram name as a node: its own node.
+        .zone_id => one(a, try own(a, token)),
         .at => one(a, try named(a, "@", .{ .own = true, .name_token = token, .kind = .plain, .kind_token = token })),
         .star => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .null_node })),
         .quid => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .choice, .kind_token = token })),
@@ -131,6 +130,56 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     ends[0] = dom;
     ends[1] = cod;
     return .{ .left = ends[0..1], .right = ends[1..2] };
+}
+
+// ---------------------------------------------------------------------------
+// Other diagrams (rule 6)
+
+/// A diagram declared before this one, by the token of its name. Its own
+/// declaration is not before it: it names its own node with `@`.
+fn diagram(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?Analyser.Zone {
+    const zone = a.zones.get(a.cst.tokenText(token));
+    if (zone == null or zone.?.index == a.zone()) {
+        try a.fail(.diagram_not_declared, token);
+        return null;
+    }
+    return zone.?;
+}
+
+/// `A` as a node: A's own node.
+fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
+    const zone = try diagram(a, token) orelse return hole(a);
+    return zone.names.get("@") orelse {
+        try a.fail(.diagram_without_own_node, token);
+        return hole(a);
+    };
+}
+
+/// `A.+f`, `A.f+`, `A.#X`, `A.@`: a node of another diagram, shared. It
+/// stays A's: the oldest element of a class is A's own.
+fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
+    const cst = a.cst;
+    const left, const right_ = cst.data(node).nodes;
+    const right = sort.ofOne(cst, right_);
+    const zone_token = cst.mainToken(left);
+    if (sort.isLeaf(cst, right, .at)) return own(a, zone_token);
+    const zone = try diagram(a, zone_token) orelse return hole(a);
+
+    if (sort.isLeaf(cst, right, .node_id)) {
+        const token = cst.mainToken(right);
+        return zone.names.get(cst.tokenText(token)) orelse {
+            try a.fail(.undeclared_name_in_diagram, token);
+            return hole(a);
+        };
+    }
+    // Another shape was reported by rule 1, or by the kind after it.
+    if (!sort.isPinchedEdge(cst, right)) return hole(a);
+    const name = cst.mainToken(singleEdge(cst, cst.data(right).node));
+    const binding = zone.edges.get(cst.tokenText(name)) orelse {
+        try a.fail(.undeclared_name_in_diagram, name);
+        return hole(a);
+    };
+    return endOf(a, binding, if (cst.tag(right) == .prefix) .dom else .cod, name);
 }
 
 /// A named node, `@`, or a diagram name: one element per name in a
@@ -268,14 +317,19 @@ fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemor
         try a.fail(if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
         return hole(a);
     };
+    return endOf(a, binding, side, cst.mainToken(singleEdge(cst, cst.data(node).node)));
+}
+
+/// One end of a bound edge. A null node is private to the one end it holds
+/// (rule 5), so a reference to it is an error at the edge's name.
+fn endOf(a: *Analyser, binding: Binding, side: Ir.End.Side, name: TokenIndex) error{OutOfMemory}!Elem {
     const elem = switch (binding) {
         .edge => |e| if (side == .dom) e.dom else e.cod,
         .hole => |h| return h,
     };
-    // A null node is private to the one end it holds (rule 5).
     const class = a.uf.class(elem);
     if (class.sealed and !class.hole) {
-        try a.fail(.reference_to_null_node, cst.mainToken(singleEdge(cst, cst.data(node).node)));
+        try a.fail(.reference_to_null_node, name);
         return hole(a);
     }
     return elem;

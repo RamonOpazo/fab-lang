@@ -69,9 +69,25 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             .slash => if (sort.of(cst, cst.data(node).node) == .edges) try term(a, cst.data(node).node),
             else => try markerOperand(a, node),
         },
+        .juxtafix => try crossReference(a, node),
         .invalid => {},
         else => for (cst.children(node)) |child| try term(a, child),
     }
+}
+
+/// `A.+f`, `A.f+`, `A.#X`, `A.@` (rule 6): in relations, `.` reaches a node
+/// of another diagram, never one of its edges. A kind there would change a
+/// node that exists.
+fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const left, const right_ = cst.data(node).nodes;
+    const right = sort.ofOne(cst, right_);
+    const marker = if (cst.tag(right) == .postfix) cst.tokenTag(cst.mainToken(right)) else null;
+    if (marker == .quid or marker == .bang)
+        return a.failTerm(.kind_on_reference, node, cst.mainToken(right));
+    const reaches = sort.isPinchedEdge(cst, right) or sort.isLeaf(cst, right, .node_id) or sort.isLeaf(cst, right, .at);
+    if (!sort.isLeaf(cst, left, .zone_id) or !reaches)
+        try a.failTerm(.cross_reference_not_a_node, node, cst.firstToken(node));
 }
 
 /// The operand of a marker (rule 4). A pinched single edge is one node, so
@@ -80,17 +96,10 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
 fn markerOperand(a: *Analyser, marker: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const main = cst.mainToken(marker);
-    const operand = ofOne(cst, cst.data(marker).node);
+    const operand = sort.ofOne(cst, cst.data(marker).node);
     if (sort.isPinchedEdge(cst, operand)) return a.failTerm(.single_edge_pinched_twice, marker, main);
     if (sort.of(cst, operand) == .node) return a.failTerm(.pinch_of_a_node, marker, main);
     try term(a, operand);
-}
-
-/// A group of one is its item.
-fn ofOne(cst: *const Cst, node: Node.Index) Node.Index {
-    if (cst.tag(node) != .group) return node;
-    const inner = cst.children(node)[0];
-    return if (cst.tag(inner) == .items) node else ofOne(cst, inner);
 }
 
 /// `a/b/…`. A `/` needs an edge on one side at least. A `*` is private to one
@@ -126,8 +135,15 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             } else {
                 try kindAfter(a, links[i - 1], link);
             }
-        } else try term(a, link);
+        } else if (!(i + 1 == last and cst.tag(link) == .juxtafix and isKind(cst, links[last]))) {
+            // A cross reference before a kind is the kind's to report.
+            try term(a, link);
+        }
     }
+}
+
+fn isKind(cst: *const Cst, link: Node.Index) bool {
+    return sort.isLeaf(cst, link, .quid) or sort.isLeaf(cst, link, .bang);
 }
 
 /// What a kind node may follow: an edge being declared. A node before it was

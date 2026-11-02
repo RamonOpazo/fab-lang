@@ -314,6 +314,26 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A null node (`*`) is private to the one edge end it holds: nothing glues to it and nothing refers to it.",
             .hint = "Name the node instead of `*`: `f/#Done, j/#Done`.",
         },
+        .diagram_not_declared => .{
+            .message = "The diagram {} is not declared before this one",
+            .explanation = "A reference to another diagram points left, as references inside a diagram do: it must be declared earlier. A diagram names its own node with `@`.",
+            .hint = "Declare it first; inside its own declaration, write `@/f`.",
+        },
+        .undeclared_name_in_diagram => .{
+            .message = "{} is not declared in that diagram",
+            .explanation = "Names never come into existence by being mentioned from outside: the edge or the named node must be in the diagram's own declaration.",
+            .hint = "Check the spelling, or add it to that diagram.",
+        },
+        .diagram_without_own_node => .{
+            .message = "The diagram {} has no own node",
+            .explanation = "A diagram attaches as a node at its `@`. Without one, there is nothing to attach to.",
+            .hint = "Give it an own node: `T :: @/…`, or reach one of its nodes: `T.#X`.",
+        },
+        .cross_reference_not_a_node => .{
+            .message = "In relations, `.` reaches a node of another diagram",
+            .explanation = "Another diagram's edges are its own and can't be declared again here. Its nodes can be shared: an end, a named node, or its own node.",
+            .hint = "Reach an end: `A.f+`, a named node: `A.#X`, or the own node: `A.@`.",
+        },
         .space_reaches_one_branch => .{
             .message = "The space before {} joins one branch of several",
             .explanation = "The other branches of the group expose nothing on this side (a stop, a cycle, a lone node), so the space joins only one of them, though it reads as joining the group.",

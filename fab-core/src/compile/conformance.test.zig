@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 5 };
+const done: Progress = .{ .step = 5, .rule = 6 };
 
 const Progress = struct {
     step: u8,
@@ -114,6 +114,9 @@ test "Composition: join" {
 
 test "Composition: a declaration in braces spans lines" {
     try check(.{ .step = 5, .source =
+        \\User :: @/id
+        \\Document :: @/id
+        \\Config :: @/id
         \\Db :: {
         \\  Document/owner/User,
         \\  Config/settings_of/User
@@ -592,6 +595,68 @@ test "Relations: a reference to a null node" {
 
 test "Where nodes meet: the same kind agrees" {
     try check(.{ .step = 5, .rule = 5, .source = "G :: (a/?, b/?)+" });
+}
+
+// ---------------------------------------------------------------------------
+// Other diagrams (rule 6)
+
+test "Diagrams and names: a cross reference shares A's node" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f g\nB :: h/A.+f", .ir =
+        \\zone A
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  node n2 canon g+
+        \\  edge f n0 -> n1
+        \\  edge g n1 -> n2
+        \\zone B
+        \\  node n3 canon +h
+        \\  edge h n3 -> n0
+        \\
+    });
+}
+
+test "Diagrams as nodes: attached at the own node" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: @/f\nB :: h/A.@, A/k" });
+}
+
+test "Diagrams and names: a diagram not declared" {
+    try check(.{ .step = 5, .rule = 6, .source = "B :: h/A.+f", .codes = &.{.{ .analysis = .diagram_not_declared }} });
+}
+
+test "Diagrams and names: a diagram declared later" {
+    try check(.{ .step = 5, .rule = 6, .source = "B :: h/A.+f\nA :: f", .codes = &.{.{ .analysis = .diagram_not_declared }} });
+}
+
+test "Diagrams as nodes: a diagram's own name" {
+    try check(.{ .step = 5, .rule = 6, .source = "G :: G/f", .codes = &.{.{ .analysis = .diagram_not_declared }} });
+}
+
+test "Named nodes: an undeclared name in another diagram" {
+    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nU :: @/(id/T.#UUDI7)", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
+}
+
+test "Diagrams and names: an undeclared edge in another diagram" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: g\nB :: h/A.+f", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
+}
+
+test "Diagrams as nodes: a diagram without @" {
+    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nUser :: @/id\nDb :: T/owns/User", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
+}
+
+test "Diagrams and names: A.@ without @" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: h/A.@", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
+}
+
+test "Diagrams and names: a reference to another diagram's null node" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f/*\nB :: h/A.f+", .codes = &.{.{ .analysis = .reference_to_null_node }} });
+}
+
+test "Diagrams and names: another diagram's edge in relations" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: A.f g", .codes = &.{.{ .analysis = .cross_reference_not_a_node }} });
+}
+
+test "Diagrams and names: a group of another diagram's edges" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nG :: A.(f, g)", .codes = &.{.{ .analysis = .cross_reference_not_a_node }} });
 }
 
 // ---------------------------------------------------------------------------

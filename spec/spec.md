@@ -117,7 +117,8 @@ B :: h/A.+f        // h ends at dom(f) of A
 B :: h/(A.+f)      // the same, easier to read
 ```
 
-- The referenced diagram must be declared earlier, just as references inside a diagram point left.
+- The referenced diagram must be declared earlier, just as references inside a diagram point left. A diagram is not earlier than itself: it names its own node with `@`, never by its name.
+- In relations, `.` reaches a node: an end (`A.+f`, `A.f+`), a named node (`A.#X`) or the own node (`A.@`, the same as `A`). Another diagram's edge is its own, so `A.f g` is an error; style and proofs name it freely (`User.email :uk`).
 - Only ends A exposes can be referenced: never a null node's end, and only ends on A's boundary once the header defines one.
 - A cross reference makes B share a node with A. When B is drawn, A appears inside it as a cluster with its own style; B styles only its own subjects, including edges that reach into A.
 
@@ -907,7 +908,9 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Node named twice                             | `a/#A #B/b`                                                  | One node, one name                                                                |
 | Named node referenced by an end              | `+f :label …` where dom(f) is `#A`                           | A named node is referenced by its name                                            |
 | Diagram without `@` used as a node           | `Db :: T/owns/User`                                          | Only a diagram with an own node can attach                                        |
-| Undeclared name in another diagram           | `T.#UUDI7`                                                   | Names never come into existence by being mentioned                                |
+| Undeclared name in another diagram           | `T.#UUDI7`, `A.+k`                                           | Names never come into existence by being mentioned                                |
+| Diagram not declared before                  | `B :: h/A.+f` before `A ::`, `G :: G/f`                      | References point left; a diagram names its own node with `@`                      |
+| Another diagram's edge in relations          | `A.f g`, `A.(f, g)`                                          | `.` reaches a node: `A.f+`, `A.#X`, `A.@`                                         |
 | Foreign key to a table without a key         | an edge to `Tag` with no `Tag.… :pk`                         | A foreign key references the target's key                                         |
 | Reference to a column that is not a key      | `(author, User.name) :refs`, `User.name` not `:uk`           | A foreign key references a key                                                    |
 | `:refs` without a foreign key and its target | `(author, Tag.label) :refs` where `author` goes to User      | The group pairs one foreign key with a key of its target                          |

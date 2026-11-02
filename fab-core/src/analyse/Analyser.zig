@@ -93,10 +93,14 @@ const Scope = struct {
     pinches: u32 = 0,
 };
 
-const Zone = struct {
+pub const Zone = struct {
     index: Ir.ZoneIndex,
     /// The name in the head of its first declaration.
     token: TokenIndex,
+    /// What its names mean, once elaborated: other diagrams reach in through
+    /// them (`A.+f`, `A.#X`, `A.@`, `A`).
+    edges: std.StringHashMapUnmanaged(elaborate.Binding) = .empty,
+    names: std.StringHashMapUnmanaged(u32) = .empty,
 };
 
 /// Analyses a program. A program with syntax errors is analysed too.
@@ -186,11 +190,15 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
 
     // Only a diagram has a graph; a reserved head is checked, not drawn.
     const z = zone_index orelse return;
-    a.scope.edges.clearRetainingCapacity();
-    a.scope.names.clearRetainingCapacity();
-    a.scope.zone = z;
-    a.scope.end = cst.lastToken(body);
+    a.scope = .{ .zone = z, .end = cst.lastToken(body) };
     try elaborate.items(a, first);
+
+    // The first declaration is the one other diagrams refer to.
+    const entry = a.zones.getPtr(cst.tokenText(name)).?;
+    if (entry.index == z) {
+        entry.edges = a.scope.edges;
+        entry.names = a.scope.names;
+    }
 }
 
 /// A diagram is declared once. A second declaration is still drawn, as a zone

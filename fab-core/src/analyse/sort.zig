@@ -50,3 +50,10 @@ pub fn isPinchedEdge(cst: *const Cst, node: Node.Index) bool {
 pub fn isLeaf(cst: *const Cst, node: Node.Index, tag: Token.Tag) bool {
     return cst.tag(node) == .leaf and cst.tokenTag(cst.mainToken(node)) == tag;
 }
+
+/// A group of one is its item.
+pub fn ofOne(cst: *const Cst, node: Node.Index) Node.Index {
+    if (cst.tag(node) != .group) return node;
+    const inner = cst.children(node)[0];
+    return if (cst.tag(inner) == .items) node else ofOne(cst, inner);
+}

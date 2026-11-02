@@ -115,8 +115,19 @@ pub const Tag = enum(u8) {
     kinds_disagree,
     /// `a/#A #B/b`.
     two_names_for_one_node,
-    /// `k f/*, j/f+`.
+    /// `k f/*, j/f+`; `A :: f/*` then `B :: h/A.f+`.
     reference_to_null_node,
+
+    // -- other diagrams (rule 6) ---------------------------------------------
+
+    /// `B :: h/A.+f` with A not declared before B; `G :: G/f`.
+    diagram_not_declared,
+    /// `T.#UUDI7`, `A.+k` with no k in A.
+    undeclared_name_in_diagram,
+    /// `Db :: T/owns/User` where T has no `@`.
+    diagram_without_own_node,
+    /// `A.f g`, `A.(f, g)`, `f.#X`.
+    cross_reference_not_a_node,
 
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
