@@ -2,7 +2,7 @@
 
 Decisions taken in the design sessions of 22-23 October 2026, after `fab render` first worked end to end. They change the grammar in six places: statements and bindings, values, cells (levels), the `/` operator, pinching (with the split between flow and fusion), and subjects (classes). This note is the record of what was decided and why; the code does not implement it yet.
 
-> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
+> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read; section 15 (2 November), how programs with no meaning yet are reported. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
 
 **The spec doc ([`spec.md`](spec.md)) was rewritten from this note and [`style.md`](style.md) on the evening of 23 October. Where this note and the spec differ, the spec wins.** Three corrections were made while writing it, and are applied below: repeated node names glue in flows (5.1); `*` is not a pinch (5.3); `?` and `!` stay postfix only (5.3). Two decisions followed the same evening, both in 5.3: **`*` is a nameless node term, written alone, private to one edge end**, which replaced the seal; and **a pinched single edge resolves as a reference node, so it is pinched on one side only**, with redundant pinches allowed. The bracket reading and arrow literals of section 2 were refined in the style document (lowercase names, `[tail/line/head]` arrows).
 
@@ -566,3 +566,23 @@ Decided while planning the parser (plan step 4). The proof layer will add operat
 - **Plain left to right, mixing allowed:** unambiguous, but `a == b implies c == d` would read `((a == b) implies c) == d`.
 - **Precedence among the connectives** (not over and over or over implies): a rule every reader has to remember; a group says the same thing in the program.
 
+
+---
+
+## 15. Reserved and unsupported, 2026-11-02
+
+Decided while designing the analyser (plan step 5). Some programs have no meaning yet: either the spec has not decided one, or the compiler does not implement it yet. Both are said plainly, and differently, because what is missing differs.
+
+### 15.1 Decided
+
+- **Every program has a meaning or a diagnostic.** There is nothing in between: no undefined behaviour, and no implementation-defined meaning.
+- **Reserved: the spec has not decided.** A construct whose meaning is an open question, such as declaring a node (`#User :: …`) or an edge (`review :: …`), is an error, marked *reserved* in the spec's error tables and listed under Open questions. Rejecting it is forward compatible: lifting an error never breaks a program, while changing an accepted meaning would. The message says the meaning is open, so the user knows the program is not wrong, only early. Reserved errors may ship; they are the language's answer until the spec decides.
+- **Unsupported: the compiler has not caught up.** A construct the spec defines and the compiler does not implement yet, such as levels above the first or the contents of a definition, is reported with its own severity, `unsupported`. It is not an error about the program, so it never changes the status or the exit code, is never promoted, and the IR is still handed out, with the skipped parts left out rather than marked as holes, since nothing in them failed. It is reported once per skipped construct (a level, a definition), never once per element inside it.
+- **Unsupported never ships.** It is scaffolding for the plan: each unsupported diagnostic names the step that removes it, and the spec never mentions one. A release build refuses to compile while any remains, so no released compiler skips part of a valid program.
+
+### 15.2 Rejected
+
+- **Undefined behaviour:** it means the compiler may assume something never happens. fAB has no runtime, so there is nothing to assume, and every program is either a diagram or rejected.
+- **Implementation-defined meaning:** programs would come to depend on what this compiler happens to do, and the spec would inherit it.
+- **Unsupported as an error:** a valid program would be reported as wrong, and the examples could not draw until every step had landed.
+- **Unsupported as a warning:** it would mix with warnings about the user's program, and promoting warnings would fail a valid program for a gap in the compiler.

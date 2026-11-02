@@ -26,7 +26,7 @@ A program is a sequence of statements, one per line; braces let a statement span
 | Declaration | `::`     | new **structure**            | `Order :: */receive/#Received validate ?(…)` |
 | Definition  | `:=`     | a new **binding** of a value | `[red] := [#ff0000]`, `G :style := { … }`    |
 
-**Declarations** build structure. Today only diagrams (zones) are declared: `G :: term`. Zones, nodes and edges are the only things that can ever be declared; what declaring a node or an edge on its own means is open.
+**Declarations** build structure. Today only diagrams (zones) are declared: `G :: term`. Zones, nodes and edges are the only things that can ever be declared; what declaring a node or an edge on its own means is open, so it is reserved: an error until decided.
 
 **Definitions** bind values. Every definition has one form, read left to right as context, then attribute, then value:
 
@@ -786,19 +786,24 @@ The three group forms are the three ways columns combine: each on its own, toget
 
 ## Errors
 
-A program that hits any of these is rejected, each with its precise cause. Warnings are marked as such.
+A program that hits any of these is rejected, each with its precise cause. Warnings are marked as such. Rows marked *reserved* are errors because their meaning is still open (see Open questions); lifting one later breaks no program.
 
 ### Statements
 
-| Error                              | Example                                      | Why                                                 |
-| ---------------------------------- | -------------------------------------------- | --------------------------------------------------- |
-| Statement spanning lines           | `Db :: (` with `)` on a later line           | A statement is one line; braces let it span lines   |
-| Missing comma                      | `#Done :terminal f :label "x"`               | Items are separated by commas                       |
-| Trailing comma                     | `(f, g,)`, `{ a :x, }`                       | A comma stands between items only                   |
-| Empty braces                       | `G :: {}`, `G :style := {}`                  | There are no empty declarations or definitions      |
-| Bare term in a definition          | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`  |
-| Entry or equation in a declaration | `G :: f (g :label "x")`                      | A declaration's items are terms                     |
-| Warning: chain broken across lines | `f g` then `h k` on the next line, in braces | Write `,` for two items, or group the chains        |
+| Error                              | Example                                      | Why                                                              |
+| ---------------------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| Statement spanning lines           | `Db :: (` with `)` on a later line           | A statement is one line; braces let it span lines                |
+| Missing comma                      | `#Done :terminal f :label "x"`               | Items are separated by commas                                    |
+| Trailing comma                     | `(f, g,)`, `{ a :x, }`                       | A comma stands between items only                                |
+| Empty braces                       | `G :: {}`, `G :style := {}`                  | There are no empty declarations or definitions                   |
+| Bare term in a definition          | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`               |
+| Entry or equation in a declaration | `G :: f (g :label "x")`                      | A declaration's items are terms                                  |
+| Class in a declaration             | `G :: &node f`                               | Classes are subjects of definitions only                         |
+| Levels in a definition             | `:x := a \| b`                               | `\|` separates the levels of a declaration                       |
+| Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
+| Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
+| Definition head of no form         | `f g := [red]`, `G := [red]`                 | A definition's left side is `[name]`, `:attr` or `subject :attr` |
+| Warning: chain broken across lines | `f g` then `h k` on the next line, in braces | Write `,` for two items, or group the chains                     |
 
 ### Relations
 
@@ -1129,6 +1134,10 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 - **Proof equations** over partial edges: `parent document == document` holds only where `parent` is defined.
 - **Undirected edges in equations,** which have no composition order.
 - **Column names for emitters.** A foreign-key row's label is its column's name; whether an emitter reads it from `:label` or from a schema attribute of its own is open until fAB emits SQL.
+
+**Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
+
+- Declaring a node or an edge on its own (Declaring nodes and edges, above).
 
 **Settled since the first revision:** name scope (local to a diagram); precedence of `/` chains (left to right); the clash between colours and named nodes on `#` (colours are values in brackets); the format vocabulary and arrow grammar (now the style layer); styling proof-derived marks (`:marks`, as a definition after the proof).
 

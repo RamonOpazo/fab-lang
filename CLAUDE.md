@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges     |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -140,7 +140,7 @@ Also back in step 5: the tests skipped in 4a ("Needs an analysed program"), and 
 
 One rule at a time, in order, each with its corpus rows and its messages in `compile/messages.zig`:
 
-0. **Statements and items.** Declarations hold terms; definitions hold entries and equations. An operation mixing different operators without a group is an error. `|` only in a declaration, a lone literal only in a definition. A declaration's head is a zone (nodes and edges are open). The warning for a chain broken across lines. The Statements error table.
+0. **Statements and items.** The driver: statements in source order, the zone table, errors with subjects. Declarations hold terms; definitions hold entries and equations, in a head of one of the three forms. An operation mixing different operators without a group is an error. `|` only in a declaration; a value or class only in a definition. A declaration's head is a zone; a node or an edge is *reserved*. The warning for a chain broken across lines. Programs with no meaning yet (`statements.md` §15): `reserved` tags are errors, and `unsupported` is its own severity, which skips levels above the first (until step 7) and definition contents (until steps 8–11), never changes the status, and fails a release build while any remains. The Statements error table.
 1. **Node terms take a slash.** `#A`, `@`, diagram names, `+f`, `f+`, `*`. A node beside a space is an error. `*` is fresh and private to one end: `*/(f, g)`, `f/* g`, `*/f/*` are errors.
 2. **Interfaces.** Every term computes a left and a right side. A space joins one to one; closed branches (a stop, a cycle's right side) are skipped when counting; nothing on a side is an error.
 3. **Slash chains.** One edge attaches to the nodes beside it; two or more close a cycle, which exposes its start on the left. `/` distributes over a group. A trailing `/` makes a one-edge chain undirected.
