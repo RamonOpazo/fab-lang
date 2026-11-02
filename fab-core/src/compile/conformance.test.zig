@@ -19,7 +19,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 0 };
+const done: Progress = .{ .step = 5, .rule = 1 };
 
 const Progress = struct {
     step: u8,
@@ -362,6 +362,109 @@ test "Proofs: different operators without a group" {
 
 test "Proofs: different operators, grouped" {
     try check(.{ .step = 5, .source = "G :prove := (f == g) ~= h, f == g == h" });
+}
+
+// ---------------------------------------------------------------------------
+// Sorts (rule 1)
+
+test "Relations: a node beside a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: #A f", .codes = &.{.{ .analysis = .node_beside_space }} });
+}
+
+test "Relations: a null node beside a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: * f", .codes = &.{.{ .analysis = .node_beside_space }} });
+}
+
+test "Relations: own node beside a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: @ (f)", .codes = &.{.{ .analysis = .node_beside_space }} });
+}
+
+test "Relations: a diagram beside a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f User", .codes = &.{.{ .analysis = .node_beside_space }} });
+}
+
+test "Relations: a kind beside a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: ? f", .codes = &.{.{ .analysis = .node_beside_space }} });
+}
+
+test "Relations: a pinched edge beside a space, before a group" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f? (g, h)", .codes = &.{.{ .analysis = .pinched_edge_beside_space }} });
+}
+
+test "Relations: a pinched edge beside a space, after an edge" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f, k +f", .codes = &.{.{ .analysis = .pinched_edge_beside_space }} });
+}
+
+test "Relations: a pinched edge beside a space, before an edge" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f, f+ g", .codes = &.{.{ .analysis = .pinched_edge_beside_space }} });
+}
+
+test "Relations: both ends null" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: */f/*", .codes = &.{.{ .analysis = .both_ends_null }} });
+}
+
+test "Relations: a lone null node" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: *", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: a null node between edges" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/*/g", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: a null node in a cycle" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: */f/g", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+}
+
+test "Relations: a kind pinching on the left" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: ?(g, h)", .codes = &.{.{ .analysis = .kind_on_the_left }} });
+}
+
+test "Relations: a kind before an edge" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: !f", .codes = &.{.{ .analysis = .kind_on_the_left }} });
+}
+
+test "Relations: a kind node before an edge" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: ?/f", .codes = &.{.{ .analysis = .kind_on_the_left }} });
+}
+
+test "Relations: a kind node between edges" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/?/g", .codes = &.{.{ .analysis = .kind_on_the_left }} });
+}
+
+test "Relations: a kind closing a cycle" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/g/?", .codes = &.{.{ .analysis = .kind_closes_cycle }} });
+}
+
+test "Relations: a lone kind" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: ?", .codes = &.{.{ .analysis = .lone_kind }} });
+}
+
+test "Relations: a lone kind in a group" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: (!)", .codes = &.{.{ .analysis = .lone_kind }} });
+}
+
+test "Relations: a kind on a reference" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f, f?", .codes = &.{.{ .analysis = .kind_on_reference }} });
+}
+
+test "Relations: a kind on another diagram's edge" {
+    try check(.{ .step = 5, .rule = 1, .source = "A :: f\nG :: A.f/?", .codes = &.{.{ .analysis = .kind_on_reference }} });
+}
+
+test "Relations: a kind after a group" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: (a, b)/?", .codes = &.{.{ .analysis = .kind_after_group }} });
+}
+
+test "Relations: warning, a kind after a group of one" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: (f)/?", .codes = &.{.{ .analysis = .kind_after_group_of_one }} });
+}
+
+test "Pinches: a decision with its branches written apart" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/?, f+/a, f+/b" });
+}
+
+test "Pinches: kinds after edges between nodes" {
+    try check(.{ .step = 5, .rule = 1, .source = "G :: #A/f/?, */s/! +(a, b)" });
 }
 
 // ---------------------------------------------------------------------------

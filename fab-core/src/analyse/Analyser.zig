@@ -14,6 +14,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const Token = @import("../lex/Token.zig");
 const Cst = @import("../parse/Cst.zig");
 const Ir = @import("Ir.zig");
 
@@ -54,6 +55,29 @@ pub const Error = struct {
         /// Warning. `f g` then `h k` on the next line, in braces.
         chain_broken_across_lines,
 
+        // -- sorts (rule 1) --------------------------------------------------
+
+        /// `#A f`, `* f`, `@ (f)`, `? f`.
+        node_beside_space,
+        /// `f? (g, h)`, `k +f`, `f+ g`.
+        pinched_edge_beside_space,
+        /// `*/f/*`.
+        both_ends_null,
+        /// `*`, `f/*/g`, `*/f/g`.
+        null_not_on_one_end,
+        /// `?(g, h)`, `!f`, `?/f`, `f/?/g`.
+        kind_on_the_left,
+        /// `f/g/?`.
+        kind_closes_cycle,
+        /// `?`, `(!)`.
+        lone_kind,
+        /// `f?`, `A.f/?`.
+        kind_on_reference,
+        /// `(a, b)/?`.
+        kind_after_group,
+        /// Warning. `(f)/?`.
+        kind_after_group_of_one,
+
         // -- reserved: the spec has not decided (statements.md §15) ----------
 
         /// `#User :: @/(id, name)`, `review :: a b`.
@@ -68,7 +92,7 @@ pub const Error = struct {
 
         pub fn severity(tag: Tag) Severity {
             return switch (tag) {
-                .chain_broken_across_lines => .warning,
+                .chain_broken_across_lines, .kind_after_group_of_one => .warning,
                 .unsupported_levels, .unsupported_definition => .unsupported,
                 else => .@"error",
             };
@@ -118,6 +142,9 @@ builder: Ir.Builder,
 errors: std.ArrayList(Error) = .empty,
 /// The zones declared so far, by name: the first declaration of each.
 zones: std.StringHashMapUnmanaged(Zone) = .empty,
+/// The CST nodes of terms with an error. A failed term becomes a hole, so
+/// its neighbours report nothing more about it.
+failed: std.DynamicBitSetUnmanaged = .{},
 
 const Zone = struct {
     index: Ir.ZoneIndex,
@@ -127,8 +154,14 @@ const Zone = struct {
 
 /// Analyses a program. A program with syntax errors is analysed too.
 pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Result {
-    var a: Analyser = .{ .gpa = gpa, .cst = cst, .builder = .init(gpa) };
+    var a: Analyser = .{
+        .gpa = gpa,
+        .cst = cst,
+        .builder = .init(gpa),
+        .failed = try .initEmpty(gpa, cst.nodes.len),
+    };
     defer a.zones.deinit(gpa);
+    defer a.failed.deinit(gpa);
     errdefer a.builder.deinit();
     errdefer a.errors.deinit(gpa);
 
@@ -137,12 +170,19 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
         try a.statement(node);
     }
 
-    const ir = try a.builder.finish();
-    return .{ .ir = ir, .errors = try a.errors.toOwnedSlice(gpa) };
+    const errors = try a.errors.toOwnedSlice(gpa);
+    errdefer gpa.free(errors);
+    return .{ .ir = try a.builder.finish(), .errors = errors };
 }
 
 fn fail(a: *Analyser, tag: Error.Tag, token: TokenIndex) error{OutOfMemory}!void {
     try a.errors.append(a.gpa, .{ .tag = tag, .token = token });
+}
+
+/// Reports an error in a term, and marks the term as failed.
+fn failTerm(a: *Analyser, tag: Error.Tag, node: Node.Index, token: TokenIndex) error{OutOfMemory}!void {
+    a.failed.set(@backingInt(node));
+    try a.fail(tag, token);
 }
 
 /// Whether the parser reported anything inside a statement.
@@ -225,20 +265,144 @@ fn terms(a: *Analyser, node: Node.Index, place: Place) error{OutOfMemory}!void {
     }
 }
 
-/// Checks that a term holds only structure: edges, nodes and groups of them.
+/// Checks a term: it holds only structure, edges and nodes (rule 0), and
+/// each node term stands where its sort allows (rule 1). A term with an error
+/// is not looked into further.
 fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
+    const main = cst.mainToken(node);
     switch (cst.tag(node)) {
-        .entry, .operation => try a.fail(.entry_in_declaration, cst.firstToken(node)),
-        .leaf => switch (cst.tokenTag(cst.mainToken(node))) {
-            .class_id => try a.fail(.class_in_declaration, cst.mainToken(node)),
-            .str, .math, .val => try a.fail(.value_in_declaration, cst.mainToken(node)),
+        .entry, .operation => try a.failTerm(.entry_in_declaration, node, cst.firstToken(node)),
+        // Chains judge the leaves in them; a leaf reaching here stands alone.
+        .leaf => switch (cst.tokenTag(main)) {
+            .class_id => try a.failTerm(.class_in_declaration, node, main),
+            .str, .math, .val => try a.failTerm(.value_in_declaration, node, main),
+            .star => try a.failTerm(.null_not_on_one_end, node, main),
+            .quid, .bang => try a.failTerm(.lone_kind, node, main),
             else => {},
         },
         .group => try a.terms(cst.children(node)[0], .group),
+        .o_chain => for (cst.children(node)) |step| {
+            if (sort(cst, step) == .edges) {
+                try a.term(step);
+            } else if (isPinchedEdge(cst, step)) {
+                try a.failTerm(.pinched_edge_beside_space, step, cst.firstToken(step));
+            } else {
+                try a.failTerm(.node_beside_space, step, cst.firstToken(step));
+            }
+        },
+        .c_chain => try a.closedChain(node),
+        .prefix => switch (cst.tokenTag(main)) {
+            .quid, .bang => try a.failTerm(.kind_on_the_left, node, main),
+            else => try a.markerOperand(cst.data(node).node),
+        },
+        .postfix => switch (cst.tokenTag(main)) {
+            .quid, .bang => if (isSingleEdge(cst, cst.data(node).node)) {
+                try a.failTerm(.kind_on_reference, node, main);
+            } else try a.markerOperand(cst.data(node).node),
+            else => try a.markerOperand(cst.data(node).node),
+        },
         .invalid => {},
         else => for (cst.children(node)) |child| try a.term(child),
     }
+}
+
+/// The operand of a marker. A marker on a node is a question for pinches
+/// (rule 4), so only edges are looked into.
+fn markerOperand(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    if (sort(a.cst, node) == .edges) try a.term(node);
+}
+
+/// `a/b/…`. A `*` is private to one end, so it stands at either end of a
+/// one-edge chain. A kind marks where flow arrives, so it stands last, right
+/// after the chain's one edge.
+fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const links = cst.children(node);
+    const last = links.len - 1;
+    var edges: usize = 0;
+    for (links) |link| edges += @intFromBool(sort(cst, link) == .edges);
+
+    if (links.len == 3 and edges == 1 and isLeaf(cst, links[0], .star) and isLeaf(cst, links[last], .star))
+        return a.failTerm(.both_ends_null, node, cst.mainToken(links[last]));
+
+    for (links, 0..) |link, i| {
+        const token = cst.mainToken(link);
+        if (isLeaf(cst, link, .star)) {
+            if ((i != 0 and i != last) or edges > 1) try a.failTerm(.null_not_on_one_end, link, token);
+        } else if (isLeaf(cst, link, .quid) or isLeaf(cst, link, .bang)) {
+            if (i != last) {
+                try a.failTerm(.kind_on_the_left, link, token);
+            } else if (edges > 1) {
+                try a.failTerm(.kind_closes_cycle, link, token);
+            } else {
+                try a.kindAfter(links[i - 1], link);
+            }
+        } else try a.term(link);
+    }
+}
+
+/// What a kind node may follow: an edge being declared. A node before it is
+/// a slash between nodes, for rule 3.
+fn kindAfter(a: *Analyser, before: Node.Index, kind: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const token = cst.mainToken(kind);
+    switch (cst.tag(before)) {
+        .leaf => {},
+        .group => if (isSingleEdge(cst, before)) {
+            try a.fail(.kind_after_group_of_one, token);
+        } else try a.failTerm(.kind_after_group, kind, token),
+        .prefix, .postfix => if (isPinchedEdge(cst, before)) {
+            try a.failTerm(.kind_on_reference, kind, token);
+        } else if (cst.tokenTag(cst.mainToken(before)) != .slash) {
+            try a.failTerm(.kind_after_group, kind, token);
+        },
+        .juxtafix => if (sort(cst, before) == .edges) try a.failTerm(.kind_on_reference, kind, token),
+        else => {},
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sorts: what a term is, read from its shape alone.
+
+const Sort = enum { node, edges };
+
+fn sort(cst: *const Cst, node: Node.Index) Sort {
+    return switch (cst.tag(node)) {
+        .leaf => switch (cst.tokenTag(cst.mainToken(node))) {
+            .node_id, .zone_id, .at, .star, .quid, .bang => .node,
+            else => .edges,
+        },
+        .juxtafix => sort(cst, cst.data(node).nodes[1]),
+        .prefix, .postfix => if (isPinchedEdge(cst, node)) .node else .edges,
+        .group => blk: {
+            const inner = cst.children(node)[0];
+            break :blk if (cst.tag(inner) == .items) .edges else sort(cst, inner);
+        },
+        else => .edges,
+    };
+}
+
+/// `f`, or a group of one that is: `(f)` is f.
+fn isSingleEdge(cst: *const Cst, node: Node.Index) bool {
+    return switch (cst.tag(node)) {
+        .leaf => cst.tokenTag(cst.mainToken(node)) == .edge_id,
+        .group => isSingleEdge(cst, cst.children(node)[0]),
+        else => false,
+    };
+}
+
+/// `+f`, `f+`, `f?`, `+(f)`: a marker on a single edge, which is a reference
+/// to the node at that end.
+fn isPinchedEdge(cst: *const Cst, node: Node.Index) bool {
+    return switch (cst.tag(node)) {
+        .prefix, .postfix => cst.tokenTag(cst.mainToken(node)) != .slash and isSingleEdge(cst, cst.data(node).node),
+        else => false,
+    };
+}
+
+fn isLeaf(cst: *const Cst, node: Node.Index, tag: Token.Tag) bool {
+    return cst.tag(node) == .leaf and cst.tokenTag(cst.mainToken(node)) == tag;
 }
 
 /// Warns about an open chain whose steps continue on the next line: in

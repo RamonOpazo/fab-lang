@@ -164,6 +164,56 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Inside braces a newline is a space, so a chain on two lines is one chain: `f g` then `h k` reads `f g h k`.",
             .hint = "Write `,` at the end of the line for two items, or group the chain to say it is one.",
         },
+        .node_beside_space => .{
+            .message = "The node {} stands beside a space",
+            .explanation = "A space joins the end of one edge to the start of the next. A node is attached to an edge with `/`.",
+            .hint = "Attach it with a slash: `#A/f`, `*/f`, `@/(…)`.",
+        },
+        .pinched_edge_beside_space => .{
+            .message = "The reference {} stands beside a space",
+            .explanation = "A pinched single edge is a reference to the node at that end, and a node is attached with `/`. To pinch a group, the marker goes on the group.",
+            .hint = "Move the marker to the group: `f/? +(g, h)`, or attach the reference: `g/+f`.",
+        },
+        .both_ends_null => .{
+            .message = "An edge from a null node to a null node",
+            .explanation = "A null node is a start or a stop. An edge from nothing to nothing says nothing.",
+            .hint = "Keep one end: `*/f` or `f/*`.",
+        },
+        .null_not_on_one_end => .{
+            .message = "{} does not hold exactly one end",
+            .explanation = "A null node is private to one edge end: it starts one edge or stops one. Alone it holds none; inside a chain or a cycle it would hold two.",
+            .hint = "Put `*` at the outer end of a single edge: `*/f`, `f/*`; for several, `(*/f, */g)`.",
+        },
+        .kind_on_the_left => .{
+            .message = "The kind {} is on the left",
+            .explanation = "A kind is written where flow arrives: after an edge, `f/?`, or after a group, `(a, b)?`. Nothing arrives on the left.",
+            .hint = "Write the decision after its edge: `f/? +(g, h)`.",
+        },
+        .kind_closes_cycle => .{
+            .message = "The kind {} closes a cycle",
+            .explanation = "A cycle ends where it starts, so a kind at its end sits on the left of its first edge, where nothing arrives.",
+            .hint = "Put the kind after an edge that leads into the cycle, or name the node: `f/#Loop/g`.",
+        },
+        .lone_kind => .{
+            .message = "The kind {} stands alone",
+            .explanation = "A kind marks the node where flow arrives, and nothing arrives at a lone node.",
+            .hint = "Write it after the edge that reaches it: `f/?`.",
+        },
+        .kind_on_reference => .{
+            .message = "The kind {} is on a node that already exists",
+            .explanation = "A kind is set where its node is created. A reference, `f+` or `A.f`, points to a node created before.",
+            .hint = "Write the kind where the edge is declared: `f/?`.",
+        },
+        .kind_after_group => .{
+            .message = "The kind {} follows a group",
+            .explanation = "A kind node follows a single edge. After a group, the ends are pinched with the kind as the marker.",
+            .hint = "Pinch the group: `(a, b)?`.",
+        },
+        .kind_after_group_of_one => .{
+            .message = "The kind {} follows a group of one",
+            .explanation = "A group of one is its item, so this is the kind after that edge.",
+            .hint = "Drop the parentheses: `f/?`.",
+        },
         .reserved_node_or_edge_declaration => .{
             .message = "Declaring {} is reserved",
             .explanation = "Only diagrams are declared today. What declaring a node or an edge on its own means is still open in the spec, so it is an error until it is decided.",

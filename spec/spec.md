@@ -830,8 +830,11 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |
 | Single edge pinched on both sides | `+f+`, `+(f)+`                                  | A pinched edge is one node; it has one side                                |
 | Kind on the left                  | `?(g, h)`, `!f`, `?/f`, `f/?/g`                 | A kind is written where flow arrives: `f/?`, `(a, b)?`                     |
+| Kind closing a cycle              | `f/g/?`                                         | A cycle ends on its start, so the kind would sit on the left of f          |
+| Lone kind                         | `?`, `(!)`                                      | A kind marks where flow arrives, and nothing arrives here                  |
 | Kind on a reference               | `f?`, `A.f/?`                                   | A kind is set where its node is created: `f/?` where f is declared         |
 | Kind after a group                | `(a, b)/?`                                      | After a group, the kind is a pinch: `(a, b)?`                              |
+| Warning: kind after a group of one | `(f)/?`                                        | A group of one is its item: write `f/?`                                    |
 | Marker touching both sides        | `f+(g, h)`, `(a, b)!(c, d)`                     | Write `f +(g, h)` or `(a, b)! +(c, d)`                                     |
 | Kinds disagree                    | `(a/?, b/!)+`, `validate/? #Valid/yes`          | A node has one kind, and a named node is plain                             |
 | Two names for one node            | `a/#A #B/b`                                     | One node, one name                                                         |

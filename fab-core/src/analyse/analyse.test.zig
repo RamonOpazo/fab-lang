@@ -109,3 +109,19 @@ test "a mixed run is reported once, at the first different operator" {
 test "runs inside groups are checked on their own" {
     try expectTags("G :prove := (a == b ~= c) == d", &.{ .mixed_operators, .unsupported_definition });
 }
+
+// ---------------------------------------------------------------------------
+// Sorts
+
+test "the old spelling of a decision is a kind on the left" {
+    try expectTags("G :: f ?(a, b)", &.{.kind_on_the_left});
+}
+
+test "each step of a chain is judged on its own" {
+    try expectTags("G :: #A f #B", &.{ .node_beside_space, .node_beside_space });
+}
+
+test "a term with an error is not looked into" {
+    // `f?` is also a kind on a reference; beside a space, that is all it is.
+    try expectTags("G :: f? (g, h), (*) f", &.{ .pinched_edge_beside_space, .node_beside_space });
+}

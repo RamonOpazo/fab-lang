@@ -202,6 +202,7 @@ Consequences:
 - **Kind and collapse are separate.** A pinch collapses ends; a kind is a label of a node, as a name is, set where the node is created. So the branches of a decision may be written as separate items: `G :: f/?, f+/a, f+/b`.
 - **`f/?`, not `f?`.** `f+` is a reference to an existing node, so `f?` would change the kind of a node that exists. `f/?` creates the node. `f?` stays an error, with the hint `f/?`; so does `A.f/?`, which would change another diagram's node.
 - **Where a kind may stand.** As a node term, `?` or `!` is the last element of a closed chain, right after a single edge: `f/?`, `#A/f/?`, `*/s/!`. `f/?/g` and `?/f` put it on the left; a lone `?` holds no end.
+- **Its errors say which rule is broken:** a kind on the left (`?/f`, `f/?/g`), closing a cycle (`f/g/?`, which would put it on the left of f), lone (`?`), on a reference (`f?`), after a group (`(a, b)/?`). A group of one is its item, so `(f)/?` is allowed, with a warning.
 - **Kinds meet less.** At a space only the left term's right side can bring a kind, so two kinds meet only through a pinch of kinded branches, `(a/?, b/!)+`, and a kind meets a name as in `f/? #A/g`.
 - **Not a node term: `+`.** `f/+` would be `f`, and `+/f` would read like the reference `+f` and mean something else: "redundant and confusing".
 
