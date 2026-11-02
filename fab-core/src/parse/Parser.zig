@@ -40,8 +40,11 @@ last: ?TokenIndex = null,
 braces: u32 = 0,
 /// How many parentheses are open, to tell a statement that spans lines.
 parens: u32 = 0,
-/// `braces` at the moment of the last failure, for recovery.
+/// `braces` and `parens` at the moment of the last failure, for recovery.
 fail_braces: u32 = 0,
+fail_parens: u32 = 0,
+/// The last failure was a statement spanning lines.
+fail_spans: bool = false,
 
 nodes: std.MultiArrayList(Node) = .empty,
 extra: std.ArrayList(u32) = .empty,
@@ -160,32 +163,66 @@ fn parseLevels(p: *Parser) Error!Node.Index {
 }
 
 /// items = item { COMMA item }
+/// Two local fixes keep the rest of the list: a missing comma is reported and
+/// assumed, and a trailing comma is reported and ends the list.
 fn parseItems(p: *Parser) Error!Node.Index {
-    const first = try p.parseItem();
-    try p.checkItemEnd();
-    if (p.cur() != .comma) return first;
-
-    const comma = p.tok_i;
     const top = p.scratch.items.len;
-    try p.scratch.append(p.gpa, first);
-    while (p.cur() == .comma) {
-        const this = p.next();
+    var main: ?TokenIndex = null;
+    try p.scratch.append(p.gpa, try p.parseItemRecovering());
+    while (true) {
         switch (p.cur()) {
-            // A newline right after a comma, inside parentheses: the statement
-            // was meant to go on.
-            .eol => return if (p.parens > 0) p.fail(.statement_spans_lines, .invalid) else p.failAt(.trailing_comma, this),
-            .r_par, .r_cur, .bar, .eof => return p.failAt(.trailing_comma, this),
-            else => {},
+            .comma => {
+                const comma = p.next();
+                main = main orelse comma;
+                switch (p.cur()) {
+                    // A newline right after a comma, inside parentheses: the
+                    // statement was meant to go on.
+                    .eol => if (p.parens > 0) return p.fail(.statement_spans_lines, .invalid) else {
+                        try p.warnAt(.trailing_comma, comma);
+                        break;
+                    },
+                    .r_par, .r_cur, .bar, .eof => {
+                        try p.warnAt(.trailing_comma, comma);
+                        break;
+                    },
+                    else => {},
+                }
+            },
+            .r_par, .r_cur, .bar, .eol, .eof => break,
+            else => if (p.startsItem()) {
+                main = main orelse p.tok_i;
+                try p.warn(.missing_comma, .invalid);
+            } else if (p.braces > 0) {
+                // A stray token after an item, inside braces: skip to the next item.
+                const stray = p.tok_i;
+                try p.warn(.expected_token, .comma);
+                p.recoverItem();
+                try p.scratch.append(p.gpa, try p.addLeaf(.invalid, stray));
+                continue;
+            } else break,
         }
-        try p.scratch.append(p.gpa, try p.parseItem());
-        try p.checkItemEnd();
+        try p.scratch.append(p.gpa, try p.parseItemRecovering());
     }
-    return p.addNode(.items, comma, .{ .range = try p.listFrom(top) });
+    if (p.scratch.items.len - top == 1) return p.scratch.pop().?;
+    return p.addNode(.items, main.?, .{ .range = try p.listFrom(top) });
 }
 
-/// Two items need a comma between them.
-fn checkItemEnd(p: *Parser) Error!void {
-    if (p.startsItem()) return p.fail(.missing_comma, .invalid);
+/// An item. Inside braces, one that fails becomes an `invalid` node, and
+/// parsing goes on with the next item.
+fn parseItemRecovering(p: *Parser) Error!Node.Index {
+    if (p.braces == 0) return p.parseItem();
+    _ = p.cur();
+    const start = p.tok_i;
+    const scratch_top = p.scratch.items.len;
+    return p.parseItem() catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ParseError => {
+            // Lists left half-built by the failure must not leak into ours.
+            p.scratch.shrinkRetainingCapacity(scratch_top);
+            p.recoverItem();
+            return p.addLeaf(.invalid, start);
+        },
+    };
 }
 
 /// item = [ chain ] ( attr { attr } | block ) | chain { operator chain }
@@ -458,21 +495,32 @@ fn fail(p: *Parser, tag: Cst.Error.Tag, expected: Token.Tag) Error {
 
 /// Records an error at `token`, as is, and unwinds to the statement.
 fn failAt(p: *Parser, tag: Cst.Error.Tag, token: TokenIndex) Error {
-    p.fail_braces = p.braces;
-    try p.errors.append(p.gpa, .{ .tag = tag, .token = token });
+    try p.warnAt(tag, token);
     return error.ParseError;
 }
 
 /// Records an error at the current token without unwinding.
 fn warn(p: *Parser, tag: Cst.Error.Tag, expected: Token.Tag) error{OutOfMemory}!void {
     _ = p.cur();
-    p.fail_braces = p.braces;
     const refined = p.refine(tag);
-    try p.errors.append(p.gpa, .{
+    try p.record(.{
         .tag = refined,
         .token = p.tok_i,
         .expected = if (refined == .expected_token) expected else .invalid,
     });
+}
+
+/// Records an error at `token`, as is, without unwinding.
+fn warnAt(p: *Parser, tag: Cst.Error.Tag, token: TokenIndex) error{OutOfMemory}!void {
+    try p.record(.{ .tag = tag, .token = token });
+}
+
+/// Records an error, and where it happened, for recovery.
+fn record(p: *Parser, err: Cst.Error) error{OutOfMemory}!void {
+    p.fail_braces = p.braces;
+    p.fail_parens = p.parens;
+    p.fail_spans = err.tag == .statement_spans_lines;
+    try p.errors.append(p.gpa, err);
 }
 
 /// A more precise error when the current token explains the failure better
@@ -493,14 +541,47 @@ fn refine(p: *Parser, tag: Cst.Error.Tag) Cst.Error.Tag {
 
 /// Skips the rest of a failed statement: up to the next newline outside
 /// braces, or the end of input. Braces opened inside it are skipped with it.
+/// A statement that spans lines is skipped up to the line where its
+/// parentheses balance, unless a line before that starts a new statement.
 fn recover(p: *Parser) void {
-    var depth = p.fail_braces;
+    var braces = p.fail_braces;
+    var parens = if (p.fail_spans) p.fail_parens else 0;
     while (true) {
         switch (p.tags[p.tok_i]) {
             .eof => return,
-            .eol => if (depth == 0) return,
-            .l_cur => depth += 1,
-            .r_cur => depth -|= 1,
+            .eol => if (braces == 0 and (parens == 0 or p.lineStartsStatement(p.tok_i + 1))) return,
+            .l_cur => braces += 1,
+            .r_cur => braces -|= 1,
+            .l_par => parens += @intFromBool(p.fail_spans),
+            .r_par => parens -|= 1,
+            else => {},
+        }
+        p.tok_i += 1;
+    }
+}
+
+/// Whether the line starting at `i` holds `::` or `:=`: a new statement.
+fn lineStartsStatement(p: *Parser, i: TokenIndex) bool {
+    var j = i;
+    while (true) : (j += 1) switch (p.tags[j]) {
+        .decl, .defn => return true,
+        .eol, .eof => return false,
+        else => {},
+    };
+}
+
+/// Skips the rest of a failed item inside braces: up to the next `,` or `|`
+/// at its depth, or the bracket that closes it. Newlines are spaces there.
+fn recoverItem(p: *Parser) void {
+    var depth = (p.fail_braces - p.braces) + (p.fail_parens - p.parens);
+    while (true) {
+        switch (p.tags[p.tok_i]) {
+            .eof => return,
+            .comma, .bar => if (depth == 0) return,
+            .l_cur, .l_par => depth += 1,
+            .r_cur, .r_par => if (depth == 0) return else {
+                depth -= 1;
+            },
             else => {},
         }
         p.tok_i += 1;

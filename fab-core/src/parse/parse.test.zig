@@ -38,6 +38,17 @@ fn expectErrors(source: [:0]const u8, expected: []const ExpectedError) !void {
     }
 }
 
+/// Checks the errors, and the tree that recovery leaves.
+fn expectRecovery(source: [:0]const u8, errors: []const ExpectedError, expected: []const u8) !void {
+    try expectErrors(source, errors);
+    var cst = try parse(testing.allocator, source);
+    defer cst.deinit(testing.allocator);
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try cst.dump(&out.writer);
+    try testing.expectEqualStrings(expected, out.written());
+}
+
 /// Checks the first error only, for sources whose recovery isn't the point.
 fn expectFirstError(source: [:0]const u8, tag: Cst.Error.Tag, at: []const u8) !void {
     var cst = try parse(testing.allocator, source);
@@ -419,14 +430,82 @@ test "recovery: one bad statement doesn't hide the next" {
     try testing.expectEqualStrings("J", cst.tokenText(cst.firstToken(statements[2])));
 }
 
-test "recovery: a failure inside braces skips to the line after them" {
-    var cst = try parse(testing.allocator, "G :: {\n  f /g,\n  h\n}\nJ :: n");
-    defer cst.deinit(testing.allocator);
-    try testing.expectEqual(@as(usize, 1), cst.errors.len);
-    const statements = cst.children(.root);
-    try testing.expectEqual(@as(usize, 2), statements.len);
-    try testing.expectEqual(Node.Tag.invalid, cst.tag(statements[0]));
-    try testing.expectEqual(Node.Tag.statement, cst.tag(statements[1]));
+test "recovery: inside braces, a failed item becomes invalid and the others survive" {
+    try expectRecovery("G :: {\n  f /g,\n  h\n}\nJ :: n", &.{.{ .slash_has_no_prefix_form, "/" }},
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    block
+        \\      items
+        \\        leaf edge_id f
+        \\        invalid '/'
+        \\        leaf edge_id h
+        \\  statement ::
+        \\    leaf zone_id J
+        \\    leaf edge_id n
+        \\
+    );
+    try expectRecovery("G :: { (f, g | h), k }", &.{.{ .bar_in_group, "|" }},
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    block
+        \\      items
+        \\        invalid '('
+        \\        leaf edge_id k
+        \\
+    );
+}
+
+test "recovery: a missing comma is assumed, a trailing comma ends the list" {
+    try expectRecovery("G :style := #Done :terminal f :label \"x\"", &.{.{ .missing_comma, "f" }},
+        \\root
+        \\  statement :=
+        \\    entry
+        \\      leaf zone_id G
+        \\      attr :style
+        \\    items
+        \\      entry
+        \\        leaf node_id #Done
+        \\        attr :terminal
+        \\      entry
+        \\        leaf edge_id f
+        \\        attr :label
+        \\          leaf str "x"
+        \\
+    );
+    try expectRecovery("G :: (f, g,) h", &.{.{ .trailing_comma, "," }},
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    o_chain
+        \\      group
+        \\        items
+        \\          leaf edge_id f
+        \\          leaf edge_id g
+        \\      leaf edge_id h
+        \\
+    );
+}
+
+test "recovery: a statement spanning lines is skipped until its parentheses balance" {
+    try expectRecovery("Db :: (\n  f, g\n)\nH :: k", &.{.{ .statement_spans_lines, "\n" }},
+        \\root
+        \\  invalid 'Db'
+        \\  statement ::
+        \\    leaf zone_id H
+        \\    leaf edge_id k
+        \\
+    );
+    // a line with `::` or `:=` starts a new statement, balanced or not
+    try expectRecovery("H :: (k\nJ :: n", &.{.{ .statement_spans_lines, "\n" }},
+        \\root
+        \\  invalid 'H'
+        \\  statement ::
+        \\    leaf zone_id J
+        \\    leaf edge_id n
+        \\
+    );
 }
 
 // ---------------------------------------------------------------------------

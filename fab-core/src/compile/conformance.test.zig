@@ -16,7 +16,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step finished.
-const done = 3;
+const done = 4;
 
 const Case = struct {
     source: [:0]const u8,
