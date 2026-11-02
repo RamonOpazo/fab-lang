@@ -92,19 +92,54 @@ Done when the corpus runs, with every case failing or skipped for the right reas
 
 Done when the tests cover every terminal and the corpus's lexical cases pass.
 
-**4. Parser and CST** (`fab-core/src/parse/`).
+**4. Parser and CST** (`fab-core/src/parse/`). Only fab-core drives the plan from here; fab-render and fab-cli are redone later, and their tests may be skipped meanwhile. The analyser is rewritten, not adapted (step 5), so step 4 replaces the parser in place, in increments:
+
+- **4a.** The old analyser goes. A skeleton keeps its interface (`analyse(gpa, cst) → Result`, an empty IR, no errors yet), so fab-core builds. The old analyser tests go with it; tests that need an analysed program are skipped until step 5.
+- **4b.** The new CST, and the parser for declarations: statements, levels, items, blocks, lines, chains and atoms.
+- **4c.** The definition side: entries, attributes, equations.
+- **4d.** Recovery.
+
+The CST:
+
+| Node | Grammar |
+| --- | --- |
+| `root` | the statements |
+| `statement` | `head (:: \| :=) body`; main token the operator |
+| `levels`, `items` | two or more, separated by `\|` or `,` |
+| `block` | `{ levels }` |
+| `entry`, `attr` | `[chain] attr…` or `chain block`; `ATTR_ID [literal]` |
+| `equation` | `chain (== \| ~=) chain …`, chained |
+| `o_chain`, `c_chain` | two or more, joined by space or by `/`; both flat |
+| `prefix`, `postfix`, `juxtafix` | a marker or a trailing `/`; `a.b` |
+| `leaf`, `group`, `invalid` | one-token primaries (names, `@`, `*`, `&class`, literals); `( items )`; recovery |
+
+A single element is its own node, never a list of one. An absent child is index 0, `root`, which is never anyone's child.
+
 - One statement node replaces `relations` and `layer`: the head is read once, and the operator decides.
 - EOL ends a statement at the top level, even inside `( )`; inside `{ }`, at any depth, it is skipped.
 - Items replace `entry`, `attrs`, `attr_block`, `equation`, `card`, `ref` and `interp`.
 - `|` only at the top of a right side; inside a group it is a parse error.
 - Chains are flat over `/` and space, grouped by precedence climbing. `*` becomes a node primary, not a marker. `[ … ]` cells go. Classes become `&class`. Literals are primaries, so the analyser can say "value in a declaration".
 - One group node, `( items )`, for terms, subjects and propositions alike.
-- Touching errors (prefix `/`, an operator touching nothing, a detached dot, a marker touching both sides) move to the analyser, which sees touches in the tokens.
+- Touching errors (prefix `/`, an operator touching nothing, a detached dot, a marker touching both sides) stay in the parser: the grammar can't derive them, so they are syntax errors.
 - Recovery: an `invalid` node, then skip to the next statement at the top level, or to the next `,` or `}` at the same depth inside braces.
 
 Done when every case parses to the expected tree shape (`fab show cst`) and recovery tests pass.
 
-**5. Analyser: level 1** (`fab-core/src/analyse/`). One rule at a time, in order, each with its corpus rows and its messages in `compile/messages.zig`:
+**5. Analyser: level 1** (`fab-core/src/analyse/`). A fresh analyser on the new CST. Typing is its own pass, so elaboration only meets well-typed terms:
+
+| Concern | Knows | File |
+| --- | --- | --- |
+| Sorts | what a name is: zone, node, edge, attribute, class, value | `Analyser.zig` (rules 0–1) |
+| Interfaces | a term's type: its sides, (m, n) ends, or a node; the arity errors | `Interface.zig` (rules 1–2), before elaboration |
+| Nodes as types | which node each end lands on | elaboration, with `UnionFind.zig` (rules 3–4) and the label join, `Label.zig` (rule 5) |
+| Variables | what a name refers to: binding by first occurrence, scopes | the environment; `Scope.zig` if it grows (rules 0, 6) |
+
+`Analyser.zig` is the driver: statements, recovery, holes, building the IR. `UnionFind.zig`, `Ir.Builder` and `Result` are kept. Recovery behaviours to bring back (the old `recovery.test.zig`, in git before step 4): a failed element becomes a hole and the path stays connected; cascades are silent and their hole points back to the cause; undefined zones become holes; an edge declared twice keeps the first shape; a zone defined twice is drawn, with references to the first; local fixes keep the first kind and the first name; statements with syntax errors are skipped and the rest is analysed.
+
+Also back in step 5: the tests skipped in 4a ("Needs an analysed program"), and `compilation.test.zig`'s out-of-memory test, which fails with `NondeterministicMemoryUsage` without the old analyser: `Lexer.tokenize` grows a `MultiArrayList`, and whether the testing allocator grows it in place depends on what else is allocated.
+
+One rule at a time, in order, each with its corpus rows and its messages in `compile/messages.zig`:
 
 0. **Statements and items.** Declarations hold terms; definitions hold entries and equations. `|` only in a declaration, a lone literal only in a definition. A declaration's head is a zone (nodes and edges are open). The warning for a chain broken across lines. The Statements error table.
 1. **Node terms take a slash.** `#A`, `@`, diagram names, `+f`, `f+`, `*`. A node beside a space is an error. `*` is fresh and private to one end: `*/(f, g)`, `f/* g`, `*/f/*` are errors.
@@ -112,9 +147,8 @@ Done when every case parses to the expected tree shape (`fab show cst`) and reco
 3. **Slash chains.** One edge attaches to the nodes beside it; two or more close a cycle, which exposes its start on the left. `/` distributes over a group. A trailing `/` makes a one-edge chain undirected.
 4. **Pinches.** Several branches are declared; a pinched single edge is a reference; `?` and `!` only on groups; one side only for a single edge; the first branch names the pinched nodes.
 5. **Where nodes meet.** The label join: at most one name, kinds that agree, reported by the union-find.
-6. **Touching errors** moved from the parser.
-7. **Cross-diagram references.** `A.+f`, `A.#X` (must exist), diagram names as nodes (need an `@`).
-8. **Canonical references** for every node, as the IR's `canonical`.
+6. **Cross-diagram references.** `A.+f`, `A.#X` (must exist), diagram names as nodes (need an `@`).
+7. **Canonical references** for every node, as the IR's `canonical`.
 
 Done when every level-1 relations case passes.
 

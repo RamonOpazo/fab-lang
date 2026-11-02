@@ -62,7 +62,7 @@ fn check(case: Case) !void {
 // Composition
 
 test "Composition: two edges in a path" {
-    try check(.{ .step = 1, .source = "G :: f g", .ir =
+    try check(.{ .step = 5, .source = "G :: f g", .ir =
         \\zone G
         \\  node n0 canon +f
         \\  node n1 canon f+
