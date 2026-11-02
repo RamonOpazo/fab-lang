@@ -40,39 +40,74 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
             .hint = "Add {expected} here, or check the construct that starts before this point.",
         },
         .expected_statement => .{
-            .message = "Expected a zone name, found {}",
-            .explanation = "Every statement starts with a zone name: `G :: …` defines the zone, and `G :format { … }` adds a layer to it.",
-            .hint = "Start the line with an uppercase zone name.",
+            .message = "Expected a statement, found {}",
+            .explanation = "Every statement is a head, then `::` or `:=`, then its body: `G :: f g` declares a diagram, `G :style := { … }` defines a value.",
+            .hint = "Start the line with a name, or remove what is left over from the line before.",
         },
         .expected_atom => .{
             .message = "Expected an edge, a node or a group, found {}",
-            .explanation = "Terms are built from edges (`f`), nodes (`#A`, `@`, zone names), groups `( … )` and edge-to-edge relations `[ … ]`.",
+            .explanation = "Chains are built from edges (`f`), nodes (`#A`, `@`, `*`, diagram names), classes (`&node`), literals and groups `( … )`.",
             .hint = "Check for a missing name, or for an operator with nothing to apply to.",
         },
-        .expected_attrs_or_relation => .{
-            .message = "Expected attributes or an equation, found {}",
-            .explanation = "Each line of a layer either gives its subject attributes (`f :label \"x\"`) or states an equation (`f g == h`).",
-            .hint = "Add an attribute such as `:label`, or an equation with `==` or `~=`.",
+        .statement_spans_lines => .{
+            .message = "The line ends inside parentheses",
+            .explanation = "A statement is one line. Outside braces a newline ends it, even inside `( )`.",
+            .hint = "Close the parentheses on this line, or wrap the statement in braces: `G :: { … }`.",
+        },
+        .missing_comma => .{
+            .message = "Expected a comma before {}",
+            .explanation = "Items are separated by commas: terms in a declaration, entries and equations in a definition.",
+            .hint = "Add `,` before this item.",
+        },
+        .trailing_comma => .{
+            .message = "A comma with no item after it",
+            .explanation = "A comma stands between items only, never after the last one.",
+            .hint = "Remove the comma.",
+        },
+        .empty_braces => .{
+            .message = "Empty braces",
+            .explanation = "There are no empty declarations or definitions, and braces always hold something.",
+            .hint = "Write what the braces hold, or remove them.",
+        },
+        .empty_level => .{
+            .message = "An empty level",
+            .explanation = "Every level declares something: `|` stands between two levels.",
+            .hint = "Remove the extra `|`, or write what the level declares.",
+        },
+        .bar_in_group => .{
+            .message = "{} inside a group",
+            .explanation = "`|` separates the levels of a body, at its top. A group holds items of one level.",
+            .hint = "Move the levels out of the group: `G :: f g | f/α/g`.",
+        },
+        .atoms_touch => .{
+            .message = "{} touches what comes before it",
+            .explanation = "Only `/` joins things that touch. A space separates the steps of a chain.",
+            .hint = "Write a space for a path, or `/` to attach: `f g`, `#A/f`, `*/f`.",
+        },
+        .marker_touches_both_sides => .{
+            .message = "{} touches both sides",
+            .explanation = "A marker attaches to the one side it touches: `f+` pinches the end of f, `+f` its start.",
+            .hint = "Separate it from one side: `f ?(g, h)`, or `(a, b)! !(c, d)`.",
         },
         .slash_has_no_prefix_form => .{
             .message = "`/` touches only what follows it",
-            .explanation = "`/` attaches to what it touches: `f/g` is a back edge, and `f/` with nothing after it makes `f` undirected. There is no form where `/` touches only the right side.",
+            .explanation = "`/` attaches to what it touches: `f/g` joins two things, and `f/` with nothing after it makes `f` undirected. There is no form where `/` touches only the right side.",
             .hint = "Write `f/g` without spaces, or `f/ g` for an undirected `f` followed by `g`.",
         },
         .operator_touches_nothing => .{
             .message = "{} touches nothing",
-            .explanation = "The operators `/`, `+`, `*`, `?` and `!` attach to the term they touch. With spaces on both sides, this one has nothing to attach to.",
+            .explanation = "The operators `/`, `+`, `?` and `!` attach to what they touch. With spaces on both sides, this one has nothing to attach to.",
             .hint = "Remove the space between the operator and its term, as in `+f` or `f?`.",
         },
         .detached_dot => .{
             .message = "A `.` must touch both sides",
-            .explanation = "The dot joins a qualifier to what it qualifies, as in `A.+f` or `.node.id`, so nothing may separate them.",
+            .explanation = "The dot joins a qualifier to what it qualifies, as in `A.+f` or `&node.id`, so nothing may separate them.",
             .hint = "Remove the spaces around the dot.",
         },
         .invalid_token => .{
             .message = "Unrecognised text {}",
-            .explanation = "This is not a name, number, literal or operator of fAB. Unterminated strings and math end up here too.",
-            .hint = "Check for a missing closing `\"` or `$`, or a character fAB does not use.",
+            .explanation = "This is not a name, literal or operator of fAB. Unterminated strings and math, and numbers outside a value, end up here too.",
+            .hint = "Check for a missing closing `\"`, `$` or `]`; write numbers in brackets: `[30]`.",
         },
     };
 }

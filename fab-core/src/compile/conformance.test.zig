@@ -16,7 +16,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step finished.
-const done = 1;
+const done = 3;
 
 const Case = struct {
     source: [:0]const u8,
@@ -261,4 +261,67 @@ test "Interfaces: a stopped branch is skipped when ends are counted" {
 
 test "Interfaces: lone nodes" {
     try check(.{ .step = 5, .source = "T :: #UUID7, #DTZ" });
+}
+
+// ---------------------------------------------------------------------------
+// Syntax errors (the spec's error tables)
+
+test "Statements: a statement spanning lines" {
+    try check(.{ .step = 4, .source = "Db :: (\n  f, g\n)", .codes = &.{.{ .syntax = .statement_spans_lines }} });
+}
+
+test "Statements: a missing comma" {
+    try check(.{ .step = 4, .source = "G :style := #Done :terminal f :label \"x\"", .codes = &.{.{ .syntax = .missing_comma }} });
+}
+
+test "Statements: a trailing comma in a group" {
+    try check(.{ .step = 4, .source = "G :: (f, g,)", .codes = &.{.{ .syntax = .trailing_comma }} });
+}
+
+test "Statements: a trailing comma in braces" {
+    try check(.{ .step = 4, .source = "G :style := { a :x, }", .codes = &.{.{ .syntax = .trailing_comma }} });
+}
+
+test "Statements: empty braces in a declaration" {
+    try check(.{ .step = 4, .source = "G :: {}", .codes = &.{.{ .syntax = .empty_braces }} });
+}
+
+test "Statements: empty braces in a definition" {
+    try check(.{ .step = 4, .source = "G :style := {}", .codes = &.{.{ .syntax = .empty_braces }} });
+}
+
+test "Relations: a marker touching both sides" {
+    try check(.{ .step = 4, .source = "G :: f?(g, h)", .codes = &.{.{ .syntax = .marker_touches_both_sides }} });
+}
+
+test "Relations: a marker touching both sides, between groups" {
+    try check(.{ .step = 4, .source = "G :: (a, b)!(c, d)", .codes = &.{.{ .syntax = .marker_touches_both_sides }} });
+}
+
+test "Relations: a tight operator touching nothing, infix" {
+    try check(.{ .step = 4, .source = "G :: f / g", .codes = &.{.{ .syntax = .operator_touches_nothing }} });
+}
+
+test "Relations: a tight operator touching nothing, prefix" {
+    try check(.{ .step = 4, .source = "G :: + f", .codes = &.{.{ .syntax = .operator_touches_nothing }} });
+}
+
+test "Relations: a prefix slash" {
+    try check(.{ .step = 4, .source = "G :: f /g", .codes = &.{.{ .syntax = .slash_has_no_prefix_form }} });
+}
+
+test "Relations: atoms touching" {
+    try check(.{ .step = 4, .source = "G :: f(g)", .codes = &.{.{ .syntax = .atoms_touch }} });
+}
+
+test "Relations: a null node touching an edge" {
+    try check(.{ .step = 4, .source = "G :: *f", .codes = &.{.{ .syntax = .atoms_touch }} });
+}
+
+test "Levels: an empty level" {
+    try check(.{ .step = 4, .source = "G :: f | | m", .codes = &.{.{ .syntax = .empty_level }} });
+}
+
+test "Levels: a level inside a branch" {
+    try check(.{ .step = 4, .source = "G :: f (g | α)", .codes = &.{.{ .syntax = .bar_in_group }} });
 }

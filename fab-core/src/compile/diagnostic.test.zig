@@ -68,20 +68,20 @@ test "expected tokens, and the ends of lines and input" {
 
     source = "G f\nH :: g";
     ds = try diagnose(source);
-    try expectLayer(ds[0], .message, source, "Expected `::`, found `f`");
+    try expectLayer(ds[0], .message, source, "Expected `::`, found end of line");
     testing.allocator.free(ds);
 
-    source = "G :format {\n  f\n}";
+    source = "G :: f g)";
     ds = try diagnose(source);
-    try expectLayer(ds[0], .message, source, "Expected attributes or an equation, found end of line");
+    try expectLayer(ds[0], .message, source, "Expected end of line, found `)`");
     testing.allocator.free(ds);
 }
 
 test "braces that are not placeholders are written as they are" {
-    const source = "f :: g";
+    const source = ") f";
     const ds = try diagnose(source);
     defer testing.allocator.free(ds);
-    try expectLayer(ds[0], .explanation, source, "Every statement starts with a zone name: `G :: …` defines the zone, and `G :format { … }` adds a layer to it.");
+    try expectLayer(ds[0], .explanation, source, "Every statement is a head, then `::` or `:=`, then its body: `G :: f g` declares a diagram, `G :style := { … }` defines a value.");
 }
 
 test "every code has all three layers, and names are unique across stages" {

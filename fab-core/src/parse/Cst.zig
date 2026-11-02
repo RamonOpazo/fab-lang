@@ -6,13 +6,15 @@
 //! array of u32. A node never stores text: names and literals are tokens,
 //! and their text is a span of the source.
 //!
-//! Two conventions keep the tag set small:
+//! Three conventions keep the tag set small:
 //!   - The node tag says what shape a node has; the token tag at `main_token`
-//!     says which variant. A `postfix` node is `f+`, `f*`, `f?`, `f!` or `f/`
-//!     depending on its operator token, and a `leaf` is a name, `@` or a
-//!     literal depending on its token.
-//!   - List nodes (`sum`, `path`, `ref`) exist only for two or more elements.
-//!     A single element is its own node, so `f` is a leaf, not a path of one.
+//!     says which variant. A `postfix` node is `f+`, `f?`, `f!` or `f/`
+//!     depending on its operator token, and a `leaf` is a name, `@`, `*`, a
+//!     class or a literal depending on its token.
+//!   - List nodes (`levels`, `items`, `operation`, `o_chain`, `c_chain`) exist
+//!     only for two or more elements. A single element is its own node, so
+//!     `f` is a leaf, not a chain of one.
+//!   - An absent child is `.root`, which is never anyone's child.
 
 const std = @import("std");
 const Token = @import("../lex/Token.zig");
@@ -45,77 +47,57 @@ pub const Node = struct {
         /// The whole program.
         /// main_token: 0. data.range: the statements.
         root,
-        /// `G :: term`.
-        /// main_token: the zone name; `::` follows. data.node: the term.
-        relations,
-        /// `G :format { … }`.
-        /// main_token: the attribute; the zone name precedes it. data.node: the block.
-        layer,
+        /// `head :: body`, `head := body`.
+        /// main_token: `::` or `:=`. data.nodes: head, body.
+        statement,
 
-        // -- terms -----------------------------------------------------------
+        // -- items -----------------------------------------------------------
 
-        /// `s, t, …`: disjoint union.
-        /// main_token: the first comma. data.range: two or more terms.
-        sum,
-        /// `s t …`: juxtaposition.
-        /// main_token: the first token. data.range: two or more terms.
-        path,
-        /// `s/t`: a back edge.
-        /// main_token: the slash. data.nodes: left, right.
-        slash,
-        /// `+u`, `*u`.
-        /// main_token: the operator. data.node: the operand.
+        /// `items | items | …`.
+        /// main_token: the first `|`. data.range: two or more.
+        levels,
+        /// `item, item, …`.
+        /// main_token: the first comma. data.range: two or more.
+        items,
+        /// `{ levels }`.
+        /// main_token: `{`. data.node_token: what it holds, `}`.
+        block,
+        /// `subject :attr v :attr …`, `:attr v …`, `subject { … }`.
+        /// main_token: the first token. data.range: the subject (`.root` if
+        /// there is none), then the attributes or the block.
+        entry,
+        /// `:attr`, `:attr literal`.
+        /// main_token: the attribute. data.node: the literal, or `.root`.
+        attr,
+        /// `a == b == c`, `a ~= b`: chains joined by operators, one level, a
+        /// flat run. The operators are the tokens between the operands.
+        /// main_token: the first operator. data.range: two or more operands.
+        operation,
+
+        // -- chains ----------------------------------------------------------
+
+        /// `a b …`: an open chain, joined by spaces.
+        /// main_token: the first token. data.range: two or more.
+        o_chain,
+        /// `a/b/…`: a closed chain, joined by touching slashes.
+        /// main_token: the first slash. data.range: two or more.
+        c_chain,
+        /// `+a`, `?a`, `!a`.
+        /// main_token: the marker. data.node: the operand.
         prefix,
-        /// `u+`, `u*`, `u?`, `u!`, and `u/` (an undirected edge).
+        /// `a+`, `a?`, `a!`, and `a/` (a trailing slash).
         /// main_token: the operator. data.node: the operand.
         postfix,
-        /// One token: an edge, node or zone name, `@`, or a literal
-        /// (number, string, math, arrow).
+        /// `a.b`.
+        /// main_token: the dot. data.nodes: left, right.
+        juxtafix,
+        /// One token: an edge, node or zone name, a class, `@`, `*`, or a
+        /// literal (string, math, value).
         /// main_token: that token. data.none.
         leaf,
-        /// `A.u`: u inside zone A.
-        /// main_token: the zone name; the dot follows. data.node: u.
-        qualified,
-        /// `.iso`, `.node.id`: a class.
-        /// main_token: the first dot. data.token: the last name.
-        class,
-        /// `( term )`.
-        /// main_token: `(`. data.node_token: the term, `)`.
+        /// `( items )`.
+        /// main_token: `(`. data.node_token: what it holds, `)`.
         group,
-        /// `[ term ]`: edge-to-edge relations.
-        /// main_token: `[`. data.node_token: the term, `]`.
-        cells,
-
-        // -- layers ----------------------------------------------------------
-
-        /// `{ entries }`: a layer's body.
-        /// main_token: `{`. data.extra: a `Braced` list of entries.
-        block,
-        /// `subject attrs`.
-        /// main_token: the subject's first token. data.nodes: subject, attributes
-        /// (an `attrs` or `attr_block` node).
-        entry,
-        /// `lhs == rhs`, `lhs ~= rhs`.
-        /// main_token: `==` or `~=`. data.nodes: left, right.
-        equation,
-        /// Attributes written inline: `:label "x" :shape circle`.
-        /// main_token: the first attribute. data.range: one or more `attr` nodes.
-        attrs,
-        /// Attributes written as a block: `{ :label "x" … }`.
-        /// main_token: `{`. data.extra: a `Braced` list of `attr` nodes.
-        attr_block,
-        /// `:name value…`.
-        /// main_token: the attribute name. data.range: the values, possibly none.
-        attr,
-        /// `0..*`, `0..1`.
-        /// main_token: the first number; `..` and the bound follow. data.none.
-        card,
-        /// Touching segments: `{.edge+ :snakecase}_id`.
-        /// main_token: the first token. data.range: two or more segments.
-        ref,
-        /// `{ unit attr }`: an interpolation inside a value.
-        /// main_token: `{`. data.nodes: the unit, the attribute.
-        interp,
 
         // -- recovery --------------------------------------------------------
 
@@ -130,26 +112,14 @@ pub const Node = struct {
         node: Index,
         nodes: [2]Index,
         node_token: struct { Index, TokenIndex },
-        token: TokenIndex,
         range: Range,
-        extra: ExtraIndex,
     };
 };
-
-/// A position in `extra`.
-pub const ExtraIndex = enum(u32) { _ };
 
 /// `extra[start..end]` holds node indices.
 pub const Range = struct {
     start: u32,
     end: u32,
-};
-
-/// A list with a closing token: `extra[start..end]` holds node indices.
-pub const Braced = struct {
-    start: u32,
-    end: u32,
-    close: TokenIndex,
 };
 
 pub const Error = struct {
@@ -161,9 +131,26 @@ pub const Error = struct {
 
     pub const Tag = enum {
         expected_token,
+        /// A line that can't start a statement.
         expected_statement,
         expected_atom,
-        expected_attrs_or_relation,
+        /// `Db :: (` with `)` on a later line: outside braces, a newline ends
+        /// the statement.
+        statement_spans_lines,
+        /// `#Done :terminal f :label "x"`: two items with no comma between.
+        missing_comma,
+        /// `(f, g,)`: a comma with no item after it.
+        trailing_comma,
+        /// `G :: {}`.
+        empty_braces,
+        /// `f | | m`: a level with nothing in it.
+        empty_level,
+        /// `f (g | h)`: levels are written at the top of a body only.
+        bar_in_group,
+        /// `f(g)`, `*f`: two atoms touching, with no operator between them.
+        atoms_touch,
+        /// `f?(g, h)`: a marker touching both sides.
+        marker_touches_both_sides,
         /// `f /g`: a slash touching only what follows it.
         slash_has_no_prefix_form,
         /// `+ f`, `f / g`: a tight operator touching nothing.
@@ -207,29 +194,30 @@ pub fn tokenText(cst: Cst, token: TokenIndex) []const u8 {
 }
 
 /// The node indices stored in `extra[start..end]`.
-pub fn list(cst: Cst, start: u32, end: u32) []const Node.Index {
-    return @ptrCast(cst.extra[start..end]);
+pub fn list(cst: Cst, range: Range) []const Node.Index {
+    return @ptrCast(cst.extra[range.start..range.end]);
 }
 
-/// The `Braced` list stored in `extra` at `index`.
-pub fn braced(cst: Cst, index: ExtraIndex) Braced {
-    const i = @backingInt(index);
-    return .{ .start = cst.extra[i], .end = cst.extra[i + 1], .close = cst.extra[i + 2] };
+/// An entry's subject, if it has one.
+pub fn subject(cst: Cst, entry: Node.Index) ?Node.Index {
+    const first = cst.list(cst.data(entry).range)[0];
+    return if (first == .root) null else first;
 }
 
-/// The direct children of a node, in source order.
+/// The direct children of a node, in source order. Absent children are left out.
 pub fn children(cst: Cst, node: Node.Index) []const Node.Index {
-    const d = cst.data(node);
+    const d = &cst.nodes.items(.data)[@backingInt(node)];
     return switch (cst.tag(node)) {
-        .root, .sum, .path, .attrs, .attr, .ref => cst.list(d.range.start, d.range.end),
-        .block, .attr_block => blk: {
-            const b = cst.braced(d.extra);
-            break :blk cst.list(b.start, b.end);
+        .root, .levels, .items, .operation, .o_chain, .c_chain => cst.list(d.range),
+        .entry => blk: {
+            const all = cst.list(d.range);
+            break :blk if (all[0] == .root) all[1..] else all;
         },
-        .relations, .layer, .prefix, .postfix, .qualified => (&cst.nodes.items(.data)[@backingInt(node)].node)[0..1],
-        .group, .cells => (&cst.nodes.items(.data)[@backingInt(node)].node_token[0])[0..1],
-        .slash, .entry, .equation, .interp => &cst.nodes.items(.data)[@backingInt(node)].nodes,
-        .leaf, .class, .card, .invalid => &.{},
+        .statement, .juxtafix => &d.nodes,
+        .prefix, .postfix => (&d.node)[0..1],
+        .attr => if (d.node == .root) &.{} else (&d.node)[0..1],
+        .block, .group => (&d.node_token[0])[0..1],
+        .leaf, .invalid => &.{},
     };
 }
 
@@ -238,65 +226,52 @@ pub fn children(cst: Cst, node: Node.Index) []const Node.Index {
 
 /// The first token that belongs to a node.
 pub fn firstToken(cst: Cst, node: Node.Index) TokenIndex {
-    const main = cst.mainToken(node);
     return switch (cst.tag(node)) {
-        .layer => main - 1,
-        .sum, .path, .ref, .slash, .postfix, .entry, .equation => cst.firstToken(cst.children(node)[0]),
-        .root,
-        .relations,
-        .prefix,
-        .leaf,
-        .qualified,
-        .class,
-        .group,
-        .cells,
-        .block,
-        .attrs,
-        .attr_block,
-        .attr,
-        .card,
-        .interp,
-        .invalid,
-        => main,
+        .statement,
+        .levels,
+        .items,
+        .entry,
+        .operation,
+        .o_chain,
+        .c_chain,
+        .postfix,
+        .juxtafix,
+        => cst.firstToken(cst.children(node)[0]),
+        .root, .attr, .block, .prefix, .leaf, .group, .invalid => cst.mainToken(node),
     };
 }
 
 /// The last token that belongs to a node.
 pub fn lastToken(cst: Cst, node: Node.Index) TokenIndex {
-    const main = cst.mainToken(node);
     const d = cst.data(node);
     return switch (cst.tag(node)) {
         .root => @intCast(cst.tokens.len - 1),
-        .postfix, .leaf, .invalid => main,
-        .class => d.token,
-        .card => main + 2,
-        .group, .cells => d.node_token[1],
-        .block, .attr_block => cst.braced(d.extra).close,
-        .interp => cst.lastToken(d.nodes[1]) + 1,
-        .attr => if (cst.children(node).len == 0) main else cst.lastLeaf(node),
-        .relations,
-        .layer,
-        .sum,
-        .path,
-        .slash,
-        .prefix,
-        .qualified,
+        .postfix, .leaf, .invalid => cst.mainToken(node),
+        .block, .group => d.node_token[1],
+        .attr => if (d.node == .root) cst.mainToken(node) else cst.lastToken(d.node),
+        .statement,
+        .levels,
+        .items,
         .entry,
-        .equation,
-        .attrs,
-        .ref,
-        => cst.lastLeaf(node),
+        .operation,
+        .o_chain,
+        .c_chain,
+        .prefix,
+        .juxtafix,
+        => blk: {
+            const kids = cst.children(node);
+            break :blk cst.lastToken(kids[kids.len - 1]);
+        },
     };
 }
 
-fn lastLeaf(cst: Cst, node: Node.Index) TokenIndex {
-    const kids = cst.children(node);
-    return cst.lastToken(kids[kids.len - 1]);
+/// The operators of an `operation`, in order: the tokens between its operands.
+pub fn operator(cst: Cst, operation: Node.Index, i: usize) TokenIndex {
+    return cst.lastToken(cst.children(operation)[i]) + 1;
 }
 
 // ---------------------------------------------------------------------------
-// Dump: one node per line, children indented. The format of `fab cst` and of
-// the golden files in test/cases/parse/.
+// Dump: one node per line, children indented. The format of `fab show cst`.
 
 pub fn dump(cst: Cst, w: *std.Io.Writer) std.Io.Writer.Error!void {
     try cst.dumpNode(w, .root, 0);
@@ -308,17 +283,14 @@ fn dumpNode(cst: Cst, w: *std.Io.Writer, node: Node.Index, depth: usize) std.Io.
     const main = cst.mainToken(node);
     try w.writeAll(@tagName(t));
     switch (t) {
-        .relations, .qualified, .attr, .prefix, .postfix, .slash, .equation => try w.print(" {s}", .{cst.tokenText(main)}),
-        .layer => try w.print(" {s} {s}", .{ cst.tokenText(main - 1), cst.tokenText(main) }),
+        .statement, .attr, .prefix, .postfix => try w.print(" {s}", .{cst.tokenText(main)}),
+        .operation => for (0..cst.children(node).len - 1) |i| {
+            try w.print(" {s}", .{cst.tokenText(cst.operator(node, i))});
+        },
         .leaf => try w.print(" {s} {s}", .{ @tagName(cst.tokenTag(main)), cst.tokenText(main) }),
-        .class, .card => try w.print(" {s}", .{cst.spanText(main, cst.lastToken(node))}),
         .invalid => try w.print(" '{s}'", .{cst.tokenText(main)}),
-        .root, .sum, .path, .group, .cells, .block, .entry, .attrs, .attr_block, .ref, .interp => {},
+        .root, .levels, .items, .block, .entry, .o_chain, .c_chain, .juxtafix, .group => {},
     }
     try w.writeAll("\n");
     for (cst.children(node)) |child| try cst.dumpNode(w, child, depth + 1);
-}
-
-fn spanText(cst: Cst, first: TokenIndex, last: TokenIndex) []const u8 {
-    return cst.source[cst.tokens.items(.start)[first]..cst.tokens.items(.end)[last]];
 }

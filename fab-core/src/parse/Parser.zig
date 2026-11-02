@@ -1,12 +1,19 @@
 //! Turns tokens into a concrete syntax tree, following grammar.ebnf.
 //!
-//! Each grammar rule is one `parseX` function. Where the grammar writes
-//! `a ~ b` (b touches a), the code checks `touchesPrev` or `touchesNext`.
+//! Each grammar rule is one `parseX` function, recursive descent. Where the
+//! grammar writes `a ~ b` (b touches a), the code checks `touchesPrev` or
+//! `touchesNext`. There is no precedence table: chains are fixed by the
+//! grammar, and the operators between chains share one level, read left to
+//! right, so each list is a loop.
+//!
+//! A statement is one line; braces let it span lines. Inside `{ }`, at any
+//! depth, a newline is a space and `cur` skips it. Outside them it ends the
+//! statement, even inside `( )`.
 //!
 //! The parser never stops at the first error. A failure is recorded in
-//! `errors` and unwinds, as `error.ParseError`, to the nearest statement or
-//! block entry. That construct becomes an `invalid` node, the parser skips to
-//! the next line at the same bracket depth, and continues.
+//! `errors` and unwinds, as `error.ParseError`, to the statement. The
+//! statement becomes an `invalid` node, the parser skips to the next line
+//! outside braces, and continues.
 
 const std = @import("std");
 const Token = @import("../lex/Token.zig");
@@ -29,12 +36,12 @@ ends: []const u32,
 tok_i: TokenIndex = 0,
 /// The last token consumed, for `touchesPrev`. Skipped newlines don't count.
 last: ?TokenIndex = null,
-/// Inside ( ) and [ ], newlines are insignificant and skipped.
-skip_eol: bool = false,
-/// How many brackets are open at the current position.
-open: u32 = 0,
-/// `open` at the moment of the last failure, for recovery.
-fail_open: u32 = 0,
+/// How many braces are open. While any is, newlines are spaces.
+braces: u32 = 0,
+/// How many parentheses are open, to tell a statement that spans lines.
+parens: u32 = 0,
+/// `braces` at the moment of the last failure, for recovery.
+fail_braces: u32 = 0,
 
 nodes: std.MultiArrayList(Node) = .empty,
 extra: std.ArrayList(u32) = .empty,
@@ -59,9 +66,9 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}!Cs
     errdefer p.extra.deinit(gpa);
     errdefer p.errors.deinit(gpa);
 
-    p.parseRoot() catch |err| switch (err) {
+    p.parseProgram() catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
-        error.ParseError => unreachable, // the root always recovers
+        error.ParseError => unreachable, // the program always recovers
     };
 
     const extra = try p.extra.toOwnedSlice(gpa);
@@ -77,9 +84,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}!Cs
 }
 
 // ---------------------------------------------------------------------------
-// program
+// Statements
 
-fn parseRoot(p: *Parser) Error!void {
+/// program = [ statement ] { EOL [ statement ] } EOF
+fn parseProgram(p: *Parser) Error!void {
     // The root must be node 0, so it is reserved first and filled in last.
     try p.nodes.append(p.gpa, undefined);
     const top = p.scratch.items.len;
@@ -93,8 +101,8 @@ fn parseRoot(p: *Parser) Error!void {
             error.ParseError => blk: {
                 // Lists left half-built by the failure must not leak into ours.
                 p.scratch.shrinkRetainingCapacity(scratch_top);
-                p.recover(false);
-                break :blk try p.addLeafLike(.invalid, start);
+                p.recover();
+                break :blk try p.addLeaf(.invalid, start);
             },
         };
         try p.scratch.append(p.gpa, statement);
@@ -104,7 +112,7 @@ fn parseRoot(p: *Parser) Error!void {
             .eof => {},
             else => {
                 try p.warn(.expected_token, .eol);
-                p.recover(false);
+                p.recover();
                 p.skipEols();
             },
         }
@@ -114,273 +122,247 @@ fn parseRoot(p: *Parser) Error!void {
     p.nodes.set(0, .{ .tag = .root, .main_token = 0, .data = .{ .range = range } });
 }
 
+/// statement = ( primitive DECL | subject DEFN ) ( levels | block )
+/// The head is read as an item; which heads each operator allows is the
+/// analyser's call.
 fn parseStatement(p: *Parser) Error!Node.Index {
-    if (p.cur() != .zone_id) return p.fail(.expected_statement, .invalid);
-    const zone = p.next();
+    if (!p.startsItem()) return p.fail(.expected_statement, .invalid);
+    const head = try p.parseItem();
     switch (p.cur()) {
-        .decl => {
-            _ = p.next();
-            const term = try p.parseTerm();
-            return p.addNode(.relations, zone, .{ .node = term });
-        },
-        .attr_id => {
-            const attr = p.next();
-            const block = try p.parseBlock();
-            return p.addNode(.layer, attr, .{ .node = block });
-        },
+        .decl, .defn => {},
         else => return p.fail(.expected_token, .decl),
     }
+    const op = p.next();
+    const body = try p.parseLevels();
+    return p.addNode(.statement, op, .{ .nodes = .{ head, body } });
 }
 
 // ---------------------------------------------------------------------------
-// terms
+// Items
 
-/// term = path { comma path }
-fn parseTerm(p: *Parser) Error!Node.Index {
-    const first = try p.parsePath();
+/// levels = items { BAR items }
+fn parseLevels(p: *Parser) Error!Node.Index {
+    const first = try p.parseItems();
+    if (p.cur() != .bar) return first;
+
+    const bar = p.tok_i;
+    const top = p.scratch.items.len;
+    try p.scratch.append(p.gpa, first);
+    while (p.cur() == .bar) {
+        const this = p.next();
+        switch (p.cur()) {
+            .bar, .r_cur, .eol, .eof => return p.failAt(.empty_level, this),
+            else => {},
+        }
+        try p.scratch.append(p.gpa, try p.parseItems());
+    }
+    return p.addNode(.levels, bar, .{ .range = try p.listFrom(top) });
+}
+
+/// items = item { COMMA item }
+fn parseItems(p: *Parser) Error!Node.Index {
+    const first = try p.parseItem();
+    try p.checkItemEnd();
     if (p.cur() != .comma) return first;
 
     const comma = p.tok_i;
     const top = p.scratch.items.len;
     try p.scratch.append(p.gpa, first);
     while (p.cur() == .comma) {
-        _ = p.next();
-        try p.scratch.append(p.gpa, try p.parsePath());
+        const this = p.next();
+        switch (p.cur()) {
+            // A newline right after a comma, inside parentheses: the statement
+            // was meant to go on.
+            .eol => return if (p.parens > 0) p.fail(.statement_spans_lines, .invalid) else p.failAt(.trailing_comma, this),
+            .r_par, .r_cur, .bar, .eof => return p.failAt(.trailing_comma, this),
+            else => {},
+        }
+        try p.scratch.append(p.gpa, try p.parseItem());
+        try p.checkItemEnd();
     }
-    return p.addNode(.sum, comma, .{ .range = try p.listFrom(top) });
+    return p.addNode(.items, comma, .{ .range = try p.listFrom(top) });
 }
 
-/// path = tight { tight }
-fn parsePath(p: *Parser) Error!Node.Index {
+/// Two items need a comma between them.
+fn checkItemEnd(p: *Parser) Error!void {
+    if (p.startsItem()) return p.fail(.missing_comma, .invalid);
+}
+
+/// item = [ chain ] ( attr { attr } | block ) | chain { operator chain }
+fn parseItem(p: *Parser) Error!Node.Index {
     _ = p.cur(); // skip newlines first, so `start` is a real token
     const start = p.tok_i;
-    const first = try p.parseTight();
-    if (!p.startsUnit()) return first;
+    switch (p.cur()) {
+        .attr_id => return p.parseEntry(.root, start),
+        .l_cur => return p.parseBlock(),
+        else => {},
+    }
+    const chain = try p.parseChain();
+    return switch (p.cur()) {
+        .attr_id, .l_cur => p.parseEntry(chain, start),
+        .iden, .cong => p.parseOperation(chain),
+        else => chain,
+    };
+}
+
+/// The rest of an entry: its attributes, or its block.
+fn parseEntry(p: *Parser, subject: Node.Index, start: TokenIndex) Error!Node.Index {
+    const top = p.scratch.items.len;
+    try p.scratch.append(p.gpa, subject);
+    if (p.cur() == .l_cur) {
+        try p.scratch.append(p.gpa, try p.parseBlock());
+    } else {
+        while (p.cur() == .attr_id) try p.scratch.append(p.gpa, try p.parseAttr());
+    }
+    return p.addNode(.entry, start, .{ .range = try p.listFrom(top) });
+}
+
+/// attr = ATTR_ID [ literal ]
+fn parseAttr(p: *Parser) Error!Node.Index {
+    const name = p.next();
+    const literal: Node.Index = switch (p.cur()) {
+        .str, .math, .val => try p.addLeaf(.leaf, p.next()),
+        else => .root,
+    };
+    return p.addNode(.attr, name, .{ .node = literal });
+}
+
+/// The rest of an operation: { operator chain }. One level, left to right;
+/// whether the operators agree is the analyser's call.
+fn parseOperation(p: *Parser, first: Node.Index) Error!Node.Index {
+    const op = p.tok_i;
+    const top = p.scratch.items.len;
+    try p.scratch.append(p.gpa, first);
+    while (true) switch (p.cur()) {
+        .iden, .cong => {
+            _ = p.next();
+            try p.scratch.append(p.gpa, try p.parseChain());
+        },
+        else => break,
+    };
+    return p.addNode(.operation, op, .{ .range = try p.listFrom(top) });
+}
+
+/// block = L_CUR levels R_CUR
+fn parseBlock(p: *Parser) Error!Node.Index {
+    const open = p.next();
+    p.braces += 1;
+    defer p.braces -= 1;
+
+    if (p.cur() == .r_cur) return p.failAt(.empty_braces, open);
+    const body = try p.parseLevels();
+    const close = try p.expect(.r_cur);
+    return p.addNode(.block, open, .{ .node_token = .{ body, close } });
+}
+
+// ---------------------------------------------------------------------------
+// Chains
+
+/// chain = c_chain { _ c_chain }: an open chain, joined by spaces.
+fn parseChain(p: *Parser) Error!Node.Index {
+    _ = p.cur();
+    const start = p.tok_i;
+    const first = try p.parseCChain();
+    if (!try p.continuesChain()) return first;
 
     const top = p.scratch.items.len;
     try p.scratch.append(p.gpa, first);
-    while (p.startsUnit()) try p.scratch.append(p.gpa, try p.parseTight());
-    return p.addNode(.path, start, .{ .range = try p.listFrom(top) });
+    while (try p.continuesChain()) try p.scratch.append(p.gpa, try p.parseCChain());
+    return p.addNode(.o_chain, start, .{ .range = try p.listFrom(top) });
 }
 
-/// tight = unit { ~ slash ~ unit } [ ~ slash ]
-fn parseTight(p: *Parser) Error!Node.Index {
-    var lhs = try p.parseUnit();
-    while (p.cur() == .slash and p.touchesPrev()) {
-        const slash = p.next();
-        if (p.touchesPrev() and p.startsUnit()) {
-            const rhs = try p.parseUnit();
-            lhs = try p.addNode(.slash, slash, .{ .nodes = .{ lhs, rhs } });
-        } else {
-            // a slash touching only its left side: an undirected edge
-            return p.addNode(.postfix, slash, .{ .node = lhs });
-        }
+/// Another atom follows, apart from the last one. Touching it is an error:
+/// only `/` joins atoms that touch.
+fn continuesChain(p: *Parser) Error!bool {
+    if (!p.startsAtomAt(p.tok_i)) return false;
+    if (p.touchesPrev()) return p.fail(.atoms_touch, .invalid);
+    return true;
+}
+
+/// c_chain = atom { ~ SLASH ~ atom }: a closed chain, joined by slashes.
+fn parseCChain(p: *Parser) Error!Node.Index {
+    const first = try p.parseAtom();
+    if (!p.atInfixSlash()) return first;
+
+    const slash = p.tok_i;
+    const top = p.scratch.items.len;
+    try p.scratch.append(p.gpa, first);
+    while (p.atInfixSlash()) {
+        _ = p.next();
+        try p.scratch.append(p.gpa, try p.parseAtom());
     }
-    return lhs;
+    return p.addNode(.c_chain, slash, .{ .range = try p.listFrom(top) });
 }
 
-/// unit = { prefix ~ } atom { ~ postfix }
-/// Postfix operators bind tighter than prefix ones: +f? is +(f?).
-fn parseUnit(p: *Parser) Error!Node.Index {
+/// A slash touching an atom on each side.
+fn atInfixSlash(p: *Parser) bool {
+    return p.cur() == .slash and p.touchesPrev() and p.touchesNext() and p.startsAtomAt(p.tok_i + 1);
+}
+
+// ---------------------------------------------------------------------------
+// Atoms
+
+/// atom = prefix | juxtafix | postfix
+/// prefix = marker ~ atom;  juxtafix = postfix ~ DOT ~ atom
+fn parseAtom(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .plus, .star => if (p.touchesNext()) {
+        .plus, .quid, .bang => if (p.touchesNext()) {
             const op = p.next();
-            const operand = try p.parseUnit();
+            const operand = try p.parseAtom();
             return p.addNode(.prefix, op, .{ .node = operand });
         },
         else => {},
     }
-    var node = try p.parseAtom();
-    while (true) switch (p.cur()) {
-        .plus, .star, .quid, .bang => {
-            if (!p.touchesPrev()) break;
-            const op = p.next();
-            node = try p.addNode(.postfix, op, .{ .node = node });
-        },
-        else => break,
-    };
-    return node;
+    const left = try p.parsePostfix();
+    if (p.cur() != .dot or !p.touchesPrev()) return left;
+    if (!p.touchesNext()) return p.fail(.detached_dot, .invalid);
+    const dot = p.next();
+    const right = try p.parseAtom();
+    return p.addNode(.juxtafix, dot, .{ .nodes = .{ left, right } });
 }
 
-fn parseAtom(p: *Parser) Error!Node.Index {
+/// postfix = primary [ ~ marker | ~ SLASH ]
+/// A slash touching an atom on its right too is infix, not postfix.
+fn parsePostfix(p: *Parser) Error!Node.Index {
+    const primary = try p.parsePrimary();
+    if (!p.touchesPrev()) return primary;
     switch (p.cur()) {
-        .edge_id, .node_id, .at => return p.addLeafLike(.leaf, p.next()),
-        .zone_id => {
-            const zone = p.next();
-            if (p.cur() != .dot or !p.touchesPrev()) return p.addLeafLike(.leaf, zone);
-            _ = p.next();
-            if (!p.touchesPrev()) return p.fail(.detached_dot, .invalid);
-            const unit = try p.parseUnit();
-            return p.addNode(.qualified, zone, .{ .node = unit });
+        .plus, .quid, .bang => {
+            if (p.touchesNext() and p.startsAtomAt(p.tok_i + 1)) return p.fail(.marker_touches_both_sides, .invalid);
         },
-        .dot => return p.parseClass(),
-        .l_par => return p.parseEnclosed(.group, .r_par),
+        .slash => if (p.atInfixSlash()) return primary,
+        else => return primary,
+    }
+    const op = p.next();
+    return p.addNode(.postfix, op, .{ .node = primary });
+}
+
+/// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | AT | STAR | literal | L_PAR items R_PAR
+fn parsePrimary(p: *Parser) Error!Node.Index {
+    switch (p.cur()) {
+        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
+        .l_par => return p.parseGroup(),
         else => return p.fail(.expected_atom, .invalid),
     }
 }
 
-/// class = dot ~ edge_id { ~ dot ~ edge_id }
-fn parseClass(p: *Parser) Error!Node.Index {
-    const first = p.next();
-    var last = try p.expectTouching(.edge_id);
-    while (p.cur() == .dot and p.touchesPrev()) {
-        _ = p.next();
-        last = try p.expectTouching(.edge_id);
-    }
-    return p.addNode(.class, first, .{ .token = last });
-}
-
-/// ( term ) and [ term ]. Newlines inside are skipped.
-fn parseEnclosed(p: *Parser, tag: Node.Tag, close: Token.Tag) Error!Node.Index {
+fn parseGroup(p: *Parser) Error!Node.Index {
     const open = p.next();
-    const saved = p.skip_eol;
-    p.skip_eol = true;
-    defer p.skip_eol = saved;
-    p.open += 1;
-    defer p.open -= 1;
+    p.parens += 1;
+    defer p.parens -= 1;
 
-    const term = try p.parseTerm();
-    const close_tok = try p.expect(close);
-    return p.addNode(tag, open, .{ .node_token = .{ term, close_tok } });
+    const inner = try p.parseItems();
+    if (p.cur() == .bar) return p.fail(.bar_in_group, .invalid);
+    const close = try p.expect(.r_par);
+    return p.addNode(.group, open, .{ .node_token = .{ inner, close } });
 }
 
 // ---------------------------------------------------------------------------
-// layers
+// Tokens
 
-/// block = l_cur { eol } [ entry { eols entry } ] { eol } r_cur
-fn parseBlock(p: *Parser) Error!Node.Index {
-    const open = try p.expect(.l_cur);
-    const saved = p.skip_eol;
-    p.skip_eol = false;
-    defer p.skip_eol = saved;
-    p.open += 1;
-    defer p.open -= 1;
-
-    const top = p.scratch.items.len;
-    p.skipEols();
-    while (p.cur() != .r_cur and p.cur() != .eof) {
-        const start = p.tok_i;
-        const scratch_top = p.scratch.items.len;
-        const entry = p.parseEntry() catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.ParseError => blk: {
-                // Lists left half-built by the failure must not leak into ours.
-                p.scratch.shrinkRetainingCapacity(scratch_top);
-                p.recover(true);
-                break :blk try p.addLeafLike(.invalid, start);
-            },
-        };
-        try p.scratch.append(p.gpa, entry);
-
-        switch (p.cur()) {
-            .eol => p.skipEols(),
-            .r_cur, .eof => {},
-            else => {
-                try p.warn(.expected_token, .eol);
-                p.recover(true);
-                p.skipEols();
-            },
-        }
-    }
-    const close = try p.expect(.r_cur);
-    return p.addBraced(.block, open, top, close);
-}
-
-/// entry = term attrs | term relation term
-fn parseEntry(p: *Parser) Error!Node.Index {
-    const start = p.tok_i;
-    const subject = try p.parseTerm();
-    switch (p.cur()) {
-        .attr_id, .l_cur => {
-            const attrs = try p.parseAttrs();
-            return p.addNode(.entry, start, .{ .nodes = .{ subject, attrs } });
-        },
-        .iden, .cong => {
-            const op = p.next();
-            const rhs = try p.parseTerm();
-            return p.addNode(.equation, op, .{ .nodes = .{ subject, rhs } });
-        },
-        else => return p.fail(.expected_attrs_or_relation, .invalid),
-    }
-}
-
-/// attrs = attr { attr } | l_cur { attr | eol } r_cur
-fn parseAttrs(p: *Parser) Error!Node.Index {
-    const top = p.scratch.items.len;
-    if (p.cur() == .l_cur) {
-        const open = p.next();
-        p.open += 1;
-        defer p.open -= 1;
-        while (true) switch (p.cur()) {
-            .eol => _ = p.next(),
-            .attr_id => try p.scratch.append(p.gpa, try p.parseAttr()),
-            else => break,
-        };
-        const close = try p.expect(.r_cur);
-        return p.addBraced(.attr_block, open, top, close);
-    }
-    const first = p.tok_i;
-    while (p.cur() == .attr_id) try p.scratch.append(p.gpa, try p.parseAttr());
-    return p.addNode(.attrs, first, .{ .range = try p.listFrom(top) });
-}
-
-/// attr = attr_id { value }
-fn parseAttr(p: *Parser) Error!Node.Index {
-    const name = try p.expect(.attr_id);
-    const top = p.scratch.items.len;
-    while (p.startsValue()) try p.scratch.append(p.gpa, try p.parseValue());
-    return p.addNode(.attr, name, .{ .range = try p.listFrom(top) });
-}
-
-fn startsValue(p: *Parser) bool {
-    return switch (p.cur()) {
-        .str, .math, .val, .l_cur => true,
-        else => p.startsUnit(),
-    };
-}
-
-/// value = str | math | val | ref
-fn parseValue(p: *Parser) Error!Node.Index {
-    switch (p.cur()) {
-        .str, .math, .val => return p.addLeafLike(.leaf, p.next()),
-        else => return p.parseRef(),
-    }
-}
-
-/// ref = segment { ~ segment }
-fn parseRef(p: *Parser) Error!Node.Index {
-    const start = p.tok_i;
-    const first = try p.parseSegment();
-    if (!p.continuesRef()) return first;
-
-    const top = p.scratch.items.len;
-    try p.scratch.append(p.gpa, first);
-    while (p.continuesRef()) try p.scratch.append(p.gpa, try p.parseSegment());
-    return p.addNode(.ref, start, .{ .range = try p.listFrom(top) });
-}
-
-fn continuesRef(p: *Parser) bool {
-    return p.touchesPrev() and (p.cur() == .l_cur or p.startsUnit());
-}
-
-/// segment = unit | interp;  interp = l_cur unit attr r_cur
-fn parseSegment(p: *Parser) Error!Node.Index {
-    if (p.cur() != .l_cur) return p.parseUnit();
-    const open = p.next();
-    p.open += 1;
-    defer p.open -= 1;
-    const unit = try p.parseUnit();
-    const attr = try p.parseAttr();
-    _ = try p.expect(.r_cur);
-    return p.addNode(.interp, open, .{ .nodes = .{ unit, attr } });
-}
-
-// ---------------------------------------------------------------------------
-// tokens
-
-/// The current token's tag. Inside ( ) and [ ], newlines are skipped first.
+/// The current token's tag. Inside braces, newlines are skipped first.
 fn cur(p: *Parser) Token.Tag {
-    if (p.skip_eol) {
+    if (p.braces > 0) {
         while (p.tags[p.tok_i] == .eol) p.tok_i += 1;
     }
     return p.tags[p.tok_i];
@@ -404,12 +386,6 @@ fn expect(p: *Parser, tag: Token.Tag) Error!TokenIndex {
     return p.next();
 }
 
-/// Expects `tag` touching the previous token, as after a dot.
-fn expectTouching(p: *Parser, tag: Token.Tag) Error!TokenIndex {
-    if (p.cur() == tag and !p.touchesPrev()) return p.fail(.detached_dot, .invalid);
-    return p.expect(tag);
-}
-
 /// The current token starts exactly where the last consumed one ended.
 fn touchesPrev(p: *Parser) bool {
     const last = p.last orelse return false;
@@ -427,17 +403,29 @@ fn touchesNext(p: *Parser) bool {
     };
 }
 
-/// Could the current token begin a unit?
-fn startsUnit(p: *Parser) bool {
-    return switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .at, .dot, .l_par => true,
-        .plus, .star => p.touchesNext(),
+/// Could the token at `i` begin an atom? A marker begins one only as a
+/// prefix, touching what follows it.
+fn startsAtomAt(p: *Parser, i: TokenIndex) bool {
+    return switch (p.tags[i]) {
+        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .str, .math, .val, .l_par => true,
+        .plus, .quid, .bang => switch (p.tags[i + 1]) {
+            .eol, .eof => false,
+            else => p.ends[i] == p.starts[i + 1],
+        },
         else => false,
     };
 }
 
+/// Could the current token begin an item?
+fn startsItem(p: *Parser) bool {
+    return switch (p.cur()) {
+        .attr_id, .l_cur => true,
+        else => p.startsAtomAt(p.tok_i),
+    };
+}
+
 // ---------------------------------------------------------------------------
-// building nodes
+// Building nodes
 
 fn addNode(p: *Parser, tag: Node.Tag, main_token: TokenIndex, data: Node.Data) Error!Node.Index {
     const index: Node.Index = @fromBackingInt(@intCast(p.nodes.len));
@@ -445,8 +433,8 @@ fn addNode(p: *Parser, tag: Node.Tag, main_token: TokenIndex, data: Node.Data) E
     return index;
 }
 
-/// A node with no payload: leaf, card, invalid.
-fn addLeafLike(p: *Parser, tag: Node.Tag, main_token: TokenIndex) Error!Node.Index {
+/// A node with no payload: leaf, invalid.
+fn addLeaf(p: *Parser, tag: Node.Tag, main_token: TokenIndex) Error!Node.Index {
     return p.addNode(tag, main_token, .{ .none = {} });
 }
 
@@ -459,28 +447,26 @@ fn listFrom(p: *Parser, top: usize) Error!Cst.Range {
     return .{ .start = start, .end = start + @as(u32, @intCast(items.len)) };
 }
 
-/// A list with a closing token: block, attr_block.
-fn addBraced(p: *Parser, tag: Node.Tag, open: TokenIndex, top: usize, close: TokenIndex) Error!Node.Index {
-    const range = try p.listFrom(top);
-    const index: Cst.ExtraIndex = @fromBackingInt(@intCast(p.extra.items.len));
-    try p.extra.appendSlice(p.gpa, &.{ range.start, range.end, close });
-    return p.addNode(tag, open, .{ .extra = index });
-}
-
 // ---------------------------------------------------------------------------
-// errors and recovery
+// Errors and recovery
 
-/// Records an error at the current token and unwinds to the nearest
-/// statement or entry.
+/// Records an error at the current token and unwinds to the statement.
 fn fail(p: *Parser, tag: Cst.Error.Tag, expected: Token.Tag) Error {
     try p.warn(tag, expected);
+    return error.ParseError;
+}
+
+/// Records an error at `token`, as is, and unwinds to the statement.
+fn failAt(p: *Parser, tag: Cst.Error.Tag, token: TokenIndex) Error {
+    p.fail_braces = p.braces;
+    try p.errors.append(p.gpa, .{ .tag = tag, .token = token });
     return error.ParseError;
 }
 
 /// Records an error at the current token without unwinding.
 fn warn(p: *Parser, tag: Cst.Error.Tag, expected: Token.Tag) error{OutOfMemory}!void {
     _ = p.cur();
-    p.fail_open = p.open;
+    p.fail_braces = p.braces;
     const refined = p.refine(tag);
     try p.errors.append(p.gpa, .{
         .tag = refined,
@@ -490,38 +476,31 @@ fn warn(p: *Parser, tag: Cst.Error.Tag, expected: Token.Tag) error{OutOfMemory}!
 }
 
 /// A more precise error when the current token explains the failure better
-/// than what the parser was looking for: a lexer error, or an operator
-/// attached to the wrong side.
+/// than what the parser was looking for: a lexer error, a newline inside
+/// parentheses, or an operator attached to the wrong side.
 fn refine(p: *Parser, tag: Cst.Error.Tag) Cst.Error.Tag {
     const prev = p.touchesPrev();
     const next_ = p.touchesNext();
     return switch (p.cur()) {
         .invalid => .invalid_token,
+        .eol => if (p.parens > 0) .statement_spans_lines else tag,
         .slash => if (prev) tag else if (next_) .slash_has_no_prefix_form else .operator_touches_nothing,
-        .plus, .star, .quid, .bang => if (!prev and !next_) .operator_touches_nothing else tag,
+        .plus, .quid, .bang => if (!prev and !next_) .operator_touches_nothing else tag,
         .dot => if (!prev or !next_) .detached_dot else tag,
         else => tag,
     };
 }
 
-/// Skips the rest of a failed statement or entry: up to the next newline at
-/// the depth where it began, the end of input, or (inside a block) the
-/// block's closing brace. Brackets opened inside the failed construct are
-/// skipped with it.
-fn recover(p: *Parser, stop_at_r_cur: bool) void {
-    var depth = p.fail_open - p.open;
+/// Skips the rest of a failed statement: up to the next newline outside
+/// braces, or the end of input. Braces opened inside it are skipped with it.
+fn recover(p: *Parser) void {
+    var depth = p.fail_braces;
     while (true) {
         switch (p.tags[p.tok_i]) {
             .eof => return,
             .eol => if (depth == 0) return,
-            .l_par, .l_cur => depth += 1,
-            .r_par, .r_cur => |t| {
-                if (depth > 0) {
-                    depth -= 1;
-                } else if (stop_at_r_cur and t == .r_cur) {
-                    return;
-                }
-            },
+            .l_cur => depth += 1,
+            .r_cur => depth -|= 1,
             else => {},
         }
         p.tok_i += 1;
