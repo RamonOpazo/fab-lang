@@ -30,7 +30,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | ---------------- | ----------------------------------------------------------------------- |
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
-| `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges     |
+| `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right (2 November) |
 | `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
@@ -61,7 +61,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 1    | Grammar                                   | done    |
 | 2    | Conformance corpus                        | done    |
 | 3    | Lexer                                     | done    |
-| 4    | Parser and CST                            | done    |
+| 4    | Parser and CST                            | done; 4d next |
 | 5    | Analyser: level 1                         | next    |
 | 6    | IR, JSON, renderer for level 1; examples  |         |
 | 7    | Levels                                    |         |
@@ -97,6 +97,7 @@ Done when the tests cover every terminal and the corpus's lexical cases pass.
 - **4a.** The old analyser goes. A skeleton keeps its interface (`analyse(gpa, cst) → Result`, an empty IR, no errors yet), so fab-core builds. The old analyser tests go with it; tests that need an analysed program are skipped until step 5.
 - **4b.** The new CST and the whole parser, one function per grammar rule (recursive descent, no Pratt parser): statements, lines, levels, items, blocks, entries, attributes, operator runs, chains, atoms; the syntax errors, with their corpus rows; `parse.test.zig` in the new syntax.
 - **4c.** Recovery.
+- **4d.** Kinds on the right (`joining.md` §12): a `?` or `!` touching no atom on its right is a node leaf, as `*` is. The examples, `parse.test.zig` and the corpus move to `f/? +(a, b)`.
 
 The CST:
 
@@ -141,11 +142,11 @@ Also back in step 5: the tests skipped in 4a ("Needs an analysed program"), and 
 One rule at a time, in order, each with its corpus rows and its messages in `compile/messages.zig`:
 
 0. **Statements and items.** The driver: statements in source order, the zone table, errors with subjects. Declarations hold terms; definitions hold entries and equations, in a head of one of the three forms. An operation mixing different operators without a group is an error. `|` only in a declaration; a value or class only in a definition. A declaration's head is a zone; a node or an edge is *reserved*. The warning for a chain broken across lines. Programs with no meaning yet (`statements.md` §15): `reserved` tags are errors, and `unsupported` is its own severity, which skips levels above the first (until step 7) and definition contents (until steps 8–11), never changes the status, and fails a release build while any remains. The Statements error table.
-1. **Node terms take a slash.** `#A`, `@`, diagram names, `+f`, `f+`, `*`. A node beside a space is an error. `*` is fresh and private to one end: `*/(f, g)`, `f/* g`, `*/f/*` are errors.
-2. **Interfaces.** Every term computes a left and a right side. A space joins one to one; closed branches (a stop, a cycle's right side) are skipped when counting; nothing on a side is an error.
+1. **Sorts: node terms take a slash.** Every term is a node (`#A`, `@`, diagram names, `+f`, `f+`, `*`, `?`, `!`) or edges. A node beside a space is an error, and a pinched single edge beside one has its own (`f? (g, h)`). `*` and the kinds by position: `*/f/*`, a lone `*`, `*` inside a chain or a cycle; `?` and `!` only right after a single edge, never on the left (`?(a, b)`, `?/f`, `f/?/g`), never after a group or a reference (`(a, b)/?`, `f?`, `A.f/?`). (`joining.md` §12.)
+2. **Interfaces.** Every term computes a left and a right side. A space joins one to one; closed branches (a stop, a cycle's right side) are skipped when counting; nothing on a side is an error (`f/* g`). The side beside `*` holds exactly one end (`*/(f, g)`, `*/+(f, g)`). Failed terms become holes, so their neighbours report nothing.
 3. **Slash chains.** One edge attaches to the nodes beside it; two or more close a cycle, which exposes its start on the left. `/` distributes over a group. A trailing `/` makes a one-edge chain undirected.
-4. **Pinches.** Several branches are declared; a pinched single edge is a reference; `?` and `!` only on groups; one side only for a single edge; the first branch names the pinched nodes.
-5. **Where nodes meet.** The label join: at most one name, kinds that agree, reported by the union-find.
+4. **Pinches.** Several branches are declared; a pinched single edge is a reference; one side only for a single edge; the first branch names the pinched nodes.
+5. **Where nodes meet.** The label join: at most one name, kinds that agree, reported by the union-find. Null never meets.
 6. **Cross-diagram references.** `A.+f`, `A.#X` (must exist), diagram names as nodes (need an `@`).
 7. **Canonical references** for every node, as the IR's `canonical`.
 

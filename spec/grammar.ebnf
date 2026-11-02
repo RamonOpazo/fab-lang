@@ -84,7 +84,9 @@ juxtafix
 
 # A SLASH touching only its left is postfix: f/ g, #A/f/#B/.
 # A marker touching the primary before it is postfix; touching both sides is
-# an error: f?(g, h). Atoms that touch need a / between them.
+# an error: f+(g, h). Atoms that touch need a / between them.
+# The grammar takes ? and ! on either side; the analyser keeps them on the
+# right: f/?, (a, b)?. A prefix ? or ! is an error there: ?(a, b), !f.
 postfix
     = primary [ ~ marker | ~ SLASH ]
     ;
@@ -95,6 +97,8 @@ marker
     | BANG
     ;
 
+# A ? or ! that touches no atom on its right is a node of that kind: the
+# f/? in f/? +(a, b). Touching an atom, it is a prefix marker.
 primary
     = EDGE_ID
     | NODE_ID
@@ -102,6 +106,8 @@ primary
     | CLASS_ID
     | AT
     | STAR
+    | QUID
+    | BANG
     | literal
     | L_PAR items R_PAR
     ;

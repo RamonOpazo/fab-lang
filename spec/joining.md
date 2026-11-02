@@ -1,6 +1,6 @@
 # fAB design decisions, 2026-11-01: the grammar of joining
 
-Decided in the design session of 1 November 2026. This note settles how terms join: what a space does, what `/` does, what pinches do, and where nodes may meet. It replaces parts of [`statements.md`](statements.md) (section 5 and parts of 4 and 7), listed at the end. The spec ([`spec.md`](spec.md), revision of 1 November) was rewritten from this note. The code does not implement it yet.
+Decided in the design session of 1 November 2026. This note settles how terms join: what a space does, what `/` does, what pinches do, and where nodes may meet. It replaces parts of [`statements.md`](statements.md) (section 5 and parts of 4 and 7), listed at the end. The spec ([`spec.md`](spec.md), revision of 1 November) was rewritten from this note. The code does not implement it yet. Section 12, an addendum of 2 November, revises null nodes and moves kinds to the right (`f/? +(a, b)`).
 
 Status words as before: **Decided**, **Open**, **Rejected**.
 
@@ -166,3 +166,46 @@ Comparison with the 23 October forms: the category-theory core (squares, triangl
 ## 11. Plan
 
 Unchanged in order: the grammar in fab-core (lexer, parser, analyser) follows the spec, now including the arity check, the cycle rule, the label join for meeting nodes, and node terms with slashes.
+
+---
+
+## 12. Addendum, 2 November: sorts, null nodes and kinds on the right
+
+Decided while designing the analyser's rule 1 (plan step 5.1), which gives every term a sort: a **node** (`#A`, `@`, `*`, a diagram name, a reference `+f`, `f+`) or **edges** (everything else). Writing that rule down showed where the 1 November wording ranked one error above another badly, and led to one change of syntax: kinds are written on the right.
+
+### 12.1 Null nodes
+
+**Decided.**
+
+- **`*` exposes nothing.** So `f/* g` is "nothing to join", the same error as `(f/*) g`; the group changes nothing, since `/` binds tighter than a space. It leaves the `*` row, and the null label leaves the meeting table: a null node never meets anything.
+- **`*` holds exactly one end,** never none and never several. The row is renamed "`*` not on exactly one end": a lone `*` holds none; `f/*/g`, `*/f/g` (in a cycle) and `*/(f, g)` hold several. Whether the side beside `*` holds one end is counted with the interfaces, so `*/+(f, g)` is caught too.
+
+### 12.2 Kinds on the right
+
+**Decided.** The user: "the left side `?` bugs me"; and then two constraints that decide the syntax in one stroke.
+
+1. **`?` and `!` only on the right; `+` on either side.** `+` is structural (the bowtie, the square) and keeps both sides: `+(a, b)`, `(a, b)+`, and the references `+f`, `f+`. `?` and `!` are flow, which has a direction: a kind is written where flow arrives.
+2. **`?` and `!` are node terms, after a single edge only.** `f/?` ends f at a fresh choice node; `f/!` at a fresh bar. After a group, the kind is the postfix pinch: `(a, b)?`, `(a, b)!`.
+
+| Construct                  | Written             | Was                 |
+| -------------------------- | ------------------- | ------------------- |
+| Decision                   | `f/? +(a, b)`       | `f ?(a, b)`         |
+| Merge                      | `(a, b)? k`         | unchanged           |
+| Fork                       | `f/! +(a, b)`       | `f !(a, b)`         |
+| Join                       | `(a, b)! k`         | unchanged           |
+| One bar that joins and forks | `(a, b)! +(c, d)` | `(a, b)! !(c, d)`   |
+| A loop on a decision       | `f/? +(b/b, e) k`   | `f ?(b/b, e) k`     |
+
+Consequences:
+
+- **One spelling for each construct.** `f/?(a, b)`, `?/(a, b)` and `(a, b)/?` are not alternatives: the first two put a kind on the left, the third after a group.
+- **Kind and collapse are separate.** A pinch collapses ends; a kind is a label of a node, as a name is, set where the node is created. So the branches of a decision may be written as separate items: `G :: f/?, f+/a, f+/b`.
+- **`f/?`, not `f?`.** `f+` is a reference to an existing node, so `f?` would change the kind of a node that exists. `f/?` creates the node. `f?` stays an error, with the hint `f/?`; so does `A.f/?`, which would change another diagram's node.
+- **Where a kind may stand.** As a node term, `?` or `!` is the last element of a closed chain, right after a single edge: `f/?`, `#A/f/?`, `*/s/!`. `f/?/g` and `?/f` put it on the left; a lone `?` holds no end.
+- **Kinds meet less.** At a space only the left term's right side can bring a kind, so two kinds meet only through a pinch of kinded branches, `(a/?, b/!)+`, and a kind meets a name as in `f/? #A/g`.
+- **Not a node term: `+`.** `f/+` would be `f`, and `+/f` would read like the reference `+f` and mean something else: "redundant and confusing".
+
+### 12.3 Rejected
+
+- **Markers on groups as `/` to an anonymous node** (`?(a, b)` = `?/(a, b)`): coherent, but it gave a decision four spellings. With kinds on the right, the pinch stays a primitive.
+- **`+` as a node term,** for the reasons above.

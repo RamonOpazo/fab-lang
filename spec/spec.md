@@ -23,7 +23,7 @@ A program is a sequence of statements, one per line; braces let a statement span
 
 | Kind        | Operator | Introduces                   | Example                                      |
 | ----------- | -------- | ---------------------------- | -------------------------------------------- |
-| Declaration | `::`     | new **structure**            | `Order :: */receive/#Received validate ?(…)` |
+| Declaration | `::`     | new **structure**            | `Order :: */receive/#Received validate/? +(…)` |
 | Definition  | `:=`     | a new **binding** of a value | `[red] := [#ff0000]`, `G :style := { … }`    |
 
 **Declarations** build structure. Today only diagrams (zones) are declared: `G :: term`. Zones, nodes and edges are the only things that can ever be declared; what declaring a node or an edge on its own means is open, so it is reserved: an error until decided.
@@ -162,8 +162,9 @@ Db :: {
 | `f/g`        | a cycle: g goes back from cod(f) to dom(f)       |
 | `f/ g`       | undirected f, then g                             |
 | `f /g`       | error: `/` has no prefix form                    |
-| `f ?(g, h)`  | a choice node at cod(f), where g and h start     |
-| `f?(g, h)`   | error: `?` touches both sides; write `f ?(g, h)` |
+| `f/? +(g, h)` | a choice node at cod(f), where g and h start    |
+| `f+(g, h)`   | error: `+` touches both sides; write `f +(g, h)` |
+| `?(g, h)`    | error: a kind is written on the right            |
 | `+(f, g)`    | the starts of f and g pinched into one node      |
 | `+f`         | the start of f; `+ f` is an error                |
 | `*/f`, `f/*` | a null node holding the start of f, or its end   |
@@ -206,7 +207,7 @@ A chain with two or more edges must end where it began. When it ends on an edge,
 | `#A/f/#B/g/#C` | error: the chain ends away from its start          |
 
 - **`f/f` is not a special case.** `f/g` says dom(g) = cod(f) and cod(g) = dom(f). With g = f, both say dom(f) = cod(f).
-- **A cycle closes on its start.** It exposes that node on its left and nothing on its right. So `h f/g` ends h at dom(f), and in `f ?(b/b, e)` the pinch puts the loop b on the decision; but `f/g h` is an error. To continue from another node of the cycle, use a comma and a reference: `f/g, f+/h`.
+- **A cycle closes on its start.** It exposes that node on its left and nothing on its right. So `h f/g` ends h at dom(f), and in `f/? +(b/b, e)` the pinch puts the loop b on the decision; but `f/g h` is an error. To continue from another node of the cycle, use a comma and a reference: `f/g, f+/h`.
 - **A space is never a cycle.** `+f/α β/g+` is a path through a fresh node, not the pair; the pair is `+f/α/g+/β`.
 - **The old pair form is an error.** `+f/m/n/g+` has two edges and ends on `g+`, not on its start. The pair is `+f/m/g+/n`.
 
@@ -231,23 +232,26 @@ G :: f/ g/             // two undirected edges in a path
 
 ## Node kinds and pinching
 
-Every node has exactly one kind: plain, choice ◇, parallel ‖ or null ⊙. Choice and parallel come only from pinches, null only from `*`, and a named node is always plain. A node whose kind nothing sets is plain.
+Every node has exactly one kind: plain, choice ◇, parallel ‖ or null ⊙. Choice and parallel are written where flow arrives, on the right: after a single edge (`f/?`) or after a group (`(a, b)?`). Null comes only from `*`, and a named node is always plain. A node whose kind nothing sets is plain.
 
-| Marker | Kind                                  | Prefix                   | Postfix                |
-| ------ | ------------------------------------- | ------------------------ | ---------------------- |
-| `+`    | none of its own                       | `+t`: pinches the starts | `t+`: pinches the ends |
-| `?`    | choice ◇: exactly one branch is taken | `?t`                     | `t?`                   |
-| `!`    | parallel ‖: all branches are taken    | `!t`                     | `t!`                   |
+| Marker | Kind                                  | On the left              | On the right                                  |
+| ------ | ------------------------------------- | ------------------------ | --------------------------------------------- |
+| `+`    | none of its own                       | `+t`: pinches the starts | `t+`: pinches the ends                        |
+| `?`    | choice ◇: exactly one branch is taken | never                    | `f/?` after an edge, `t?` pinching a group    |
+| `!`    | parallel ‖: all branches are taken    | never                    | `f/!` after an edge, `t!` pinching a group    |
+
+`+` is structural, so it has both sides. `?` and `!` are flow, and flow has a direction: a kind is written where flow arrives, so a decision is reached by its edge and a merge by its branches.
 
 ### Pinches: `+`, `?`, `!`
 
 > A pinch merges one side of a group into a single node. It is the only way anonymous ends merge, so every collapse is written.
 
 - **On a group,** the start of every branch (or the end of every branch) becomes one node. Only the _first_ node of each branch is pinched at the start, and only the _last_ at the end; inner nodes of a path stay separate.
-- **`?` and `!` are `+` with a kind.** `f ?(g, h)` is a decision after f, `(g, h)? k` merges the branches, and `(a, b)! !(c, d)` is one bar that joins and forks.
-- **On one edge, a pinch is a reference.** A pinched single edge resolves to the node at that end: `+f` is dom(f), `f+` is cod(f), and `+(f) = +f`. A reference needs its edge declared before it, so `f? (g, h)` with f new is an error; write `f ?(g, h)`.
+- **`(a, b)?` and `(a, b)!` are `t+` with a kind:** `(g, h)? k` merges the branches, `(a, b)! k` joins them.
+- **A decision or a fork is a kind after an edge, then a pinch.** `f/?` ends f at a fresh choice node, and `f/? +(g, h)` starts g and h there. Likewise `f/! +(g, h)` forks, and `(a, b)! +(c, d)` is one bar that joins and forks. Since the kind is on the node, the branches may also be written apart: `f/?, f+/g, f+/h`.
+- **On one edge, a pinch is a reference.** A pinched single edge resolves to the node at that end: `+f` is dom(f), `f+` is cod(f), and `+(f) = +f`. A reference is a node, so it takes a slash: `f+ g` is an error, and `f? (g, h)` is too; write `f/? +(g, h)`.
 - **A single edge has one side.** A pinched edge is one node, and a term cannot be two: `+f+` and `+(f)+` are errors. A group may be pinched on both sides: `+(f, g)+`.
-- **`?` and `!` never touch a single edge.** `f?` and `!f` would change the kind of a node that already exists; a kind is set where the node is created.
+- **A kind is set where its node is created.** `f?` and `A.f/?` would change the kind of a node that already exists; write `f/?` where f is declared. `?` and `!` are never on the left: `?(g, h)`, `!f` and `?/f` are errors.
 
 **A pinch with several branches declares them.**
 
@@ -258,8 +262,8 @@ Every node has exactly one kind: plain, choice ◇, parallel ‖ or null ⊙. Ch
 ```
 Pair :: +(f, g)+               // a parallel pair f, g : A ⇉ B
 Sq   :: +(f h, g k)+           // a square: two paths from one start to one end
-G    :: f ?(g, h)? k           // decision, two branches, merge, continue
-G    :: f !(g, h)! k           // fork, two parallel branches, join, continue
+G    :: f/? +(g, h)? k         // decision, two branches, merge, continue
+G    :: f/! +(g, h)! k         // fork, two parallel branches, join, continue
 G    :: (a, b)+ +(c, d)        // a bowtie: a and b end where c and d start
 ```
 
@@ -272,24 +276,24 @@ When a space joins two sides, the node they meet at carries what each side bring
 | Side                                                          | Brings                        |
 | ------------------------------------------------------------- | ----------------------------- |
 | a free end, or a `+` pinch                                    | nothing                       |
-| a `?` or `!` pinch                                            | its kind                      |
+| on the right only: `f/?`, `f/!`, or a `?` or `!` pinch        | its kind                      |
 | an end attached by `/` to a named node, `@` or a diagram name | that name, and the kind plain |
-| an end attached to `*`                                        | null, which meets nothing     |
+
+A null node never meets anything: `*` exposes nothing (see Interfaces).
 
 > The node may have at most one name, and its kinds must agree.
 
 | Written                      | Meets              | Result                                                     |
 | ---------------------------- | ------------------ | ---------------------------------------------------------- |
 | `f g`                        | nothing, nothing   | a fresh node                                               |
-| `f ?(a, b)`                  | nothing, choice    | a choice node                                              |
+| `f/? +(a, b)`                | choice, nothing    | a choice node                                              |
 | `receive/#Received validate` | name, nothing      | Received                                                   |
 | `validate/#Valid +(yes, no)` | name, nothing      | a fan out of Valid                                         |
 | `(a, b)+ +(c, d)`            | nothing, nothing   | the bowtie                                                 |
-| `(a, b)! !(c, d)`            | parallel, parallel | one bar that joins and forks                               |
-| `(a, b)! ?(c, d)`            | parallel, choice   | error: kinds disagree                                      |
-| `validate/#Valid ?(yes, no)` | plain, choice      | error: a state is not a decision; put an edge between them |
+| `(a, b)! +(c, d)`            | parallel, nothing  | one bar that joins and forks                               |
+| `(a/?, b/!)+`                | choice, parallel   | error: kinds disagree                                      |
+| `f/? #Valid/yes`             | choice, plain      | error: a state is not a decision; put an edge between them |
 | `a/#A #B/b`                  | two names          | error: one node, one name                                  |
-| `f/* g`                      | null, nothing      | error: a null node holds one end                           |
 
 Mathematically, the labels form a partial commutative monoid with "nothing" as its unit. A space is a pushout along one node, and it is defined exactly when the join of the two labels is.
 
@@ -304,9 +308,9 @@ G :: (*/f f1, */g g1)+      // two starts, two paths, one end
 ```
 
 - **A node, so a slash.** `* f`, `*f` and `f *` are errors.
-- **One end only.** `*/(f, g)` and `(f, g)/*` are errors: each would make one null node hold several ends. Write `(*/f, */g)`.
+- **Exactly one end.** `*/(f, g)`, `(f, g)/*`, `*/+(f, g)` and `f/*/g` are errors: each would make one null node hold several ends. Write `(*/f, */g)`. A lone `*` holds none, and is an error too.
 - **Private.** Nothing glues to a null node and nothing refers to it: `k f/*, j/f+` is an error. Definitions still name it through its edge, as `+f` or `f+`.
-- **It leaves the interface:** `f/*` exposes nothing on its right.
+- **It leaves the interface:** `f/*` exposes nothing on its right, so `f/* g` is "nothing to join".
 
 ## Interfaces
 
@@ -317,20 +321,21 @@ Every term has a left side and a right side. Each side holds what a neighbour ca
 | `f`                                | dom(f)                                                            | cod(f)                  |
 | `s t`                              | the left of s                                                     | the right of t          |
 | `s, t`                             | the left of s and of t                                            | the right of s and of t |
-| `+(s, t)`, `?(s, t)`, `!(s, t)`    | one pinched node                                                  | the right of s and of t |
+| `+(s, t)`                          | one pinched node                                                  | the right of s and of t |
 | `(s, t)+`, `(s, t)?`, `(s, t)!`    | the left of s and of t                                            | one pinched node        |
 | `#A/f`, `+f/g`                     | A; dom(f)                                                         | cod(f); cod(g)          |
 | `f/#B`, `g/f+`                     | dom(f); dom(g)                                                    | B; cod(f)               |
 | `#A/f/#B`                          | A                                                                 | B                       |
 | `*/f`                              | nothing                                                           | cod(f)                  |
 | `f/*`                              | dom(f)                                                            | nothing                 |
+| `f/?`, `f/!`                       | dom(f)                                                            | cod(f), with its kind   |
 | `f/`                               | dom(f)                                                            | cod(f)                  |
 | a cycle: `f/g`, `f/f`, `#A/f/#B/g` | its start: dom(f); A                                              | nothing                 |
 | `#A`, `@`, `User` alone            | a lone node: it may stand as a whole branch, never beside a space |                         |
 
 - **One to one.** `f (g, h)` and `(f, g) h` are errors: pinch the group, `f +(g, h)`, `(f, g)+ h`.
-- **Ending a branch.** A branch ends with `*` (a stop) or with a cycle, and then exposes nothing on that side. Those branches are skipped when ends are counted, so `(f/*, g) h` attaches h to g only. A cycle still exposes its start on the left, so a pinch gathers it: in `f ?(b/b, e)`, b loops on the decision. A branch that ends on a node (`k/+f`, `x/#Done`) still exposes that node.
-- **Nothing to join.** A space with nothing on one side is an error: `f/g h`, `(f/*) g`. Use a comma for separate pieces.
+- **Ending a branch.** A branch ends with `*` (a stop) or with a cycle, and then exposes nothing on that side. Those branches are skipped when ends are counted, so `(f/*, g) h` attaches h to g only. A cycle still exposes its start on the left, so a pinch gathers it: in `f/? +(b/b, e)`, b loops on the decision. A branch that ends on a node (`k/+f`, `x/#Done`) still exposes that node.
+- **Nothing to join.** A space with nothing on one side is an error: `f/g h`, `f/* g`, `(f/*) g`. Use a comma for separate pieces.
 - **Lone nodes.** `T :: #UUID7, #DTZ` is a discrete diagram: nodes and no edges.
 
 ## Named nodes and diagrams as nodes
@@ -348,7 +353,7 @@ T :: #UUID7, #DTZ, #String, #JSONB   // a discrete diagram: objects only
 
 - **Free.** A named node needs nothing declared before it: writing it creates it. A repeated name glues: `#U/f/#V, #U/g/#W` forks at U.
 - **Always with a slash.** A named node is attached to an edge with `/`, never placed beside a space: `#A f` is an error.
-- **A state, never a junction.** A named node is plain, so it is never a decision or a bar: `validate/#Valid ?(yes, no)` is an error. Put an edge between the state and the decision, and label the decision through its canonical end.
+- **A state, never a junction.** A named node is plain, so it is never a decision or a bar: `validate/? #Valid/yes` is an error. Put an edge between the state and the decision, and label the decision through its canonical end.
 - **The name is canonical.** A named node is referenced and styled as `#A`, never as `+f`.
 - **One node, one name.** `a/#A #B/b` is an error.
 - **Scope is local.** Another diagram's named node is `A.#X`, as with `A.+f`. It must already be declared there: names never come into existence by being mentioned from outside.
@@ -818,18 +823,20 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Cycle that does not close         | `#A/f/#B/g/#C`, `+f/m/n/g+`                     | A chain of two or more edges ends where it began                           |
 | Reference not declared            | `gg/α/g` with gg undeclared                     | A reference needs its edge declared before it                              |
 | Forward reference                 | `+f/g f`                                        | References point left only                                                 |
-| Node beside a space               | `#A f`, `* f`, `@ (…)`, `k +f`                  | A node is attached to an edge with `/`                                     |
+| Node beside a space               | `#A f`, `* f`, `@ (…)`, `f User`                | A node is attached to an edge with `/`                                     |
 | Ends don't match                  | `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`         | A space joins one end to one end; pinch the group: `f +(g, h)`             |
-| Nothing to join                   | `f/g h`, `(f/*) g`                              | One side exposes nothing; write `,` for separate pieces                    |
+| Nothing to join                   | `f/g h`, `f/* g`                                | One side exposes nothing; write `,` for separate pieces                    |
 | Pinch of declared edges           | `f g, h k, +(f, h)`                             | A pinch with several branches declares them                                |
-| Pinch of a new single edge        | `f? (g, h)` with f new                          | A pinched single edge is a reference; pinch the group instead: `f ?(g, h)` |
+| Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |
 | Single edge pinched on both sides | `+f+`, `+(f)+`                                  | A pinched edge is one node; it has one side                                |
-| Kind on a single edge             | `f?`, `!f`                                      | A kind is set where a node is created: pinch a group                       |
-| Marker touching both sides        | `f?(g, h)`, `(a, b)!(c, d)`                     | Write `f ?(g, h)` or `(a, b)! !(c, d)`                                     |
-| Kinds disagree                    | `(a, b)! ?(c, d)`, `validate/#Valid ?(yes, no)` | A node has one kind, and a named node is plain                             |
+| Kind on the left                  | `?(g, h)`, `!f`, `?/f`, `f/?/g`                 | A kind is written where flow arrives: `f/?`, `(a, b)?`                     |
+| Kind on a reference               | `f?`, `A.f/?`                                   | A kind is set where its node is created: `f/?` where f is declared         |
+| Kind after a group                | `(a, b)/?`                                      | After a group, the kind is a pinch: `(a, b)?`                              |
+| Marker touching both sides        | `f+(g, h)`, `(a, b)!(c, d)`                     | Write `f +(g, h)` or `(a, b)! +(c, d)`                                     |
+| Kinds disagree                    | `(a/?, b/!)+`, `validate/? #Valid/yes`          | A node has one kind, and a named node is plain                             |
 | Two names for one node            | `a/#A #B/b`                                     | One node, one name                                                         |
 | Reference to a null node          | `k f/*, j/f+`                                   | A null node is private to its edge end                                     |
-| `*` holding several ends          | `*/(f, g)`, `(f, g)/*`, `f/* g`                 | A null node holds exactly one edge end; write `(*/f, */g)`                 |
+| `*` not on exactly one end        | `*`, `*/(f, g)`, `(f, g)/*`, `f/*/g`            | A null node holds exactly one edge end; write `(*/f, */g)`                 |
 | Both ends null                    | `*/f/*`                                         | An edge from nothing to nothing says nothing                               |
 | Tight operator touching nothing   | `f / g`, `+ f`                                  | A tight operator attaches to what it touches                               |
 | Atoms touching                    | `f(g)`, `*f`, `#A(f)`                           | Only `/` joins what touches; write a space for a path, or `/` to attach    |
@@ -933,11 +940,11 @@ Pr   :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)   // the universal property of a pro
 **Flow diagrams**
 
 ```
-If    :: f ?(fg g, fh h)? k              // decision, two branches, merge
-While :: f ?(b/b, e) k                   // body b loops on the test; e exits to k
-Exit  :: f ?(fg g/*, fh h) k             // g's branch stops; only h continues to k
-Loop  :: f ?(fg g, fh h k/+f)            // k : cod(h) → dom(f), back before the test
-Par   :: */s !(a, b)! t/*                // start, fork, two parallel branches, join, stop
+If    :: f/? +(fg g, fh h)? k            // decision, two branches, merge
+While :: f/? +(b/b, e) k                 // body b loops on the test; e exits to k
+Exit  :: f/? +(fg g/*, fh h) k           // g's branch stops; only h continues to k
+Loop  :: f/? +(fg g, fh h k/+f)          // k : cod(h) → dom(f), back before the test
+Par   :: */s/! +(a, b)! t/*              // start, fork, two parallel branches, join, stop
 ```
 
 ### A flowchart: order fulfilment
@@ -946,10 +953,10 @@ An order is validated, then payment and stock reservation run in parallel, each 
 
 ```
 Order :: {
-  */receive/#Received validate ?(
-      yes/#Accepted fork !(
-          charge ?(paid, declined/#Waiting/retry)
-        , reserve ?(reserved, short/#Backorder/restock)
+  */receive/#Received validate/? +(
+      yes/#Accepted fork/! +(
+          charge/? +(paid, declined/#Waiting/retry)
+        , reserve/? +(reserved, short/#Backorder/restock)
       )! ready/#Ready ship/#Shipped close/*
     , no/#Rejected notify/*
   )
@@ -970,8 +977,8 @@ Order :style := {
 ```
 
 - `*/receive` opens the flow at a start; `close/*` and `notify/*` end it at two stops.
-- `validate ?(…)` puts a decision after the edge validate. A named node is never a decision, so the state Received and the decision are joined by that edge, and the decision is labelled through its canonical end, `validate+`.
-- `fork !(…)!` forks and joins on anonymous bars; `ready` leads from the join to the state Ready.
+- `validate/? +(…)` puts a decision at the end of the edge validate, and starts both branches there. A named node is never a decision, so the state Received and the decision are joined by that edge, and the decision is labelled through its canonical end, `validate+`.
+- `fork/! +(…)!` forks and joins on anonymous bars; `ready` leads from the join to the state Ready.
 - `declined/#Waiting/retry` is a cycle: it exposes its start on the left, which the pinch makes the payment decision, so retry closes on it; it exposes nothing on the right, so only `paid` reaches the join. The same holds for `short/#Backorder/restock`.
 - The fork is matched by a join, and both loops are choice loops, so the diagram is well-structured.
 
