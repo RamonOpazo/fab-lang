@@ -343,7 +343,14 @@ fn atInfixSlash(p: *Parser) bool {
 /// prefix = marker ~ atom;  juxtafix = postfix ~ DOT ~ atom
 fn parseAtom(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .plus, .quid, .bang => if (p.touchesNext()) {
+        // `+` touching anything is a prefix. `?` and `!` are one only when
+        // they touch an atom; otherwise they are nodes, read as primaries.
+        .plus => if (p.touchesNext()) {
+            const op = p.next();
+            const operand = try p.parseAtom();
+            return p.addNode(.prefix, op, .{ .node = operand });
+        },
+        .quid, .bang => if (p.touchesNext() and p.startsAtomAt(p.tok_i + 1)) {
             const op = p.next();
             const operand = try p.parseAtom();
             return p.addNode(.prefix, op, .{ .node = operand });
@@ -374,10 +381,13 @@ fn parsePostfix(p: *Parser) Error!Node.Index {
     return p.addNode(.postfix, op, .{ .node = primary });
 }
 
-/// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | AT | STAR | literal | L_PAR items R_PAR
+/// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | AT | STAR | QUID | BANG
+///         | literal | L_PAR items R_PAR
+/// A `?` or `!` gets here only when it touches no atom on its right: a node
+/// of that kind, as in `f/?`.
 fn parsePrimary(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
+        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
         .l_par => return p.parseGroup(),
         else => return p.fail(.expected_atom, .invalid),
     }
@@ -440,12 +450,12 @@ fn touchesNext(p: *Parser) bool {
     };
 }
 
-/// Could the token at `i` begin an atom? A marker begins one only as a
-/// prefix, touching what follows it.
+/// Could the token at `i` begin an atom? `+` begins one only as a prefix,
+/// touching what follows it; `?` and `!` always do, as a prefix or a node.
 fn startsAtomAt(p: *Parser, i: TokenIndex) bool {
     return switch (p.tags[i]) {
-        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .str, .math, .val, .l_par => true,
-        .plus, .quid, .bang => switch (p.tags[i + 1]) {
+        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .quid, .bang, .str, .math, .val, .l_par => true,
+        .plus => switch (p.tags[i + 1]) {
             .eol, .eof => false,
             else => p.ends[i] == p.starts[i + 1],
         },
@@ -533,7 +543,7 @@ fn refine(p: *Parser, tag: Cst.Error.Tag) Cst.Error.Tag {
         .invalid => .invalid_token,
         .eol => if (p.parens > 0) .statement_spans_lines else tag,
         .slash => if (prev) tag else if (next_) .slash_has_no_prefix_form else .operator_touches_nothing,
-        .plus, .quid, .bang => if (!prev and !next_) .operator_touches_nothing else tag,
+        .plus => if (!prev and !next_) .operator_touches_nothing else tag,
         .dot => if (!prev or !next_) .detached_dot else tag,
         else => tag,
     };

@@ -183,13 +183,15 @@ test "a slash touching only its left side is postfix" {
 }
 
 test "markers on groups: postfix binds tighter than prefix" {
-    try expectDump("G :: f ?(g, h)? k",
+    try expectDump("G :: f/? +(g, h)? k",
         \\root
         \\  statement ::
         \\    leaf zone_id G
         \\    o_chain
-        \\      leaf edge_id f
-        \\      prefix ?
+        \\      c_chain
+        \\        leaf edge_id f
+        \\        leaf quid ?
+        \\      prefix +
         \\        postfix ?
         \\          group
         \\            items
@@ -364,6 +366,90 @@ test "the superset: shapes the analyser will reject still parse" {
 }
 
 // ---------------------------------------------------------------------------
+// Kinds: a `?` or `!` touching an atom is a prefix; otherwise a node. Where
+// either may stand is the analyser's call.
+
+test "kinds: a node after an edge" {
+    try expectDump("G :: f/! +(a, b)",
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    o_chain
+        \\      c_chain
+        \\        leaf edge_id f
+        \\        leaf bang !
+        \\      prefix +
+        \\        group
+        \\          items
+        \\            leaf edge_id a
+        \\            leaf edge_id b
+        \\
+    );
+}
+
+test "kinds: a node before a comma or a closing parenthesis" {
+    try expectDump("G :: f/?, (g/!)",
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    items
+        \\      c_chain
+        \\        leaf edge_id f
+        \\        leaf quid ?
+        \\      group
+        \\        c_chain
+        \\          leaf edge_id g
+        \\          leaf bang !
+        \\
+    );
+}
+
+test "kinds: a node on the left, or after a group" {
+    try expectDump("G :: ?/f, (a, b)/!",
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    items
+        \\      c_chain
+        \\        leaf quid ?
+        \\        leaf edge_id f
+        \\      c_chain
+        \\        group
+        \\          items
+        \\            leaf edge_id a
+        \\            leaf edge_id b
+        \\        leaf bang !
+        \\
+    );
+}
+
+test "kinds: a prefix, touching an atom" {
+    try expectDump("G :: ?(a, b)",
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    prefix ?
+        \\      group
+        \\        items
+        \\          leaf edge_id a
+        \\          leaf edge_id b
+        \\
+    );
+}
+
+test "kinds: a node beside a space" {
+    try expectDump("G :: ? f",
+        \\root
+        \\  statement ::
+        \\    leaf zone_id G
+        \\    o_chain
+        \\      leaf quid ?
+        \\      leaf edge_id f
+        \\
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Spans
 
 test "first and last tokens" {
@@ -395,6 +481,7 @@ test "statement errors" {
 }
 
 test "touching errors" {
+    try expectFirstError("G :: f+(g, h)", .marker_touches_both_sides, "+");
     try expectFirstError("G :: f?(g, h)", .marker_touches_both_sides, "?");
     try expectFirstError("G :: (a, b)!(c, d)", .marker_touches_both_sides, "!");
     try expectFirstError("G :: f(g)", .atoms_touch, "(");

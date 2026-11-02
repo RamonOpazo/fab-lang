@@ -61,7 +61,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 1    | Grammar                                   | done    |
 | 2    | Conformance corpus                        | done    |
 | 3    | Lexer                                     | done    |
-| 4    | Parser and CST                            | done; 4d next |
+| 4    | Parser and CST                            | done    |
 | 5    | Analyser: level 1                         | next    |
 | 6    | IR, JSON, renderer for level 1; examples  |         |
 | 7    | Levels                                    |         |

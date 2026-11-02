@@ -188,7 +188,7 @@ test "Cycles: a cycle exposes its start on the left" {
 }
 
 test "Cycles: a pinch gathers a cycle by its start" {
-    try check(.{ .step = 5, .source = "G :: f ?(b/b, e)" });
+    try check(.{ .step = 5, .source = "G :: f/? +(b/b, e)" });
 }
 
 test "Cycles: continuing from another node of the cycle" {
@@ -237,11 +237,11 @@ test "Pinches: a square" {
 }
 
 test "Pinches: decision and merge" {
-    try check(.{ .step = 5, .source = "G :: f ?(g, h)? k" });
+    try check(.{ .step = 5, .source = "G :: f/? +(g, h)? k" });
 }
 
 test "Pinches: fork and join" {
-    try check(.{ .step = 5, .source = "G :: f !(g, h)! k" });
+    try check(.{ .step = 5, .source = "G :: f/! +(g, h)! k" });
 }
 
 test "Pinches: a bowtie" {
@@ -249,7 +249,7 @@ test "Pinches: a bowtie" {
 }
 
 test "Pinches: one bar that joins and forks" {
-    try check(.{ .step = 5, .source = "G :: (a, b)! !(c, d)" });
+    try check(.{ .step = 5, .source = "G :: (a, b)! +(c, d)" });
 }
 
 test "Where nodes meet: a fan out of a named node" {
@@ -392,7 +392,7 @@ test "Statements: empty braces in a definition" {
 }
 
 test "Relations: a marker touching both sides" {
-    try check(.{ .step = 4, .source = "G :: f?(g, h)", .codes = &.{.{ .syntax = .marker_touches_both_sides }} });
+    try check(.{ .step = 4, .source = "G :: f+(g, h)", .codes = &.{.{ .syntax = .marker_touches_both_sides }} });
 }
 
 test "Relations: a marker touching both sides, between groups" {
@@ -453,21 +453,21 @@ test "Examples: mathematical diagrams" {
 
 test "Examples: flows" {
     try check(.{ .step = 5, .source =
-        \\If    :: f ?(fg g, fh h)? k              // decision, two branches, merge
-        \\While :: f ?(b/b, e) k                   // body b loops on the test; e exits to k
-        \\Exit  :: f ?(fg g/*, fh h) k             // g's branch stops; only h continues to k
-        \\Loop  :: f ?(fg g, fh h k/+f)            // k : cod(h) → dom(f), back before the test
-        \\Par   :: */s !(a, b)! t/*                // start, fork, two parallel branches, join, stop
+        \\If    :: f/? +(fg g, fh h)? k            // decision, two branches, merge
+        \\While :: f/? +(b/b, e) k                 // body b loops on the test; e exits to k
+        \\Exit  :: f/? +(fg g/*, fh h) k           // g's branch stops; only h continues to k
+        \\Loop  :: f/? +(fg g, fh h k/+f)          // k : cod(h) → dom(f), back before the test
+        \\Par   :: */s/! +(a, b)! t/*              // start, fork, two parallel branches, join, stop
     });
 }
 
 test "Examples: a flowchart: order fulfilment" {
     try check(.{ .step = 5, .source =
         \\Order :: {
-        \\  */receive/#Received validate ?(
-        \\      yes/#Accepted fork !(
-        \\          charge ?(paid, declined/#Waiting/retry)
-        \\        , reserve ?(reserved, short/#Backorder/restock)
+        \\  */receive/#Received validate/? +(
+        \\      yes/#Accepted fork/! +(
+        \\          charge/? +(paid, declined/#Waiting/retry)
+        \\        , reserve/? +(reserved, short/#Backorder/restock)
         \\      )! ready/#Ready ship/#Shipped close/*
         \\    , no/#Rejected notify/*
         \\  )
