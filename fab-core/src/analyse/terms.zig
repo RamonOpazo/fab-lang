@@ -1,0 +1,143 @@
+//! The terms of a declaration: they hold only structure, edges and nodes
+//! (rule 0), and each node term stands where its sort allows (rule 1). A term
+//! with an error is not looked into further.
+
+const Cst = @import("../parse/Cst.zig");
+const Analyser = @import("Analyser.zig");
+const sort = @import("sort.zig");
+
+const Node = Cst.Node;
+
+/// Where a list of terms sits: as items of a body or a block, or inside a
+/// group.
+pub const Place = enum { item, group };
+
+/// The items of a declaration: terms, side by side.
+pub fn items(a: *Analyser, node: Node.Index, place: Place) error{OutOfMemory}!void {
+    const cst = a.cst;
+    switch (cst.tag(node)) {
+        .items => for (cst.children(node)) |item| try items(a, item, place),
+        // Braces without a subject only organise; levels inside them are
+        // levels of the same body.
+        .block => {
+            const inner = cst.children(node)[0];
+            if (cst.tag(inner) == .levels) {
+                try a.fail(.unsupported_levels, cst.mainToken(inner));
+                try items(a, cst.children(inner)[0], place);
+            } else try items(a, inner, place);
+        },
+        else => {
+            if (place == .item) try brokenChain(a, node);
+            try term(a, node);
+        },
+    }
+}
+
+fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const main = cst.mainToken(node);
+    switch (cst.tag(node)) {
+        .entry, .operation => try a.failTerm(.entry_in_declaration, node, cst.firstToken(node)),
+        // Chains judge the leaves in them; a leaf reaching here stands alone.
+        .leaf => switch (cst.tokenTag(main)) {
+            .class_id => try a.failTerm(.class_in_declaration, node, main),
+            .str, .math, .val => try a.failTerm(.value_in_declaration, node, main),
+            .star => try a.failTerm(.null_not_on_one_end, node, main),
+            .quid, .bang => try a.failTerm(.lone_kind, node, main),
+            else => {},
+        },
+        .group => try items(a, cst.children(node)[0], .group),
+        .o_chain => for (cst.children(node)) |step| {
+            if (sort.of(cst, step) == .edges) {
+                try term(a, step);
+            } else if (sort.isPinchedEdge(cst, step)) {
+                try a.failTerm(.pinched_edge_beside_space, step, cst.firstToken(step));
+            } else {
+                try a.failTerm(.node_beside_space, step, cst.firstToken(step));
+            }
+        },
+        .c_chain => try closedChain(a, node),
+        .prefix => switch (cst.tokenTag(main)) {
+            .quid, .bang => try a.failTerm(.kind_on_the_left, node, main),
+            else => try markerOperand(a, cst.data(node).node),
+        },
+        .postfix => switch (cst.tokenTag(main)) {
+            .quid, .bang => if (sort.isSingleEdge(cst, cst.data(node).node)) {
+                try a.failTerm(.kind_on_reference, node, main);
+            } else try markerOperand(a, cst.data(node).node),
+            else => try markerOperand(a, cst.data(node).node),
+        },
+        .invalid => {},
+        else => for (cst.children(node)) |child| try term(a, child),
+    }
+}
+
+/// The operand of a marker. A marker on a node is a question for pinches
+/// (rule 4), so only edges are looked into.
+fn markerOperand(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    if (sort.of(a.cst, node) == .edges) try term(a, node);
+}
+
+/// `a/b/…`. A `*` is private to one end, so it stands at either end of a
+/// one-edge chain. A kind marks where flow arrives, so it stands last, right
+/// after the chain's one edge.
+fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const links = cst.children(node);
+    const last = links.len - 1;
+    var edges: usize = 0;
+    for (links) |link| edges += @intFromBool(sort.of(cst, link) == .edges);
+
+    if (links.len == 3 and edges == 1 and sort.isLeaf(cst, links[0], .star) and sort.isLeaf(cst, links[last], .star))
+        return a.failTerm(.both_ends_null, node, cst.mainToken(links[last]));
+
+    for (links, 0..) |link, i| {
+        const token = cst.mainToken(link);
+        if (sort.isLeaf(cst, link, .star)) {
+            if ((i != 0 and i != last) or edges > 1) try a.failTerm(.null_not_on_one_end, link, token);
+        } else if (sort.isLeaf(cst, link, .quid) or sort.isLeaf(cst, link, .bang)) {
+            if (i != last) {
+                try a.failTerm(.kind_on_the_left, link, token);
+            } else if (edges > 1) {
+                try a.failTerm(.kind_closes_cycle, link, token);
+            } else {
+                try kindAfter(a, links[i - 1], link);
+            }
+        } else try term(a, link);
+    }
+}
+
+/// What a kind node may follow: an edge being declared. A node before it is
+/// a slash between nodes, for rule 3.
+fn kindAfter(a: *Analyser, before: Node.Index, kind: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const token = cst.mainToken(kind);
+    switch (cst.tag(before)) {
+        .leaf => {},
+        .group => if (sort.isSingleEdge(cst, before)) {
+            try a.fail(.kind_after_group_of_one, token);
+        } else try a.failTerm(.kind_after_group, kind, token),
+        .prefix, .postfix => if (sort.isPinchedEdge(cst, before)) {
+            try a.failTerm(.kind_on_reference, kind, token);
+        } else if (cst.tokenTag(cst.mainToken(before)) != .slash) {
+            try a.failTerm(.kind_after_group, kind, token);
+        },
+        .juxtafix => if (sort.of(cst, before) == .edges) try a.failTerm(.kind_on_reference, kind, token),
+        else => {},
+    }
+}
+
+/// Warns about an open chain whose steps continue on the next line: in
+/// braces a newline is a space, so `f g` then `h k` is one chain, `f g h k`.
+/// The chain must be an item of its own; inside a group it is clearly meant.
+fn brokenChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    if (cst.tag(node) != .o_chain) return;
+    const steps = cst.children(node);
+    for (steps[0 .. steps.len - 1], steps[1..]) |left, right| {
+        const after = cst.firstToken(right);
+        for (cst.lastToken(left) + 1..after) |t| {
+            if (cst.tokenTag(@intCast(t)) == .eol) return a.fail(.chain_broken_across_lines, after);
+        }
+    }
+}

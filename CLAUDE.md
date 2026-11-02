@@ -130,12 +130,12 @@ Done when every case parses to the expected tree shape (`fab show cst`) and reco
 
 | Concern | Knows | File |
 | --- | --- | --- |
-| Sorts | what a name is: zone, node, edge, attribute, class, value | `Analyser.zig` (rules 0–1) |
-| Interfaces | a term's type: its sides, (m, n) ends, or a node; the arity errors | `Interface.zig` (rules 1–2), before elaboration |
+| Sorts | what a name is: zone, node, edge, attribute, class, value | `sort.zig`, `terms.zig`, `definitions.zig` (rules 0–1) |
+| Interfaces | a term's type: its sides, (m, n) ends, or a node; the arity errors | `interface.zig` (rule 2), before elaboration |
 | Nodes as types | which node each end lands on | elaboration, with `UnionFind.zig` (rules 3–4) and the label join, `Label.zig` (rule 5) |
 | Variables | what a name refers to: binding by first occurrence, scopes | the environment; `Scope.zig` if it grows (rules 0, 6) |
 
-`Analyser.zig` is the driver: statements, recovery, holes, building the IR. `UnionFind.zig`, `Ir.Builder` and `Result` are kept. Recovery behaviours to bring back (the old `recovery.test.zig`, in git before step 4): a failed element becomes a hole and the path stays connected; cascades are silent and their hole points back to the cause; undefined zones become holes; an edge declared twice keeps the first shape; a zone defined twice is drawn, with references to the first; local fixes keep the first kind and the first name; statements with syntax errors are skipped and the rest is analysed.
+`Analyser.zig` is the driver and the shared state: statements, recovery, holes, building the IR. Every concern is a namespace file (lowercase) of functions over `*Analyser`; only struct files are TitleCase (`Analyser.zig`, `Error.zig`, re-exported as `Analyser.Error`, `UnionFind.zig`). `UnionFind.zig`, `Ir.Builder` and `Result` are kept. Recovery behaviours to bring back (the old `recovery.test.zig`, in git before step 4): a failed element becomes a hole and the path stays connected; cascades are silent and their hole points back to the cause; undefined zones become holes; an edge declared twice keeps the first shape; a zone defined twice is drawn, with references to the first; local fixes keep the first kind and the first name; statements with syntax errors are skipped and the rest is analysed.
 
 Also back in step 5: the tests skipped in 4a ("Needs an analysed program"), and `compilation.test.zig`'s out-of-memory test, which fails with `NondeterministicMemoryUsage` without the old analyser: `Lexer.tokenize` grows a `MultiArrayList`, and whether the testing allocator grows it in place depends on what else is allocated.
 
