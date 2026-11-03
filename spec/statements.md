@@ -2,7 +2,7 @@
 
 Decisions taken in the design sessions of 22-23 October 2026, after `fab render` first worked end to end. They change the grammar in six places: statements and bindings, values, cells (levels), the `/` operator, pinching (with the split between flow and fusion), and subjects (classes). This note is the record of what was decided and why; the code does not implement it yet.
 
-> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read; section 15 (2 November), how programs with no meaning yet are reported. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
+> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read; section 15 (2 November), how programs with no meaning yet are reported; section 21 (3 November), the types and the prelude, which revise 1.7 and 2. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
 
 **The spec doc ([`spec.md`](spec.md)) was rewritten from this note and [`style.md`](style.md) on the evening of 23 October. Where this note and the spec differ, the spec wins.** Three corrections were made while writing it, and are applied below: repeated node names glue in flows (5.1); `*` is not a pinch (5.3); `?` and `!` stay postfix only (5.3). Two decisions followed the same evening, both in 5.3: **`*` is a nameless node term, written alone, private to one edge end**, which replaced the seal; and **a pinched single edge resolves as a reference node, so it is pinched on one side only**, with redundant pinches allowed. The bracket reading and arrow literals of section 2 were refined in the style document (lowercase names, `[tail/line/head]` arrows).
 
@@ -731,3 +731,104 @@ How step 6 ends (plan step 6c).
 - **A definition that names no diagram** (a bundle, a value, a theme) draws its placeholder while it is unsupported (15.3), labelled by its head (`:ref`). It is for development only, and goes with step 8.
 - **The examples are checked and drawn by one target,** `make examples`: every example must check with no error and no warning (unsupported is allowed until steps 8–11), and is then drawn to SVG beside it, with Graphviz. `make test examples` runs both.
 
+
+## 21. Types and the prelude, 2026-11-03
+
+Revises 1.7 and 2, `style.md` §3 (value types, the bracket reading), §4.6 (arrows) and §7 (themes and the prelude), and the spec's Values and definitions. The prelude it describes is drafted in [`prelude.fab`](prelude.fab). Plan step 8 implements it.
+
+### 21.1 Decided
+
+**Four sorts of name,** told apart by their spelling, so no word is reserved:
+
+| Sort | Spelled | Examples |
+| --- | --- | --- |
+| Types | `:UpperCamel` | `:Color`, `:Shape`, `:Arrow`, `:Cardinality` |
+| Functions (attributes) | `:lowercase-kebab` | `:fill`, `:label-at`, `:terminal` |
+| Named values and labels | `[lowercase-kebab]` | `[red]`, `[circle]`, `[epi]`, `[base]` |
+| Symbols | glyphs, with at most one capital letter | `[>]`, `[|>]`, `[X]`, `[O{]` |
+
+**The constructors are closed; the names are open.** The language fixes the kinds of type. Every name of a type, a label or a function lives in source, the prelude's or a program's:
+
+| Constructor | Written | Its type, read from the value |
+| --- | --- | --- |
+| `:Text`, `:Math` | `"…"`, `$…$` | the delimiters |
+| `:Color` | `[#c0392b]`, `[#f00]` | `#` |
+| `:Number` | `[2]`, `[0.5]`, `[30!]` | a digit |
+| `:Range` | `[0..*]`, `[1..3]` | `..` |
+| `:Flag` | written or not: `:hide`, `:hide!` | |
+| `:Tuple.(T, U, …)` | `[a/b/c]` | its elements' types |
+| `:List.(T)` | `[a/b/c]`, `[]` | a contract, never read |
+| `:Union.(T, U, …)` | any value of one of its types | a contract, never read |
+| `:Record` | `{ … }` | the braces |
+| labels | `:Shape :: [circle], [box]` | the label's own type |
+
+- **Every value has a type, and every name.** A type is read from the value's shape, as the table says, or from the name's definition. Nothing is inferred from use.
+- **A type written in a definition is a contract:** `:Color [red] := [#d1242f]`. It is optional, and checked when given: `:Color [warn] := [circle]` is an error. It is also what the LSP completes from.
+- **Aliases name types:** `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`, `:Length := :Number`. An alias is the same type under a second name, never a new one.
+- **Type parameters use `.` and a group,** as qualification does: `:List.(:Record)`.
+
+**Labels: `:Type :: [a], [b]`.** A declaration with a type as its head creates labels of that type: values with no definition, whose meaning a renderer gives (`[circle]`) or a record binds (`[ink]`, below). `::` because the labels are new: nothing is bound to them. Several lines go in braces, as any long statement: `:Shape :: { [box], … }`.
+
+- **One label, one type.** Declaring a label already declared in another type is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`, and `:bend` takes `:Union.(:Facing, :Angle)`. Where the words mean the same, the types merge instead: `:align` and `:label-at` share `:Span :: [start], [center], [end]` (`[mid]` became `[center]`).
+- **Nothing on its own is a label of its type:** `:shape [none]`, `:line [none]`, both through `:None :: [none]`. No label is the empty text, `:label ""`.
+
+**Sequences: `[a/b/c]`.** `/` separates the elements of a bracket, everywhere.
+
+- **What is written is a tuple:** `[1/1.5/2]` is `:Tuple.(:Number, :Number, :Number)`. A tuple whose elements share a type fits where `:List.(T)` is expected, and a single value fits a list of one: `:theme [dark]`, `:theme [dark/compact]`.
+- **An empty slot is nothing there,** in tuples and lists alike: `[/solid/>]` has no tail, `[////1/2]` is six elements, four of them empty. It is the only "none", and it exists only inside a sequence.
+- **`[]` is the empty list,** not a none: `:theme []`.
+- **One level:** a bracket is one token, so sequences do not nest. Nothing needs nesting.
+- **Arrows and cardinalities are tuples with names:** `:Arrow`, `:Cardinality := :Tuple.(:Range, :Range)`. The rule "two slashes make an arrow" goes; the type the function expects decides.
+- **`!` inverts the element it follows,** as before (2): a struck line `[/solid!/>]`, an inner hook `[?!/solid/>]`, an inward angle `[30!]`.
+
+**Numbers: one `:Number`, an exact decimal.** fAB does no arithmetic, so a number goes from the source to a renderer unchanged: a whole mantissa and a count of decimal places (`1.5` is 15 and 1). It is exact, compares exactly against the ranges functions check (a fraction is 0 to 1), and prints as written in JSON and DOT. A renderer converts to a float when it lays out geometry, and only then. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 significant digits. `:Length`, `:Angle` and `:Fraction` are aliases: the unit is the function's.
+
+**Functions: `subject :function :: type`.** A declaration with a function as its head and a type as its body states where the function applies and what it takes: `(&node, &zone) :fill :: :Color`. Anywhere else it is "does not apply". Zig gives each function its meaning; a function or a label a renderer does not know is a renderer issue ("no drawing for `[hexagon]`"), drawn with the type's fallback and marked like any other.
+
+**Flags are true when written, false otherwise:** `:hide`. `!` after a flag inverts it, so a later layer can turn it off: `f :hide!`. Only a flag inverts; a value given to a flag is an error.
+
+**Records: `{ … }`, keyed by subjects, functions and labels.** A record entry is a key and its value:
+
+- a function: `:fill [red]` (a bundle's contents, an element's style);
+- a subject: `&node :stroke [ink]`, short for `&node { :stroke [ink] }` (a style, a theme);
+- a label, bound to a value of its own type: `[ink] [#dddddd]`. This is how themes set tokens, and why records have structure where sequences have none. `[circle] [box]` is legal too: in this theme, circles are drawn as boxes.
+
+So **a theme is a record**, `:Record [dark] := { … }`, and `:theme` takes `:List.(:Record)`. `G :style := { … }` is a record bound to a diagram. A bundle still names a function, not a value: `:terminal := { :shape [circle] }` is used as `#Done :terminal`, and its record's keys must be functions.
+
+**The prelude is ordinary fAB,** with no powers a program lacks. It is read first, so its names come first, and defining one again is "defined twice"; "built-in redefined" goes. A program may declare labels, functions and types as the prelude does; what no renderer knows, a renderer reports. The prelude is what users trust, and tinkerers may change it.
+
+**`[base]` is the base theme,** the one name the style pass looks up. It always applies, first. Defaults that depend on the element (a node's label, a cell's arrow by level, one circle diameter per diagram) are computed by the style pass and sit below it:
+
+```
+computed  <  [base]  <  themes, left to right  <  the program
+```
+
+`[base]` binds nothing computed, or it would hide it; the prelude names the computed defaults in comments, where their bindings would be. `[base]` binds the tokens, so a renderer never falls back on a colour of its own.
+
+### 21.2 Consequences for the code
+
+- **Lexer:** `:Color` is a type token (today `:` is invalid before a capital); `[]` is the empty list (today invalid); `!` touching an attribute on its right is a flag's inversion. Symbols are any characters but whitespace, `[`, `]` and `/`, as values already are.
+- **Parser:** a declaration's head may be a type (labels) or a subject and a function (a signature); a definition's head may be a type and a name (`:Color [red]`); a record entry's key may be a label; `:Type.( … )` is a type expression.
+- **Analyser:** an environment of types, labels, functions and named values, each defined once and before its use, the prelude's first; types read from shape, contracts checked, unions and lists matched against tuples; "does not apply" from signatures.
+- **Formatter:** the base theme stops being hard-coded (`kindDefault`): it is `[base]`, read from the prelude. What stays in Zig is the meaning of each function and label, and the computed defaults.
+
+### 21.3 Errors
+
+New: **contract broken** (`:Color [warn] := [circle]`), **label in two types** (`[outer]` declared again), **not a type** (`:Colour [x] := …`), **value given to a flag** (`:hide [on]`), **only a flag inverts** (`:fill!`), **key of the wrong type** (`[ink] [circle]` in a record), **subject in a bundle** (`:t := { &node :fill [red] }`: a bundle's keys are functions), **number malformed** (`[.5]`, `[1.]`, too many digits). Gone: **built-in redefined**, and **theme and bundle mixed up**, which becomes an ordinary type error ("a function where a record is expected").
+
+### 21.4 Rejected
+
+- **Keywords in Zig** (`[circle]` and `[dashed]` built in, outside the prelude): the language has no keywords, and the prelude should show every name a program can use.
+- **Types through functions** (`:ink [red] := …`, a value typed by the function it fits): functions share types (`:ink`, `:fill`, `:stroke`), so the function named would be arbitrary, and it gives types no names to contract on.
+- **A label in several types, chosen by context** (`[outer]` both a `:Bow` and a `:Side`): too much overloading, and a name defined with no type written becomes ambiguous.
+- **One label in one type, others including it** (`:Side := :Union.(:Bow, :On)`): awkward once the including type is no longer a superset in meaning. A shared type of its own, named for what the words share, says why both take them.
+- **`[]` as none:** it is the empty list. None is only an empty slot; alone, each type has its own nothing.
+- **`[on]` and `[off]` for flags:** `!` already inverts what it follows.
+- **Floats:** fAB never computes with numbers, so exact decimals cost nothing and keep output deterministic.
+- **A prelude with privileges** (labels declared only there): the prelude is what users trust, not what binds them.
+
+### 21.5 Open
+
+- **The prelude's contents** beyond the draft: more colour names, more themes, whether `[base]`'s sizes are right.
+- **Records under `:prove`** hold propositions (`f h == g k`), which are not key–value entries; whether a proof block is a `:Record` waits for the equations.
+- **A renderer's fallback per type** (which shape stands in for an unknown one): with step 10.

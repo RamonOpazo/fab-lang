@@ -1,0 +1,211 @@
+// prelude.fab: the base of every program (spec/statements.md §21).
+//
+// Ordinary fAB, with no powers a program lacks: a program may add to it,
+// and a tinkerer may change it. It is read first, so its names are defined
+// before any program's, and defining one again is "defined twice".
+//
+// A draft: the code reads none of it yet. Plan step 8 embeds it in
+// fab-core and checks it compiles with no diagnostics.
+//
+// Four sorts of name:
+//   :Type        types, UpperCamel
+//   :function    functions (attributes), lowercase-kebab
+//   [value]      named values and labels, lowercase-kebab
+//   [>] [X]      symbols: glyphs, with at most one capital letter
+//
+// The constructors are the language, not written here:
+//   :Text "…"   :Math $…$   :Color [#…]   :Number [2] [0.5] [30!]
+//   :Range [0..*]   :Flag (written or not)
+//   :Tuple.(…) [a/b/c]   :List.(T) [a/b/c]   :Union.(…)   :Record { … }
+
+// ── 1. Types ──────────────────────────────────────────────────────────
+
+// Numbers carry their unit in the type's name only: all three are :Number.
+:Length   := :Number        // in em, relative to the theme's text size
+:Angle    := :Number        // in degrees; [30!] is the inner side
+:Fraction := :Number        // 0 to 1, a position along an edge
+
+:Label := :Union.(:Text, :Math)
+
+// Labels: each is declared in exactly one type. Words two types share get
+// a type of their own, which both include (:None, :Facing).
+:None   :: [none]
+:All    :: [all]
+:Facing :: [outer], [inner]
+:On     :: [on]
+
+:Shape :: {
+  [box], [round], [circle], [double-circle], [ellipse], [stadium],
+  [diamond], [hexagon], [parallelogram], [cylinder], [document],
+  [bar], [point], [terminal], [bullseye]
+}
+:Line  :: [solid], [dashed], [dotted], [double], [triple], [wavy]
+:Face  :: [regular], [italic], [bold], [bold-italic]
+:Pen   :: [thin], [normal], [thick]
+:Span  :: [start], [center], [end]
+:As    :: [flat], [cluster], [node], [table]
+:Cross :: [gap], [plain]
+
+:Side  := :Union.(:Facing, :On)
+
+// Arrow ends, read as a picture from tail to head. Any end goes at either
+// side; ! after a hook or a harpoon puts it on the inner side: [?!], [^!].
+:Head :: {
+  [>], [<], [>>], [<<], [|>], [<|], [|],
+  [O], [@], [X], [<>], [<@>], [?], [^],
+  [||], [O|], [|{], [O{], [|O], [}|], [}O]
+}
+
+// An empty slot is nothing there: [/solid/>] has no tail, [/solid/] no
+// head, [>//>] no line. ! after a line word strikes it: [/solid!/>].
+:Arrow       := :Tuple.(:Head, :Union.(:Line, :None), :Head)
+:Cardinality := :Tuple.(:Range, :Range)
+
+// ── 2. Colours ────────────────────────────────────────────────────────
+
+// Tokens: colours whose value a record binds, [base] first, then themes.
+:Color :: [ink], [soft], [muted], [accent]
+:Color :: [error], [warning], [unsupported]
+
+:Color [black]  := [#1f2328]
+:Color [white]  := [#ffffff]
+:Color [gray]   := [#6e7781]
+:Color [red]    := [#cf222e]
+:Color [orange] := [#bc4c00]
+:Color [yellow] := [#bf8700]
+:Color [green]  := [#1a7f37]
+:Color [blue]   := [#0969da]
+:Color [purple] := [#8250df]
+:Color [pink]   := [#bf3989]
+
+// ── 3. Functions ──────────────────────────────────────────────────────
+
+// subject :function :: type. The subjects are the classes it applies to;
+// anywhere else it is "does not apply". Zig gives each its meaning, and a
+// renderer reports a function or a label it cannot draw.
+
+// Text
+(&node, &edge, &cell, &zone) :label :: :Label
+(&node, &edge, &cell, &zone) :font  :: :Text
+(&node, &edge, &cell, &zone) :face  :: :Face
+(&node, &edge, &cell, &zone) :size  :: :Length
+(&node, &edge, &cell, &zone) :ink   :: :Color
+
+// Lines and fills
+(&node, &zone)               :fill   :: :Color
+(&node, &edge, &cell, &zone) :stroke :: :Color
+(&node, &edge, &cell, &zone) :pen    :: :Pen
+(&node, &zone)               :line   :: :Union.(:Line, :None)
+
+// Nodes
+&node          :shape   :: :Union.(:Shape, :None)
+&node          :width   :: :Length    // a minimum
+&node          :height  :: :Length    // a minimum
+(&node, &zone) :padding :: :Length
+&node          :align   :: :Span
+&node          :wrap    :: :Length
+
+// Edges and cells
+(&edge, &cell) :arrow       :: :Arrow
+(&edge, &cell) :bend        :: :Union.(:Facing, :Angle)
+(&edge, &cell) :label-start :: :Label
+(&edge, &cell) :label-end   :: :Label
+(&edge, &cell) :label-at    :: :Union.(:Span, :Fraction)
+(&edge, &cell) :side        :: :Side
+(&edge, &cell) :shorten     :: :Length
+
+// Zones
+&zone :as      :: :As
+&zone :caption :: :Label
+&zone :theme   :: :List.(:Record)     // applied left to right
+&zone :marks   :: :Union.(:All, :None)
+&zone :cross   :: :Cross
+&zone :alt     :: :Text
+
+// Behaviour. A flag is true when written, false otherwise; :hide! turns
+// it back off in a later layer.
+(&node, &edge, &cell)        :hide :: :Flag
+(&node, &edge, &cell, &zone) :note :: :Text
+(&node, &edge, &cell, &zone) :link :: :Text
+(&node, &edge, &cell)        :step :: :Number
+
+// ── 4. Named arrows ───────────────────────────────────────────────────
+
+:Arrow [mono]   := [>/solid/>]
+:Arrow [epi]    := [/solid/>>]
+:Arrow [incl]   := [?/solid/>]
+:Arrow [mapsto] := [|/solid/>]
+:Arrow [unique] := [/dashed/>]
+:Arrow [iso]    := [</solid/>]
+
+// ── 5. The base theme ─────────────────────────────────────────────────
+
+// [base] always applies, first:
+//
+//   computed  <  [base]  <  themes, left to right  <  the program
+//
+// Computed defaults depend on the element, so no value states them. The
+// style pass fills them in wherever no layer binds the function:
+//
+//   &node :label   its name without #; @ its diagram's name; else its
+//                  canonical end (f+, +f)
+//   &edge :label   its name             &cell :label   its name
+//   &zone :label   its name
+//   &cell :arrow   [/double/>] at level 2, [/triple/>] at level 3, …
+//   &plain         every circle in a diagram one diameter, fitted to the
+//                  longest label
+//   &parallel      as wide as its busier side needs
+//
+// [base] binds nothing computed, or it would hide it. Marks bind :label ""
+// on purpose: a choice, a parallel, a start or an end is a shape that says
+// what it is.
+
+:Record [base] := {
+  [ink] [#333333],
+  [soft] [#555555],
+  [muted] [#888888],
+  [accent] [#1f6feb],
+  [error] [#d1242f],
+  [warning] [#bf8700],
+  [unsupported] [#8250df],
+
+  &node {
+    :shape [circle], :stroke [ink], :pen [normal], :line [solid],
+    :align [center], :face [regular], :ink [ink], :size [1]
+  },
+  &choice    { :shape [diamond], :label "" },
+  &parallel  { :shape [bar], :label "" },
+  &start     { :shape [point], :label "" },
+  &end       { :shape [bullseye], :label "" },
+  &hole      :line [dashed],
+  &canonical { :face [italic], :ink [muted] },
+
+  &edge {
+    :arrow [/solid/>], :pen [normal], :ink [soft], :size [0.85],
+    :label-at [center], :side [outer]
+  },
+  &cell { :pen [normal], :ink [soft], :size [0.85], :side [outer] },
+
+  &zone { :as [cluster], :cross [gap], :marks [all] }
+}
+
+// ── 6. Built-in themes ────────────────────────────────────────────────
+
+:Record [dark] := {
+  [ink] [#dddddd],
+  [soft] [#aaaaaa],
+  [muted] [#888888],
+  &zone :fill [#1e1e1e]
+}
+
+:Record [print] := {
+  [ink] [#000000],
+  [soft] [#000000],
+  [muted] [#555555],
+  [accent] [#000000]
+}
+
+:Record [compact] := {
+  &node :padding [0.2],
+  &zone :padding [0.5]
+}

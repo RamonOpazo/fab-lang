@@ -12,8 +12,12 @@ program
     = [ statement ] { EOL [ statement ] } EOF
     ;
 
+# DECL heads: a zone (G :: f g), a type (:Shape :: [circle], [box]), or
+# subjects and an attribute (a signature: (&node, &zone) :fill :: :Color).
+# DEFN heads: a value ([red]), a typed value (:Color [red]), a type (an
+# alias, :Length := :Number), an attribute (a bundle) or subject :attr.
 statement
-    = ( primitive DECL | subject DEFN ) ( levels | block )
+    = ( primitive | subject ) ( DECL | DEFN ) ( levels | block )
     ;
 
 primitive
@@ -25,6 +29,7 @@ primitive
 subject
     = atom [ ATTR_ID ]
     | ATTR_ID
+    | TYPE_ID [ VAL ]
     ;
 
 block
@@ -49,8 +54,9 @@ operator
     | CONG
     ;
 
+# ! touching an attribute turns a flag off: f :hide!.
 attr
-    = ATTR_ID [ literal ]
+    = ATTR_ID [ ~ BANG ] [ literal ]
     ;
 
 literal
@@ -99,11 +105,15 @@ marker
 
 # A ? or ! that touches no atom on its right is a node of that kind: the
 # f/? in f/? +(a, b). Touching an atom, it is a prefix marker.
+# A type is a primary so that its parameters are a juxtafix:
+# :Tuple.(:Head, :Line, :Head). A record entry keyed by a label is a chain
+# of two literals: [ink] [#dddddd].
 primary
     = EDGE_ID
     | NODE_ID
     | ZONE_ID
     | CLASS_ID
+    | TYPE_ID
     | AT
     | STAR
     | QUID
@@ -119,10 +129,12 @@ primary
 #   NODE_ID   #A, #UUID7           # then uppercase
 #   EDGE_ID   f, h', user_id, α    lowercase, _ or non-ASCII first
 #   ATTR_ID   :label, :label-start : then lowercase; - allowed
+#   TYPE_ID   :Color, :UpperCamel  : then uppercase
 #   CLASS_ID  &node                & then lowercase
 #   STR       "…"                  one line, \ escapes
 #   MATH      $…$                  one line, \ escapes
-#   VAL       [red], [/solid/>]    one opaque token; no whitespace, [ or ]
+#   VAL       [red], [/solid/>], []  one opaque token; no whitespace, [ or ];
+#                                  / separates its elements, read later
 #
 #   SLASH /   PLUS +   QUID ?   BANG !   STAR *   AT @   DOT .   BAR |
 #   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )

@@ -13,7 +13,7 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 
 | Path          | What                                                                          |
 | ------------- | ----------------------------------------------------------------------------- |
-| `fab-core/`   | Lexer, parser, analyser, IR, styling, diagnostics, JSON. Source in, IR out, no I/O |
+| `fab-core/`   | Lexer, parser, analyser, IR, styling, diagnostics, JSON. Source in, IR out, no I/O. `src/prelude.fab`: the prelude, read before every program (`statements.md` §21) |
 | `fab-render/` | Pure backends from the styled IR to bytes (DOT for now)                       |
 | `fab-cli/`    | The `fab` command, the only package that does I/O                             |
 | `fab-lsp/`, `docs/` | Empty, for later                                                        |
@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -182,18 +182,20 @@ Done when every level case passes.
 
 ### D. Definitions and style
 
-**8. Definitions and values.**
-- An environment of names: `[name] :=` values and aliases, `:attr :=` bundles, themes. Each is defined once, before use; built-ins are fixed.
-- A bracket is read by its shape (arrow, name, colour, number or range); its type comes from the attribute.
-- `!` inside brackets: struck lines, inner hooks and harpoons, inward angles.
-- The prelude is ordinary fAB source embedded in fab-core: the base theme, built-in values, named arrows and themes.
+**8. Definitions and values** (`statements.md` §21). Types, labels, signatures and named values, checked and kept in an environment the style pass reads in step 9. `subject :attr :=` (the layers, `G.f :arrow`) stays unsupported until steps 9 and 11. In increments:
+
+- **8a. Lexer and parser.** `TYPE_ID` (`:Color`); `[]`; `!` touching an attribute (`:hide!`); the new heads: `:Type :: labels`, `subjects :attr :: type`, `:Type [name] :=`, `:Type := type`; `:Tuple.( … )` as a juxtafix of a type; a record entry keyed by a label (`[ink] [#ddd]`). `parse.test.zig` and the corpus's syntax rows.
+- **8b. Values.** `value.zig`, the bracket reader: elements split by `/`, each read by its shape (name or label, colour, number, range, symbol, empty slot), with its `!`. `:Number` is an exact decimal (mantissa and scale), never a float. Rows: uppercase name, negative number, number malformed, value in a term.
+- **8c. The environment.** `Env.zig`: types (constructors, aliases, label types), labels (one type each), signatures and named values, defined once and before use; type expressions; types read from shape and from definitions; contracts; tuples matched against lists and unions. Rows: undefined name, defined twice, label in two types, not a type, contract broken.
+- **8d. Records.** Bundles (keys are attributes) and themes (`:Record [x] := { … }`: subjects and tokens); a token binds a value of its type. Rows: subject in a bundle, key of the wrong type, value given to a flag, only a flag inverts.
+- **8e. The prelude.** `src/prelude.fab`, embedded, analysed before the program with the same analyser; a test checks it compiles clean, and that its label types and signatures match what Zig gives meaning to (`Style.Shape` and the rest). Its definitions stop drawing placeholders (§20).
 
 **9. Style layer.** `fab-core/src/format/` becomes the style pass, with `style.md` as the reference.
 - `:style` replaces `:format`. Blocks are factored subjects. Groups of subjects take attributes distributed over them. Each (subject, attribute) is bound once per layer.
 - Classes with `&`, and specificity: class, narrower class, class in a diagram, single element.
-- The spec's attribute vocabulary, with type checks and "does not apply" errors.
-- Kind defaults, then themes left to right, then the program.
-- The arrow parser: `[tail/line/head]`, its glyphs and line words.
+- Type checks at use, against the prelude's signatures, and "does not apply".
+- The cascade: computed defaults, then `[base]` (replacing `kindDefault`), then themes left to right, then the program; tokens bound by records; `:hide!`.
+- Arrows: the `:Arrow` tuple given its meaning, its `:Head` symbols and `:Line` words.
 
 **10. Renderer.** fab-render realises the new Style: arrows, ends, `:bend`, `:side`, theme tokens.
 
@@ -212,7 +214,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
-| The prelude's contents                                          | step 8             |
+| The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 8e |
 | The header's attributes (`:kind`, boundary); `:kind` is the same attribute as the proof's, which wins | after fab-core |
 | Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |

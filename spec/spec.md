@@ -27,7 +27,7 @@ A program is a sequence of statements, one per line; braces let a statement span
 | Declaration | `::`     | new **structure**            | `Order :: */receive/#Received validate/? +(…)` |
 | Definition  | `:=`     | a new **binding** of a value | `[red] := [#ff0000]`, `G :style := { … }`    |
 
-**Declarations** build structure. Today only diagrams (zones) are declared: `G :: term`. Zones, nodes and edges are the only things that can ever be declared; what declaring a node or an edge on its own means is open, so it is reserved: an error until decided.
+**Declarations** build structure: they make something new, bound to nothing. Diagrams (zones) are declared with a term: `G :: term`. The vocabulary is declared too, in the prelude or in a program (see Values and definitions): labels of a type, `:Shape :: [circle], [box]`, and functions with their signature, `(&node, &zone) :fill :: :Color`. Nodes and edges may become declarable on their own; what that means is open, so it is reserved: an error until decided.
 
 **Definitions** bind values. Every definition has one form, read left to right as context, then attribute, then value:
 
@@ -39,9 +39,11 @@ Its parts are optional, which gives exactly three kinds of definition:
 
 | Left side       | Defines                                | Examples                                                               |
 | --------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| `[name]`        | a value                                | `[red] := [#ff0000]`, `[warn] := [red]`                                |
+| `[name]`        | a value, with an optional type before it | `[red] := [#ff0000]`, `:Color [warn] := [red]`, `:Record [dark] := { … }` |
 | `:attr`         | a new attribute (a bundle), everywhere | `:terminal := { :shape [circle], :fill [red] }`                         |
 | `subject :attr` | an attribute's value at a subject      | `&node :shape := [circle]`, `G :style := { … }`, `G.f :arrow := [epi]` |
+
+A type's name may also stand alone on the left, as an alias: `:Length := :Number`.
 
 **Layers.** Three attributes of a diagram take a list of entries as their value, usually written in braces. Each is a five-letter verb, and each accepts its own vocabulary:
 
@@ -108,7 +110,8 @@ G :: f g h
 | `f`         | an edge or a cell               |
 | `#A`        | a node                          |
 | `[red]`     | a value, in value position only |
-| `:terminal` | an attribute                    |
+| `:terminal` | an attribute (a function)       |
+| `:Color`    | a type                          |
 | `&node`     | a class of elements             |
 
 **Scope.** Edge names are local to their diagram, so two diagrams can each have their own `f`. Something inside another diagram is reached with `.`, which means "inside" and nothing else. The parentheses are optional but read better:
@@ -474,53 +477,89 @@ A value is always written in exactly one of three forms:
 | `$…$` | math                                | `:label $\mathbb{R}$`                                                                |
 | `[…]` | everything else: names and literals | `[red]`, `[circle]`, `[#ff0000]`, `[/solid/>]`, `[12]`, `[0..*/1..1]`                |
 
-Numbers go in brackets too: `:width [2]`. The only exception is a **flag**, an attribute written with no value at all, such as `:hide`.
+Numbers go in brackets too: `:width [2]`. A record is written in braces, `{ … }`. The only exception is a **flag**, an attribute written with no value at all, such as `:hide`.
 
 ### The bracket token
 
 - `[ … ]` is **one opaque token**. Its contents are any characters except whitespace, `[` and `]`.
 - No whitespace inside: `[0..*/1..1]`, not `[0..* / 1..1]`. Text with spaces belongs in `"…"`.
-- No nesting. Lists, if needed, live inside one token with commas: `[dark,compact]`.
 - Because the main grammar never looks inside, symbols there cannot clash with their meaning outside: `[#ff0000]` is a colour, and `#A` outside is a node.
-- Brackets appear only in value position, and as the left side of a value definition. Never in a declaration, and never as a subject.
+- Brackets appear in value position, as the name in a value definition, as the labels a type declares, and as a key in a record. Never in a term, and never as a subject.
 
-**How a bracket is read.** One rule, by shape, gives every bracket exactly one kind:
+**What a bracket holds.** `/` separates the elements of a bracket, everywhere. Each element is read by its shape:
 
-| Bracket                        | Is                           | Examples                                         |
-| ------------------------------ | ---------------------------- | ------------------------------------------------ |
-| contains exactly two `/`       | an arrow                     | `[/solid/>]`, `[?/solid/>]`, `[>/wavy/X]`        |
-| starts with a lowercase letter | a name                       | `[red]`, `[circle]`, `[warn-bg]`, `[epi]`        |
-| starts with `#`                | a colour                     | `[#c0392b]`, `[#f00]`                            |
-| starts with a digit            | a number; with `..`, a range | `[2]`, `[0.5]`, `[30!]`, `[0..*]`, `[0..*/1..1]` |
+| Element                        | Is                | Examples                                    |
+| ------------------------------ | ----------------- | ------------------------------------------- |
+| starts with a lowercase letter | a name or a label | `[red]`, `[circle]`, `[warn-bg]`, `[epi]`   |
+| starts with `#`                | a colour          | `[#c0392b]`, `[#f00]`                       |
+| starts with a digit            | a number          | `[2]`, `[0.5]`, `[30!]`                     |
+| a digit, with `..`             | a range           | `[0..*]`, `[1..3]`                          |
+| anything else                  | a symbol          | `[>]`, `[|>]`, `[X]`, `[O{]`                |
+| nothing                        | an empty slot     | the tail in `[/solid/>]`                    |
 
-The value's type then comes from what the attribute expects: `:ink` reads a colour, `:arrow` an arrow. `:shape [red]` is a type error ("a colour where a shape is expected").
+A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one.
+
+**A bracket with slashes is a sequence.** What is written is a tuple of its elements' types: `[>/solid/>>]` is a tuple of a symbol, a label and a symbol, and `[1/1.5/2]` a tuple of three numbers. A tuple whose elements share a type is also a list of that type, and a single value is a list of one: `:theme [dark]`, `:theme [dark/compact]`. `[]` is the empty list.
+
+- **An empty slot is nothing there,** in a tuple or a list: `[/solid/>]` has no tail, `[////1/2]` six elements, four of them empty. It is the only "none", and only inside a sequence; alone, each type has its own nothing (`:shape [none]`, `:label ""`).
+- **Sequences do not nest:** a bracket is one token.
+
+The value's type must be the one the attribute expects: `:ink` takes a colour, `:arrow` an arrow. `:shape [red]` is a type error ("a `:Color` where a `:Shape` is expected").
 
 ### `!` inverts what it follows
 
-Inside brackets `!` has one meaning, as `/` does: it inverts what it follows.
+`!` has one meaning, as `/` does: it inverts what it follows.
 
 | After             | Inverts                             | Example         |
 | ----------------- | ----------------------------------- | --------------- |
 | a line word       | its meaning: struck, "does not"     | `[/solid!/>]` ↛ |
 | a hook or harpoon | its side: inner instead of outer    | `[/solid/^!]`   |
 | an angle          | its side: inward instead of outward | `:bend [30!]`   |
+| a flag            | it: off instead of on               | `f :hide!`      |
 
-So there are **no negative numbers**: every number starts with a digit.
+So there are **no negative numbers**: every number starts with a digit. Outside brackets `!` follows only a flag; in a term it is a node kind, and attributes never appear in terms.
+
+### Types
+
+Every value has a type, and so does every name. The kinds of type are fixed by the language; their names are written in fAB.
+
+| Type               | Values                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| `:Text`, `:Math`   | `"…"`, `$…$`                                                 |
+| `:Color`           | `[#c0392b]`, `[#f00]`, and the colours the prelude names     |
+| `:Number`          | `[2]`, `[0.5]`, `[30!]`: an exact decimal                    |
+| `:Range`           | `[0..*]`, `[1..3]`                                           |
+| `:Flag`            | none: written (`:hide`) or not, inverted with `!` (`:hide!`) |
+| `:Tuple.(T, U, …)` | `[a/b/c]`, one element of each type                          |
+| `:List.(T)`        | `[a/b/c]`, any number of elements, all of type T             |
+| `:Union.(T, U, …)` | a value of any of its types                                  |
+| `:Record`          | `{ … }`                                                      |
+| a label type       | the labels it declares: `:Shape :: [circle], [box]`          |
+
+- **Types are `:UpperCamel`,** functions (attributes) `:lowercase-kebab`, named values and labels `[lowercase-kebab]`.
+- **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, `{ … }`) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
+- **Aliases** give a type a second name: `:Length := :Number`, `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`. Type parameters are written with `.` and a group, as qualification is.
+- **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`.
+- **Numbers are exact decimals:** fAB never computes with them, so `0.1` stays `0.1` from the source to the renderer. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 significant digits.
 
 ### Units
 
-Lengths are numbers in **em**, relative to the theme's text size. Angles are in **degrees**. A fraction is a number from 0 to 1, a position along an edge.
+Lengths are numbers in **em**, relative to the theme's text size. Angles are in **degrees**. A fraction is a number from 0 to 1, a position along an edge. `:Length`, `:Angle` and `:Fraction` are aliases of `:Number`: the unit belongs to the attribute.
 
 ### Definitions
 
-- **Values:** `[red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]`. The type is inferred from the right side.
-- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a named set of attributes. Writing it applies its contents, exactly as if they were written there; later settings refine it: `#Done :terminal :fill [green]`.
-- **Themes:** `[dark] := { &zone :fill [#1e1e1e], &node :stroke [#dddddd] }`. A theme is a named style: subjects with attributes. A bundle holds attributes only; a theme holds subjects.
-- **Names** start with a lowercase letter, are defined once, and come before their first use. Built-in names cannot be redefined.
+- **Values:** `[red] := [#ff0000]`, or with its type, `:Color [red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]` has red's type.
+- **Records:** `{ … }`, entries keyed by subjects, attributes and labels. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`; a label binds a value of its own type, `[ink] [#dddddd]`.
+- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle's keys are attributes.
+- **Themes:** `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named record of subjects and tokens, chosen with `:theme`.
+- **Signatures:** `(&node, &zone) :fill :: :Color` declares an attribute: the classes it applies to, and the type it takes. Anywhere else it does not apply.
+- **Names** are defined once, and before their first use.
 
 ### The prelude
 
-The prelude is ordinary fAB source, compiled into `fab`. It defines the base theme (every default of the style layer), the built-in values (colour names, theme tokens, keywords), the named arrows, and the built-in themes. The defaults are documented by being written in the language itself.
+The prelude ([`prelude.fab`](../fab-core/src/prelude.fab)) is ordinary fAB source, compiled into `fab` and read before every program. It declares the types, labels and attributes, names the colours and the common arrows, and defines the base theme `[base]` and the built-in themes. So the vocabulary is documented by being written in the language itself.
+
+It has no powers a program lacks. Its names come first, so defining one again is "defined twice"; a program may declare labels, attributes and types as the prelude does. What no renderer knows how to draw (`:Shape :: [blob]`), a renderer reports, and draws with a fallback.
 
 ## Subjects and classes
 
@@ -614,7 +653,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** diagrams.
 | `:pen`                       | `[thin]` `[normal]` `[thick]`                                    | `[normal]`                                                                   |
 | `:bend`                      | `[outer]` `[inner]`, or an angle: `[30]` outward, `[30!]` inward | none: straight                                                               |
 | `:label-start`, `:label-end` | text, math                                                       | none                                                                         |
-| `:label-at`                  | `[start]` `[mid]` `[end]`, or a fraction                         | `[mid]`                                                                      |
+| `:label-at`                  | `[start]` `[center]` `[end]`, or a fraction                      | `[center]`                                                                   |
 | `:side`                      | `[outer]` `[inner]` `[on]`                                       | `[outer]`                                                                    |
 | `:shorten`                   | length                                                           | none                                                                         |
 
@@ -629,7 +668,7 @@ An edge has no `:line`: its line is part of `:arrow`.
 | `:stroke`                   | colour                                               | none: an unframed cluster                           |
 | `:pen`, `:line`, `:padding` | as for nodes                                         |                                                     |
 | `:caption`                  | text, math                                           | none                                                |
-| `:theme`                    | theme names, applied left to right: `[dark,compact]` | none: the base theme alone                          |
+| `:theme`                    | theme names, applied left to right: `[dark/compact]` | none: the base theme alone                          |
 | `:marks`                    | `[all]` `[none]`                                     | `[all]`: draw marks from the proof layer, such as ⌟ |
 | `:cross`                    | `[gap]` `[plain]`                                    | `[gap]`                                             |
 
@@ -649,7 +688,7 @@ A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are a
 
 ### Arrows
 
-An arrow is three fields: `[tail/line/head]`. The ends are symbolic glyphs, the line is a word. `tail` and `head` may be empty; `line` is required. The arrow only draws: the edge's direction always comes from the relations.
+An arrow is a tuple of three fields, `[tail/line/head]`: `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`. The ends are symbols, the line is a word. Any field may be empty, meaning nothing there: `[/solid/>]` has no tail, `[>//>]` no line. The arrow only draws: the edge's direction always comes from the relations.
 
 **Lines** use the words of `:line`, plus `triple`: `solid`, `dashed`, `dotted`, `wavy`, `double` (2-cells, ⇒), `triple` (3-cells, ⇛), `none`. A `!` suffix strikes the line: `[/solid!/>]` is ↛, "does not".
 
@@ -720,16 +759,16 @@ The prelude names the common arrows: `[mono]`, `[epi]`, `[incl]`, `[mapsto]`, `[
 
 ### Themes
 
-A theme is a named style (see Values and definitions). Styles compose in layers, the later winning wherever both set a value:
+A theme is a named record of subjects and tokens (see Values and definitions): `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. Styles compose in layers, the later winning wherever both set a value:
 
 ```
-base  <  themes, left to right  <  the program's own bindings
+computed  <  [base]  <  themes, left to right  <  the program's own bindings
 ```
 
-- **The base theme always applies.** It binds every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it.
-- **"Each binding once" holds within a layer;** across layers, the later one wins, deliberately and in order.
-- **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme := [dark,compact]`.
-- **Theme tokens** are colour names whose value the theme decides: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`.
+- **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it.
+- **"Each binding once" holds within a layer;** across layers, the later one wins, deliberately and in order. A flag set by one layer is turned off by a later one with `!`: `f :hide!`.
+- **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme := [dark/compact]`.
+- **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some: `[ink] [#dddddd]`.
 
 ## Place layer
 
@@ -878,23 +917,29 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 
 ### Definitions and values
 
-| Error                               | Example                       | Why                                                          |
-| ----------------------------------- | ----------------------------- | ------------------------------------------------------------ |
-| Undefined name                      | `:ink [wran]`                 | Every name is defined before its use                         |
-| Name defined twice                  | `[red] := …` twice            | Each name is defined once                                    |
-| Built-in redefined                  | `[epi] := …`                  | The prelude's names are fixed                                |
-| Uppercase name                      | `[Warn]`                      | Names start with a lowercase letter                          |
-| Bare value                          | `:width 2`                    | Values are written `"…"`, `$…$` or `[…]`                     |
-| Space inside brackets               | `[0..* / 1]`                  | A bracket is one token                                       |
-| Negative number                     | `[-30]`                       | Numbers are never negative; for the inner side write `[30!]` |
-| Value in a declaration              | `+(g1, [f], g2)`              | Brackets are values only                                     |
-| Wrong type                          | `:shape [red]`                | A colour where a shape is expected                           |
-| Flag given a value, value missing   | `:hide [on]`, `:shape`        | Flags take no value; other attributes need one               |
-| Binding made twice in a layer       | `#Done :shape` twice          | Each (subject, attribute) pair is bound once                 |
-| Definition at an undeclared subject | `G :style := …` before `G ::` | A definition comes after what it talks about                 |
-| Unknown class                       | `&nodes`                      | Classes are built in, or defined                             |
-| Theme and bundle mixed up           | a bundle in `:theme`          | A theme holds subjects; a bundle holds attributes            |
-| Attributes side by side             | `f :label "x" :bend [inner]` | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }` |
+| Error                               | Example                                  | Why                                                                                  |
+| ----------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| Undefined name                      | `:ink [wran]`                            | Every name is defined before its use                                                 |
+| Name defined twice                  | `[red] := …` twice, `[epi] := …`         | Each name is defined once; the prelude's come first                                  |
+| Label in two types                  | `:Bow :: [outer]` after `:Facing`        | A label belongs to one type; shared words get a type of their own                    |
+| Not a type                          | `:Colour [x] := …`                       | Types are declared or aliased before their use                                       |
+| Contract broken                     | `:Color [warn] := [circle]`              | A type written in a definition is checked                                            |
+| Uppercase name                      | `[Warn]`                                 | Names start with a lowercase letter; a symbol has at most one capital, and no letter after it |
+| Bare value                          | `:width 2`                               | Values are written `"…"`, `$…$`, `[…]` or `{ … }`                                     |
+| Space inside brackets               | `[0..* / 1]`                             | A bracket is one token                                                               |
+| Negative number                     | `[-30]`                                  | Numbers are never negative; for the inner side write `[30!]`                         |
+| Number malformed                    | `[.5]`, `[1.]`, 19 significant digits    | A number is digits, with digits on both sides of a point                             |
+| Value in a term                     | `+(g1, [f], g2)`                         | Brackets are values, never structure                                                 |
+| Wrong type                          | `:shape [red]`, `:theme [terminal]`      | A `:Color` where a `:Shape` is expected                                              |
+| Does not apply                      | `f :shape [box]`                         | An attribute applies to the classes its signature names                              |
+| Value given to a flag, value missing | `:hide [on]`, `:shape`                  | Flags take no value; other attributes need one                                       |
+| Only a flag inverts                 | `:fill!`, `:terminal!`                   | `!` after an attribute turns a flag off                                              |
+| Key of the wrong type               | `[ink] [circle]` in a record             | A label binds a value of its own type                                                |
+| Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; its keys are attributes                     |
+| Binding made twice in a layer       | `#Done :shape` twice                     | Each (subject, attribute) pair is bound once                                         |
+| Definition at an undeclared subject | `G :style := …` before `G ::`            | A definition comes after what it talks about                                         |
+| Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
+| Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |
 
 ### Style
 
@@ -1137,7 +1182,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 **Structure**
 
-- **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
+- **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures; labels and signatures declare vocabulary, not structure. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
 - **The header.** Which attributes (`:kind`, boundary) and what each changes. `:kind` is one attribute, the same in the header and in the proof, where it wins (Coming, Restrictions and passes).
 - **Diagram composition.** How one diagram is used inside another, through its boundary.
 - **What a flow could draw of its cells,** if anything, and how many levels stay readable.
@@ -1150,7 +1195,8 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 - **Equal-specificity overlaps.** When two classes of equal specificity (`&choice` and `&canonical`) set the same attribute: an error, or a fixed precedence.
 - **The fallback for `[outer]`** on a lone edge that borders no region.
-- **The prelude's contents:** colour names, keyword lists, named arrows, built-in themes.
+- **The prelude's contents** beyond the draft in `prelude.fab`: more colour names and themes, and whether `[base]`'s sizes are right.
+- **A renderer's fallback per type,** for a label or an attribute it cannot draw.
 - **Styling nested diagrams from outside,** which the current rule forbids.
 
 **Place**
