@@ -397,7 +397,7 @@ A database schema is a category presented by a graph and path equations, as in c
 | Referenced key | `:refs` on a foreign key and a key of its target: the key it references, if not the `:pk` |
 | Constraint  | A path equation                                                                           |
 
-- **A schema is a header kind:** `Db :kind := [schema]`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
+- **A schema is a kind:** `Db :prove := { :kind [schema], … }`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
 - **A foreign key is one edge.** It is both the relationship, used in paths and equations, and the column that stores it. The column's type is the type of the target's `:pk`, so it is never written and cannot mismatch. Name foreign keys as relationships (`parent`, `author`); the column takes its name from the edge (see the foreign-key row under Style layer, Diagrams).
 - **No forward references between tables.** Tables never refer to each other, and hold only their own columns; every foreign key lives in the diagram that joins them, declared after them. Circular foreign keys are two edges there, and a self-reference is a loop on one cluster.
 - **One scope for foreign keys.** Edge names are local to their diagram, so the foreign keys of one schema share its scope: two tables cannot both have an edge `author`. Choose another name and give the column its name with `:label`.
@@ -437,6 +437,8 @@ Eq  :: +(f, g)+ | f/α/g/β                  // α : f ⇒ g and β : g ⇒ f
 Vc  :: +(f, g, h)+ | f/α/g, g/β/h          // α then β: vertical composition
 Vs  :: +(f, g, h)+ | f/α g/β/h             // the same, with a space
 Mod :: +(f, g)+ | f/(α, β)/g | α/m/β       // two 2-cells and a modification
+Id  :: #A/f/#A | f/α/#A                    // α : f ⇒ 1_A, a side from a lower level
+Ud  :: #A/f/#B/, #B/g/#A | f/α/g           // a cell on an undirected edge
 ```
 
 **Composites as sources.** A 2-cell whose source is a composite, such as α : f h ⇒ g, cannot be written directly, since sides are named. The composite is named first at level 1, and the proof layer states that it is the composite:
@@ -1026,9 +1028,9 @@ Db :: {
   Tagging/(doc/Document, tag/Tag)
 }
 
-Db :kind := [schema]
-
 Db :prove := {
+  :kind [schema],
+
   &node.id :pk,
   &edge :card [0..*/1],
 

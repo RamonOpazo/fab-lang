@@ -17,9 +17,9 @@ Db :: {
   Tagging/(doc/Document, tag/Tag)
 }
 
-Db :kind := [schema]
-
 Db :prove := {
+  :kind [schema],
+
   &node.id :pk,
   &edge :card [0..*/1],
 
