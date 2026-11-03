@@ -640,7 +640,7 @@ Revises section 3 for the implementation of levels (plan step 7).
 Revises 16.1 (plan step 7d). The principle: the analyser describes the largest structure that still has a reading, and restrictions narrow it (section 17). Full freedom has no structure to draw; full strictness is a small set of shapes. fAB sits between them.
 
 - **A side may come from any lower level.** At level k, a name of level j < k−1 stands for its identity at level k−1: every cell x has an identity 1_x one level up, so this is plain category theory, not a relaxation. `#A/f/#A | f/α/#A` is α : f ⇒ 1_A; `+(f, g)+ | f/(α, β)/g | α/m/f` is m : α ⇛ 1_f. Named nodes and `@` are level 0, so they are sides at every level above 1. `*`, `?`, `!` and other diagrams' nodes are still not cells.
-- **Side from the wrong level** narrows to a side of level k or above: a cell cannot be bounded by a cell of its own level or higher.
+- **Side from the wrong level goes.** Levels are read in order, so a name of level k or above is a cell of this level, and using it again is *declared twice*, as at level 1. A named node or `@` not made at level 1 is *side not declared*: only level 1 makes nodes.
 - **Parallel uses the identities' boundaries.** 1_x has source x and target x, so α : f ⇒ 1_A needs f : A → A, and m : α ⇛ 1_f needs α : f ⇒ f. A non-parallel cell stays an error: parallelism is what makes a cell a cell, while a direction is only a property of a side.
 - **Undirected sides are allowed.** An undirected edge relates two nodes in no order, so a cell on it is parallel when the endpoints agree as an unordered pair: undirected f between A and B is parallel to g : B → A. Lifts the reserved row *cell on an undirected edge*.
 - **Undirected cells are allowed,** spelled as at level 1: a trailing `/` ends a chain of one cell, `f/α/g/`. A cell is its own way back. `f/α/` alone still lacks a side (unnamed side).
@@ -656,7 +656,7 @@ Revises 16.1 (plan step 7d). The principle: the analyser describes the largest s
 Planned with the proof shells (plan step 11); nothing here is implemented. Revises the open question on the header's errors by kind.
 
 - **The analyser describes, restrictions narrow.** Declarations accept every structure with a reading (16.3). A restriction turns some of them into findings: the kind states what the graph is proved against, and the proof layer narrows further.
-- **The kind is stated in the proof:** `G :prove := { G :kind [cd], … }`. A proof is like a paper about the relations declared: it says what kind of thing they are, and that one statement decides three things, so no second attribute is needed: the kind of graph (what is drawn), the proofs that may be posited (which attributes the proof layer accepts), and which structures are promoted to findings. The same attribute may be given at the header, `G :kind := [cd]`, with the same name; the local one, in the proof, wins. The header comes late (it needs a stable CLI), so the proof's `:kind` is the one implemented first.
+- **The kind is stated in the proof:** `G :prove := { :kind [cd], … }`. An entry with no subject binds the block's owner (1.3), so this is `G :kind`; `@` would be G's own node, and a class for the diagram itself (`&self`) would say again what the empty subject says. A proof is like a paper about the relations declared: it says what kind of thing they are, and that one statement decides three things, so no second attribute is needed: the kind of graph (what is drawn), the proofs that may be posited (which attributes the proof layer accepts), and which structures are promoted to findings. The same attribute may be given at the header, `G :kind := [cd]`, with the same name; the local one, in the proof, wins. The header comes late (it needs a stable CLI), so the proof's `:kind` is the one implemented first.
 - **No kind, no restrictions.** A diagram without a `:kind` is a plain graph: everything declared is drawn, and nothing becomes a finding.
 - **Findings are classed by reason, and the reason sets the severity.** A restriction never chooses a severity; it chooses the reason, so a pass written against a reason never breaks when severities move.
 
@@ -665,13 +665,13 @@ Planned with the proof shells (plan step 11); nothing here is implemented. Revis
 | `&refutable` | the structure contradicts the kind's rules, so the proof must take it as false (an undirected cell in a category) | error |
 | `&undecidable` | the structure has no check in the kind, because it does not belong to it: neither provable nor refutable there | warning |
 
-- **Narrower classes name the structure,** one per finding, beneath its reason: `&undirected-cell`, `&undirected-side`, and so on. The general and the specific live together, by the style layer's specificity: reason, structure, then one element.
+- **Narrower classes name the structure,** one per finding, beneath its reason: `&undirected_cell`, `&undirected_side`, and so on. The general and the specific live together, by the style layer's specificity: reason, structure, then one element.
 - **`:pass` acknowledges a finding,** with an optional literal for the reason:
 
   ```
   G :prove := {
-    G :kind [cd],
-    &undirected-side :pass,
+    :kind [cd],
+    &undirected_side :pass,
     α :pass "a relation, not a morphism",
     &undecidable :pass
   }
