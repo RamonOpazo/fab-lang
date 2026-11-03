@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -156,8 +156,11 @@ Then **issues**: an error with a subject (a hole, an edge, a node) is written to
 Done when every level-1 relations case passes.
 
 **6. IR, JSON and renderer for level 1; examples.**
-- The IR carries undirected edges, null nodes split into `&start` and `&end`, and holes; `emit/json.zig` follows it.
+- The IR carries undirected edges, null nodes and holes; `emit/json.zig` follows it. `&start` and `&end` are derived by the style pass, not stored (`statements.md` §18).
 - fab-render draws undirected edges without heads, and starts, ends, choices and bars by kind default.
+- Issues are drawn (§15.3, §18): marks on their elements, applied last; each diagram's border in its worst severity; placeholders as a square with ╳; the "unsupported" label. `Compilation.sheet()` hands the style pass one severity per issue; error, warning and unsupported are theme tokens.
+- In increments: **6a** the fab-render and fab-cli tests in the new syntax, with the two cell tests back; **6b** drawing issues; **6c** the examples.
+- Graphviz is a convenience: correct structure, reasonable looks, no layout tuning. The real renderers are native and TikZ.
 - Every file in `examples/` compiles, and its relations draw; styling may still be reported as not applied.
 
 Done when `fab render` draws every example and the JSON tests pass.

@@ -683,3 +683,23 @@ Planned with the proof shells (plan step 11); nothing here is implemented. Revis
 
 **Rejected.** `&unprovable` for the error class: in logic it includes the undecidable too, while *refutable* says exactly "provably false". `:env` beside `:kind`: two names for what the graph is. `&errors` and `&warnings` as classes: they name how loud a finding is, which depends on the restriction, and `&errors :pass` would reach language errors too.
 
+## 18. Drawing issues, and the renderers, 2026-11-03
+
+How 15.3 is drawn (plan step 6).
+
+### 18.1 Decided
+
+- **Starts and ends are told apart in the style pass, not the IR.** The IR has one kind, the null node; `&start` and `&end` are classes, derived from the edges: a null node an edge arrives at is an end, any other a start. The IR already says which way each edge goes, so a kind would state it twice, and `*/f/` (an undirected edge) has neither: the style pass draws it as it likes. A JSON reader derives it with the same rule.
+- **Severities reach the style pass as a list, one per issue.** The IR does not know the tolerance: under `--strict` a warning is promoted, and its border turns red. `Compilation.sheet()` computes the severities and hands them to the style pass beside the IR, so the style pass stays a function of both, testable without compiling, and `format/` does not depend on `compile/`.
+- **Marks always win.** They are applied last, over kind defaults, themes and the program's style. An issue has no name in fAB, so no program can address, restyle or hide one: `g :stroke [green]` on an edge marked by an error is drawn in the error's colour, and `:stroke [none]` on a broken diagram keeps its border. What can change is the theme token for each severity.
+- **Severity colours are theme tokens** shared by every backend: error, warning, unsupported.
+- **A placeholder in DOT is a square with the glyph ╳,** in its border's colour. Graphviz has no square crossed corner to corner; the native renderer draws the exact shape.
+- **Graphviz is a convenience.** The renderers that matter are fAB's own, native and TikZ, which come later and draw what the spec describes. The Graphviz backend should look reasonable and be correct about structure, but its layout (askew graphs, odd curves) is not worth tuning: effort goes into the IR, the style pass and the native renderer.
+
+### 18.2 Rejected
+
+- `&start` and `&end` as IR kinds: a derived fact stored twice, and undefined on undirected edges.
+- The style pass reading the `Compilation`: a dependency upward, and tests that need a whole compilation.
+- Letting the program style marks: an error could be painted over.
+- Graphviz's `Msquare` for the placeholder (its corners are cut, not crossed), and an HTML label drawing the cross (fragile across Graphviz versions).
+
