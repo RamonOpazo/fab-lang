@@ -2,9 +2,10 @@
 //! `?`, `!`, a marker on a single edge) or edges (everything else).
 //!
 //! At level 1 the shape alone says which. Above it, a lowercase name is read
-//! from the diagram's table: a cell of the level below is a side, which
-//! stands where a named node stands at level 1, and any other is a cell of
-//! this level, an edge one dimension up (spec, Levels).
+//! from the diagram's table: a cell of a lower level is a side, which stands
+//! where a named node stands at level 1 (one more than one level down stands
+//! for its identity), and any other is a cell of this level, an edge one
+//! dimension up (spec, Levels). Named nodes and `@` are sides there too.
 
 const Token = @import("../lex/Token.zig");
 const Cst = @import("../parse/Cst.zig");
@@ -56,11 +57,11 @@ pub fn isPinchedEdge(a: *const Analyser, node: Node.Index) bool {
     };
 }
 
-/// Above level 1, a name of the level just below: a side.
+/// Above level 1, a name of a lower level: a side.
 pub fn isSide(a: *const Analyser, token: Cst.TokenIndex) bool {
     if (a.scope.level == 1) return false;
     const name = a.scope.table.get(a.cst.tokenText(token)) orelse return false;
-    return name.level + 1 == a.scope.level;
+    return name.level < a.scope.level;
 }
 
 pub fn isLeaf(cst: *const Cst, node: Node.Index, tag: Token.Tag) bool {

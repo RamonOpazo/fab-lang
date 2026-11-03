@@ -63,8 +63,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 3    | Lexer                                     | done    |
 | 4    | Parser and CST                            | done    |
 | 5    | Analyser: level 1                         | done    |
-| 6    | IR, JSON, renderer for level 1; examples  |         |
-| 7    | Levels (before 6)                         | 7d next |
+| 6    | IR, JSON, renderer for level 1; examples  | next    |
+| 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    |         |
 | 9    | Style layer                               |         |
 | 10   | Renderer: style, arrows, themes           |         |
@@ -170,7 +170,7 @@ Level k is level 1 one dimension up (`statements.md` §16). Each zone keeps one 
 - **7a.** The IR's `Cell` generalises to level k: `level`, and source and target in level k−1 (edges at level 2, cells above); the dump and JSON follow. The table of names. `sort.of` takes the level and the table. The driver checks every level; until 7b their new names only enter the table, and `unsupported_levels` stays, as "checked, not drawn". Rows: not a cell, pinch above level 1, side from the wrong level.
 - **7b.** Elaborating cells with rules 2–5: attachment, cycles, distribution, a space landing on a named side (`f/α g/β/h`). Rows: unnamed side, two names for one side, undirected cell, path as a side, a cell declared twice, a level inside a block. `unsupported_levels` goes.
 - **7c.** Parallel cells, checked in `graph()` once level 1 is final (a later diagram can merge nodes). A non-parallel cell is kept and marked; a cell whose sides failed is dropped, its error on the zone. The corpus: the level rows and the spec's examples (Nat, Eq, Vc, Vs, Mod).
-- **7d.** Identity and undirected sides (`statements.md` §16.3). A side may come from any lower level and stands for its identity, whose source and target are itself; side from the wrong level narrows to level k or above. Cells may lie on undirected edges, parallel when the endpoints agree as an unordered pair, and may be undirected (`f/α/g/`). The IR's `Side` gains `node`, and cells keep their direction. Rows: `#A/f/#A | f/α/#A`, `α/m/f`, a non-parallel identity side, an undirected square, an undirected cell; `undirected_cell` and `cell_on_undirected_edge` go. Nothing is flagged yet: restrictions come with the proof shells.
+- **7d.** Identity and undirected sides (`statements.md` §16.3). A side may come from any lower level and stands for its identity, whose source and target are itself; side from the wrong level goes (a name of level k is declared twice), and a named node not made at level 1 is *side not declared*. Cells may lie on undirected edges, parallel when the endpoints agree as an unordered pair, and may be undirected (`f/α/g/`). The IR's `Side` gains `node`, and cells keep their direction. Rows: `#A/f/#A | f/α/#A`, `α/m/f`, a non-parallel identity side, an undirected square, an undirected cell; `undirected_cell`, `cell_on_undirected_edge` and `side_from_wrong_level` go. Nothing is flagged yet: restrictions come with the proof shells.
 
 A flow draws no cells but declares them as any diagram does: there is no "cells in flow mode" error. The header waits until fab-core is complete. fab-render's "cells are left out, with one note each" and fab-cli's "notes follow the diagnostics, and never change the exit code" come back with step 6.
 

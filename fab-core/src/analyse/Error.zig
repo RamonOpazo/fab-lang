@@ -131,14 +131,14 @@ pub const Tag = enum(u8) {
 
     // -- levels (rule 1, one dimension up) ------------------------------------
 
-    /// `+(f, g)+ | f/#A`, `f/*`, `A.α`: above level 1, every name is a cell.
+    /// `f/α/*`, `f/α/?`, `f/α/A.#X`: above level 1, a side is a name of a
+    /// lower level, and these are level 1 only.
     not_a_cell,
+    /// `+(f, g)+ | f/α/#B`: a named node is a side above level 1, and only
+    /// level 1 makes nodes.
+    side_not_declared,
     /// `+(α, β)`, `+α/β/g` at level 2: sides are named, nothing to pinch.
     pinch_above_level_one,
-    /// `α/m/f` at level 3: f is a 1-cell, and level 3 relates 2-cells.
-    side_from_wrong_level,
-    /// `f/α/` at level 2.
-    undirected_cell,
     /// `(f h)/α/g` at level 2: two sides side by side.
     path_as_side,
     /// `G :: f, { g | α }`: braces inside a body hold no levels.
@@ -157,8 +157,6 @@ pub const Tag = enum(u8) {
 
     /// `#User :: @/(id, name)`, `review :: a b`.
     reserved_node_or_edge_declaration,
-    /// `+(f/, g/)+ | f/α/g`: parallel, without a direction.
-    cell_on_undirected_edge,
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 

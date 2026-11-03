@@ -34,23 +34,24 @@ pub fn items(a: *Analyser, node: Node.Index, place: Place) error{OutOfMemory}!vo
     }
 }
 
-/// Above level 1 every name is a cell (spec, Levels). Named nodes, `@`, `*`,
-/// kinds and other diagrams are level 1 only; sides are named, so there is
-/// nothing to pinch; and a side is a cell of the level just below. Each one
-/// found fails its own term. Whether there were none.
+/// Above level 1 every name is a cell or a side of a lower level (spec,
+/// Levels). `*`, kinds, diagram names and other diagrams are level 1 only,
+/// and sides are named, so there is nothing to pinch. Each one found fails
+/// its own term. Whether there were none.
 fn cellsOnly(a: *Analyser, node: Node.Index) error{OutOfMemory}!bool {
     const cst = a.cst;
     const main = cst.mainToken(node);
     switch (cst.tag(node)) {
         .leaf => switch (cst.tokenTag(main)) {
-            .node_id, .zone_id, .at, .star, .quid, .bang => {
+            .zone_id, .star, .quid, .bang => {
                 try a.failTerm(.not_a_cell, node, main);
                 return false;
             },
-            .edge_id => {
-                const name = a.scope.table.get(cst.tokenText(main)) orelse return true;
-                if (name.level + 1 >= a.scope.level) return true;
-                try a.failTerm(.side_from_wrong_level, node, main);
+            // Only level 1 makes nodes: above it a named node is a side.
+            .node_id, .at => {
+                const key = if (cst.tokenTag(main) == .at) "@" else cst.tokenText(main);
+                if (a.scope.table.contains(key)) return true;
+                try a.failTerm(.side_not_declared, node, main);
                 return false;
             },
             // Values and classes are rule 0's.
@@ -67,11 +68,6 @@ fn cellsOnly(a: *Analyser, node: Node.Index) error{OutOfMemory}!bool {
             },
             .quid, .bang => {
                 try a.failTerm(.not_a_cell, node, main);
-                return false;
-            },
-            // A trailing `/`: a cell always has a direction.
-            .slash => {
-                try a.failTerm(.undirected_cell, node, main);
                 return false;
             },
             else => return cellsOnly(a, cst.data(node).node),

@@ -50,9 +50,10 @@ test "two zones sharing a node, a 2-cell and a 3-cell" {
     const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = n0, .target = n1, .directed = true, .zone = a });
     const g = try b.addEdge(.{ .name = try b.addString("g"), .source = n0, .target = n1, .directed = true, .zone = a });
-    const alpha = try b.addCell(.{ .name = try b.addString("α"), .level = 2, .source = @backingInt(f), .target = @backingInt(g), .zone = a });
-    const beta = try b.addCell(.{ .name = try b.addString("β"), .level = 2, .source = @backingInt(f), .target = @backingInt(g), .zone = a });
-    _ = try b.addCell(.{ .name = try b.addString("m"), .level = 3, .source = @backingInt(alpha), .target = @backingInt(beta), .zone = a });
+    const alpha = try b.addCell(.{ .name = try b.addString("α"), .level = 2, .source = .{ .edge = f }, .target = .{ .edge = g }, .directed = true, .zone = a });
+    const beta = try b.addCell(.{ .name = try b.addString("β"), .level = 2, .source = .{ .edge = f }, .target = .{ .edge = g }, .directed = false, .zone = a });
+    _ = try b.addCell(.{ .name = try b.addString("m"), .level = 3, .source = .{ .cell = alpha }, .target = .{ .cell = beta }, .directed = true, .zone = a });
+    _ = try b.addCell(.{ .name = try b.addString("ι"), .level = 2, .source = .{ .edge = f }, .target = .{ .node = n0 }, .directed = true, .zone = a });
 
     const zb = try b.addZone(.{ .name = try b.addString("B"), .own = null });
     const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = zb, .canonical = .{ .edge = @fromBackingInt(@intCast(2)), .side = .dom } });
@@ -69,8 +70,9 @@ test "two zones sharing a node, a 2-cell and a 3-cell" {
         \\  edge f n0 -> n1
         \\  edge g n0 -> n1
         \\  cell α f => g
-        \\  cell β f => g
+        \\  cell β f == g
         \\  cell m α => β level 3
+        \\  cell ι f => n0
         \\zone B
         \\  node n2 canon +h
         \\  edge h n2 -> n1

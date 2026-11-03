@@ -202,16 +202,41 @@ test "above level 1 a name of the level below is a side, and a new one a cell" {
 }
 
 test "each term that is not a cell is reported, and the rest of its item is not looked into" {
-    try expectTags("G :: +(f, g)+ | f/#A/g, (*, ?)/α, @, +α", &.{
-        .not_a_cell, .not_a_cell, .not_a_cell, .not_a_cell, .pinch_above_level_one,
+    try expectTags("G :: +(f, g)+ | f/α/*, (*, ?)/β, +α", &.{
+        .not_a_cell, .not_a_cell, .not_a_cell, .pinch_above_level_one,
     });
 }
 
-test "a side two levels down is from the wrong level" {
-    var a = try analyse("G :: +(f, g)+ | f/(α, β)/g | α/m/f");
+test "a side of a lower level stands for its identity" {
+    // α : f ⇒ 1_A, and m : β ⇛ 1_f, with β : f ⇒ f.
+    try expectTags("G :: #A/f/#A | f/α/#A, f/β/f | β/m/f", &.{});
+    try expectTags("G :: @/f/@ | f/α/@", &.{});
+    // β : 1_A ⇒ 1_A, and m : β ⇛ 1_(1_A).
+    try expectGraph("G :: #A/f/#A | f/α/#A, #A/β/#A | β/m/#A",
+        \\zone G
+        \\  node n0 #A
+        \\  edge f n0 -> n0
+        \\  cell α f => n0
+        \\  cell β n0 => n0
+        \\  cell m β => n0 level 3
+        \\
+    );
+    // 1_A starts and ends at A, and f doesn't; α : f ⇒ g is not f ⇒ f.
+    try expectTags("G :: #A/f/#B | f/α/#A", &.{.cells_not_parallel});
+    try expectTags("G :: +(f, g)+ | f/(α, β)/g | α/m/f", &.{.cells_not_parallel});
+    // α : f ⇒ 1_A, but 1_(1_A) goes from 1_A to 1_A.
+    try expectTags("G :: #A/f/#A | f/α/#A | α/m/#A", &.{.cells_not_parallel});
+}
+
+test "only level 1 makes nodes" {
+    var a = try analyse("G :: +(f, g)+ | f/α/#B, @/β/g");
     defer a.deinit();
-    try testing.expectEqualSlices(Analyser.Error.Tag, &.{.side_from_wrong_level}, a.tags());
-    try testing.expectEqualStrings("f", a.cst.tokenText(a.result.errors[0].token));
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .side_not_declared, .side_not_declared }, a.tags());
+    try testing.expectEqualStrings("#B", a.cst.tokenText(a.result.errors[0].token));
+}
+
+test "a named node only a failed term held is quiet above" {
+    try expectTags("G :: (f/#A/g)/, +(h, k)+ | h/α/#A", &.{.undirected_not_one_edge});
 }
 
 test "unnamed sides are reported where two open ends meet, and at a cell left open" {
@@ -281,8 +306,25 @@ test "a cell above level 2 is checked on its own sides" {
     try expectTags("G :: +(f, g, h)+ | f/(α, β)/g, f/γ/h | α/m/β, α/n/γ", &.{.cells_not_parallel});
 }
 
-test "a cell on an undirected edge is reserved" {
-    try expectTags("U :: +(f/, g/)+ | f/α/g", &.{.cell_on_undirected_edge});
+test "an undirected side may be read either way" {
+    try expectTags("U :: +(f/, g/)+ | f/α/g", &.{});
+    try expectTags("U :: #A/f/#B/, #B/g/#A | f/α/g", &.{});
+    try expectTags("U :: #A/f/#B, #B/g/#A | f/α/g", &.{.cells_not_parallel});
+}
+
+test "a cell is undirected with a trailing slash on a chain of one cell" {
+    try expectGraph("G :: +(f, g)+ | f/α/g/, f/β/g",
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\  cell α f == g
+        \\  cell β f => g
+        \\
+    );
+    try expectTags("G :: +(f, g)+ | f/α/", &.{.unnamed_side});
+    try expectTags("G :: +(f, g)+ | f/α/g/β/", &.{.undirected_not_one_edge});
 }
 
 test "a cell declared twice keeps the first, and points back to it" {

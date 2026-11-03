@@ -33,8 +33,10 @@
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
 //!       "edges": [{"name": "f", "source": node, "target": node,
 //!                  "directed": true, "zone": zone}],
-//!       "cells": [{"name": "α", "level": 2, "source": edge or cell,
-//!                  "target": edge or cell, "zone": zone}],
+//!       "cells": [{"name": "α", "level": 2,
+//!                  "source": {"node" | "edge" | "cell": index},
+//!                  "target": {"node" | "edge" | "cell": index},
+//!                  "directed": true, "zone": zone}],
 //!       "issues": [{"subject": {"node" | "edge" | "cell" | "zone": index},
 //!                   "diagnostic": index into "diagnostics"}] }
 //!
@@ -168,10 +170,11 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"name\":");
         try string(w, ir.string(cell.name));
-        // At level 2 the sides are edges; above, cells of the level below.
-        try w.print(",\"level\":{d},\"source\":{d},\"target\":{d},\"zone\":{d}}}", .{
-            cell.level, cell.source, cell.target, @backingInt(cell.zone),
-        });
+        try w.print(",\"level\":{d},\"source\":", .{cell.level});
+        try side(w, cell.source);
+        try w.writeAll(",\"target\":");
+        try side(w, cell.target);
+        try w.print(",\"directed\":{},\"zone\":{d}}}", .{ cell.directed, @backingInt(cell.zone) });
     }
 
     try w.writeAll("],\"issues\":[");
@@ -187,6 +190,16 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         try w.print("{{\"subject\":{{\"{s}\":{d}}},\"diagnostic\":{d}}}", .{ kind, index, try c.diagnosticIndex(issue) });
     }
     try w.writeAll("]}");
+}
+
+/// A cell's side: `{"edge": 3}`.
+fn side(w: *Writer, s: Ir.Cell.Side) Writer.Error!void {
+    const kind, const index: u32 = switch (s) {
+        .node => |x| .{ "node", @backingInt(x) },
+        .edge => |x| .{ "edge", @backingInt(x) },
+        .cell => |x| .{ "cell", @backingInt(x) },
+    };
+    try w.print("{{\"{s}\":{d}}}", .{ kind, index });
 }
 
 fn optionalIndex(w: *Writer, index: anytype) Writer.Error!void {

@@ -1,5 +1,6 @@
-//! Elaboration above level 1 (plan step 7b): the cells of level k, between
-//! cells of level k−1 (spec, Levels; statements.md §16).
+//! Elaboration above level 1 (plan steps 7b, 7d): the cells of level k,
+//! between named cells of lower levels (spec, Levels; statements.md §16). A
+//! side of a level below k−1 stands for its identity; `parallel` reads it.
 //!
 //! Level k is level 1 one dimension up, with one difference: every side is
 //! named. Nothing glues ends later, since there are no pinches and no
@@ -13,16 +14,20 @@
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
+const Ir = @import("Ir.zig");
 const Analyser = @import("Analyser.zig");
 const sort = @import("sort.zig");
 
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
 
+/// A named cell of a lower level. A node is its union-find element until
+/// the graph is built, which makes it a node (`elaborate.graph`).
+const Side = Ir.Cell.Side;
+
 /// What a term exposes on one side.
 const Port = union(enum) {
-    /// A cell of the level below, by its IR index.
-    side: u32,
+    side: Side,
     /// One end of a cell of this level.
     slot: Slot,
     /// Part of a failed term: it meets anything, quietly.
@@ -32,13 +37,14 @@ const Port = union(enum) {
 const Slot = struct { cell: u32, end: enum { left, right } };
 
 /// What a slot holds.
-const Value = union(enum) { open, side: u32, failed };
+const Value = union(enum) { open, side: Side, failed };
 
 /// A cell of this level, until the level ends.
 const Cell = struct {
     token: TokenIndex,
     left: Value = .open,
     right: Value = .open,
+    directed: bool = true,
 };
 
 const Ports = struct {
@@ -83,11 +89,12 @@ pub fn level(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             .level = k,
             .source = cell.left.side,
             .target = cell.right.side,
+            .directed = cell.directed,
             .zone = a.zone(),
         });
         try a.cell_tokens.append(l.arena(), cell.token);
         i.* = @backingInt(c);
-        entry.* = .{ .level = k, .is = .{ .generator = .{ .index = i.*.?, .left = cell.left.side, .right = cell.right.side, .token = cell.token } } };
+        entry.* = .{ .level = k, .is = .{ .generator = .{ .index = i.*.?, .token = cell.token } } };
     }
     // A cell left out leaves its error on the diagram.
     for (l.marks.items) |m| {
@@ -124,9 +131,25 @@ fn term(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
         .group => group(l, cst.children(node)[0]),
         .o_chain => openChain(l, node),
         .c_chain => closedChain(l, node),
-        // Markers, other diagrams and the rest failed in rule 1.
+        .postfix => undirected(l, cst.data(node).node),
+        // Pinches, other diagrams and the rest failed in rule 1.
         else => failedTerm(l, node),
     };
+}
+
+/// A trailing `/` on a single cell, `α/`: a cell is its own way back. Rule 2
+/// failed it on anything else.
+fn undirected(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
+    const first = l.cells.items.len;
+    const p = try term(l, node);
+    undirect(l, first);
+    return p;
+}
+
+/// The one cell a term declared, from `first` on, is undirected. A name
+/// declared twice declares nothing, and keeps its first direction.
+fn undirect(l: *Level, first: usize) void {
+    if (l.cells.items.len == first + 1) l.cells.items[first].directed = false;
 }
 
 fn one(l: *Level, port: Port) error{OutOfMemory}!Ports {
@@ -136,17 +159,25 @@ fn one(l: *Level, port: Port) error{OutOfMemory}!Ports {
 }
 
 /// A side, or a new cell with two open ends. A name of this level declared
-/// again is a cell declared twice; a hole is quiet.
+/// again is a cell declared twice; a hole is quiet. Named nodes and `@` are
+/// sides of level 0, which rule 1 found in the table.
 fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const a = l.a;
     const cst = a.cst;
     const token = cst.mainToken(node);
-    if (cst.tokenTag(token) != .edge_id) return failedTerm(l, node);
-    const text = cst.tokenText(token);
-    if (sort.isSide(a, token)) return one(l, switch (a.scope.table.get(text).?.is) {
-        .generator => |g| .{ .side = g.index },
-        else => .failed,
-    });
+    const text = switch (cst.tokenTag(token)) {
+        .edge_id, .node_id => cst.tokenText(token),
+        .at => "@",
+        else => return failedTerm(l, node),
+    };
+    if (cst.tokenTag(token) != .edge_id or sort.isSide(a, token)) {
+        const name = a.scope.table.get(text).?;
+        return one(l, switch (name.is) {
+            .node => |e| .{ .side = .{ .node = @fromBackingInt(e) } },
+            .generator => |g| .{ .side = if (name.level == 1) .{ .edge = @fromBackingInt(g.index) } else .{ .cell = @fromBackingInt(g.index) } },
+            .hole => .failed,
+        });
+    }
 
     const gop = try a.scope.table.getOrPut(l.arena(), text);
     if (gop.found_existing) {
@@ -158,7 +189,7 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     }
     const i: u32 = @intCast(l.cells.items.len);
     try l.cells.append(l.arena(), .{ .token = token });
-    gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .generator = .{ .index = i, .left = undefined, .right = undefined, .token = token } } };
+    gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .generator = .{ .index = i, .token = token } } };
 
     const ports = try l.arena().alloc(Port, 2);
     ports[0] = .{ .slot = .{ .cell = i, .end = .left } };
@@ -224,12 +255,17 @@ fn closedChain(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const links = cst.children(node);
     const last = links.len - 1;
 
+    // A trailing `/` belongs to the whole chain: `f/α/g/` is undirected α.
+    const trailing = cst.tag(links[last]) == .postfix and cst.tokenTag(cst.mainToken(links[last])) == .slash;
     const ports = try l.arena().alloc(Ports, links.len);
+    const first = l.cells.items.len;
     var cells: usize = 0;
-    for (links, ports) |link, *p| {
-        p.* = try term(l, link);
-        if (sort.of(a, link) == .edges) cells += 1;
+    for (links, ports, 0..) |link, *p, i| {
+        const one_link = if (i == last and trailing) cst.data(link).node else link;
+        p.* = try term(l, one_link);
+        if (sort.of(a, one_link) == .edges) cells += 1;
     }
+    if (trailing and cells == 1) undirect(l, first);
     // `α/α`: a cell from its own target to its own source.
     if (links.len == 2 and cells == 2 and isSame(cst, links[0], links[1])) {
         try slash(l, ports[0].right, ports[0].left, cst.lastToken(links[0]) + 1);
@@ -238,7 +274,8 @@ fn closedChain(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     for (ports[0..last], ports[1..], links[0..last]) |left, right, link| try slash(l, left.right, right.left, cst.lastToken(link) + 1);
     if (cells > 1) {
         const token = cst.lastToken(links[last - 1]) + 1;
-        if (sort.of(a, links[last]) == .node and !closes(l, ports[last].right, ports[0].left)) {
+        const end = if (trailing) cst.data(links[last]).node else links[last];
+        if (sort.of(a, end) == .node and !closes(l, ports[last].right, ports[0].left)) {
             try a.fail(.cycle_does_not_close, cst.firstToken(links[last]));
         } else try slash(l, ports[last].right, ports[0].left, token);
         return .{ .left = ports[0].left, .right = &.{} };
@@ -258,7 +295,7 @@ fn closes(l: *Level, end: []const Port, start: []const Port) bool {
     const e = value(l, end[0]);
     const s = value(l, start[0]);
     if (e != .side or s != .side) return true;
-    return e.side == s.side;
+    return std.meta.eql(e.side, s.side);
 }
 
 /// One side of a `/` is one port, meeting every port on the other. Anything
@@ -288,7 +325,7 @@ fn meet(l: *Level, x: Port, y: Port, token: TokenIndex, mark: ?u32) error{OutOfM
         slotOf(l, x).* = vy;
     } else if (vy == .open) {
         slotOf(l, y).* = vx;
-    } else if (vx.side != vy.side) {
+    } else if (!std.meta.eql(vx.side, vy.side)) {
         if (mark) |cell| try l.marks.append(l.arena(), .{ .err = @intCast(l.a.errors.items.len), .cell = cell });
         try l.a.fail(.two_names_for_one_side, token);
     }

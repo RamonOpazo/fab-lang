@@ -85,22 +85,20 @@ pub const Edge = struct {
     zone: ZoneIndex,
 };
 
-/// A cell of level k ≥ 2 between two parallel cells of level k−1: `f/α/g`
-/// at level 2 is α : f ⇒ g. Its sides are edges at level 2, and cells of
-/// level k−1 above it (`sides`).
+/// A cell of level k ≥ 2 between two parallel cells of lower levels: `f/α/g`
+/// at level 2 is α : f ⇒ g. A side of level k−1 is itself; a side of a
+/// lower level stands for its identity at level k−1 (`#A/f/#A | f/α/#A` is
+/// α : f ⇒ 1_A). Undirected like an edge, with a trailing `/`.
 pub const Cell = struct {
     name: String,
     level: u32,
-    source: u32,
-    target: u32,
+    source: Side,
+    target: Side,
+    directed: bool,
     zone: ZoneIndex,
 
-    pub const Side = union(enum) { edge: EdgeIndex, cell: CellIndex };
-
-    pub fn sides(cell: Cell) [2]Side {
-        if (cell.level == 2) return .{ .{ .edge = @fromBackingInt(cell.source) }, .{ .edge = @fromBackingInt(cell.target) } };
-        return .{ .{ .cell = @fromBackingInt(cell.source) }, .{ .cell = @fromBackingInt(cell.target) } };
-    }
+    /// A named node (level 0), an edge (level 1) or a cell.
+    pub const Side = union(enum) { node: NodeIndex, edge: EdgeIndex, cell: CellIndex };
 };
 
 /// Any element of the graph.
@@ -216,6 +214,8 @@ pub const Builder = struct {
 //     edge g n1 -- n2          undirected
 //     cell α f => g            a 2-cell between edges
 //     cell m α => β level 3    above, between cells
+//     cell α f => n0           a side of a lower level, as its identity
+//     cell α f == g            undirected
 //   issue e0 node n1           analysis error 0 marks node n1
 //   issue s0 zone G            syntax error 0 marks zone G
 
@@ -248,8 +248,12 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
         for (0..ir.cells.len) |c| {
             const cell = ir.cells.get(c);
             if (@backingInt(cell.zone) != z) continue;
-            const source, const target = cell.sides();
-            try w.print("  cell {s} {s} => {s}", .{ ir.string(cell.name), ir.sideName(source), ir.sideName(target) });
+            try w.print("  cell {s} {f} {s} {f}", .{
+                ir.string(cell.name),
+                ir.sideText(cell.source),
+                if (cell.directed) "=>" else "==",
+                ir.sideText(cell.target),
+            });
             if (cell.level > 2) try w.print(" level {d}", .{cell.level});
             try w.writeAll("\n");
         }
@@ -273,12 +277,26 @@ fn edgeName(ir: Ir, e: EdgeIndex) []const u8 {
     return ir.string(ir.edges.items(.name)[@backingInt(e)]);
 }
 
-fn sideName(ir: Ir, side: Cell.Side) []const u8 {
+/// A node side as its node, `n3`; an edge or a cell by its name.
+fn sideText(ir: Ir, side: Cell.Side) SideText {
     return switch (side) {
-        .edge => |e| ir.edgeName(e),
-        .cell => |c| ir.string(ir.cells.items(.name)[@backingInt(c)]),
+        .node => |n| .{ .node = @backingInt(n) },
+        .edge => |e| .{ .name = ir.edgeName(e) },
+        .cell => |c| .{ .name = ir.string(ir.cells.items(.name)[@backingInt(c)]) },
     };
 }
+
+const SideText = union(enum) {
+    node: u32,
+    name: []const u8,
+
+    pub fn format(self: SideText, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        switch (self) {
+            .node => |n| try w.print("n{d}", .{n}),
+            .name => |s| try w.writeAll(s),
+        }
+    }
+};
 
 /// `+f` for a domain, `f+` for a codomain, as the format layer writes them.
 fn endText(ir: Ir, end: End) EndText {

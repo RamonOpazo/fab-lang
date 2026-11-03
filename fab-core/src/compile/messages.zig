@@ -346,18 +346,18 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .not_a_cell => .{
             .message = "{} is not a cell",
-            .explanation = "Above level 1, a diagram declares cells between the cells of the level below. Named nodes, `@`, `*`, `?`, `!` and other diagrams' nodes belong to level 1.",
-            .hint = "Attach the cell to cells of the level below: `f/α/g`.",
+            .explanation = "Above level 1, a diagram declares cells between named cells of lower levels. `*`, `?`, `!` and other diagrams' nodes belong to level 1.",
+            .hint = "Attach the cell to cells of a lower level: `f/α/g`.",
+        },
+        .side_not_declared => .{
+            .message = "{} is not a node of this diagram",
+            .explanation = "Above level 1, a named node is a side: it stands for its identity. Only level 1 makes nodes, so the node must be there first.",
+            .hint = "Use the node at level 1: `#A/f/#A | f/α/#A`.",
         },
         .pinch_above_level_one => .{
             .message = "Nothing to pinch above level 1",
             .explanation = "A pinch merges unnamed ends into one node. Above level 1 every side is a named cell, so there are no unnamed ends to merge.",
             .hint = "Attach the cells to their sides: `f/(α, β)/g`.",
-        },
-        .undirected_cell => .{
-            .message = "Cells always have a direction",
-            .explanation = "A trailing `/` makes an edge undirected. A cell goes from its source to its target, so it always has one.",
-            .hint = "Remove the trailing `/`.",
         },
         .path_as_side => .{
             .message = "A path is not a side",
@@ -381,18 +381,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .cells_not_parallel => .{
             .message = "{} is between cells that are not parallel",
-            .explanation = "A cell goes between two cells that leave the same place and reach the same place: α : f ⇒ g needs f and g to share their start and their end.",
+            .explanation = "A cell goes between two cells that leave the same place and reach the same place: α : f ⇒ g needs f and g to share their start and their end. A side from a lower level stands for its identity, which starts and ends on itself, so α : f ⇒ #A needs f to go from A to A. An undirected side may be read either way.",
             .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
-        },
-        .cell_on_undirected_edge => .{
-            .message = "{} is on an undirected edge",
-            .explanation = "An undirected edge has no source and no target, so what a cell between undirected edges relates is not decided yet. Undirected edges are fine everywhere else.",
-            .hint = "Give the edges a direction: `+(f, g)+ | f/α/g`.",
-        },
-        .side_from_wrong_level => .{
-            .message = "{} is not a cell of the level below",
-            .explanation = "At level k, the sides of a cell are cells of level k−1: level 3 relates 2-cells, so a 1-cell can't be a side there.",
-            .hint = "Use a cell of the level just below as the side.",
         },
         .unsupported_definition => .{
             .message = "Definitions are not supported yet",

@@ -35,6 +35,14 @@ test "a valid program, in full" {
     , doc);
 }
 
+test "cells name their sides by kind, with their direction" {
+    const doc = try document("G :: #A/f/#A | f/α/#A, f/β/f/ | β/m/β", strict);
+    defer testing.allocator.free(doc);
+    try expectContains(doc,
+        \\"cells":[{"name":"α","level":2,"source":{"edge":0},"target":{"node":0},"directed":true,"zone":0},{"name":"β","level":2,"source":{"edge":0},"target":{"edge":0},"directed":false,"zone":0},{"name":"m","level":3,"source":{"cell":1},"target":{"cell":1},"directed":true,"zone":0}]
+    );
+}
+
 test "a broken program: diagnostics, holes and issues" {
     const doc = try document("G :: f g/+k h", preview);
     defer testing.allocator.free(doc);

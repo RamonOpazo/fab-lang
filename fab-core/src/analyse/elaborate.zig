@@ -48,10 +48,9 @@ pub const Generator = struct {
     /// The IR edge at level 1, the IR cell above.
     index: u32,
     /// At level 1, the union-find elements of its two ends, from which the
-    /// nodes are derived. Above, its sides: an edge at level 2, a cell of the
-    /// level below above that.
-    left: u32,
-    right: u32,
+    /// nodes are derived. Above, unused: the IR cell holds its sides.
+    left: u32 = 0,
+    right: u32 = 0,
     /// Where it is declared.
     token: TokenIndex,
 };
@@ -181,7 +180,7 @@ fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
     if (zone.broken) return hole(a);
     const at = zone.table.get("@") orelse return failHole(a, .diagram_without_own_node, token);
-    return at.is.node;
+    return nodeOf(a, at);
 }
 
 /// `A.+f`, `A.f+`, `A.#X`, `A.@`: a node of another diagram, shared. It
@@ -198,7 +197,7 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     if (sort.isLeaf(cst, right, .node_id)) {
         const token = cst.mainToken(right);
         const name = zone.table.get(cst.tokenText(token)) orelse return failHole(a, .undeclared_name_in_diagram, token);
-        return name.is.node;
+        return nodeOf(a, name);
     }
     // Another shape was reported by rule 1, or by the kind after it.
     if (!sort.isPinchedEdge(a, right)) return hole(a);
@@ -208,11 +207,22 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
 }
 
 /// A named node, `@`, or a diagram name: one element per name in a
-/// declaration, made on first use.
+/// declaration, made on first use. A name only a failed term held is made
+/// here, as if first used.
 fn named(a: *Analyser, key: []const u8, class: @import("UnionFind.zig").Class) error{OutOfMemory}!Elem {
     const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
-    if (!gop.found_existing) gop.value_ptr.* = .{ .level = 0, .is = .{ .node = try a.uf.add(@backingInt(a.zone()), null, class) } };
+    if (!gop.found_existing or gop.value_ptr.is == .hole) gop.value_ptr.* = .{ .level = 0, .is = .{ .node = try a.uf.add(@backingInt(a.zone()), null, class) } };
     return gop.value_ptr.is.node;
+}
+
+/// A named node of another diagram, or the hole of the failed term that
+/// alone held it: what refers to it stays quiet.
+fn nodeOf(a: *Analyser, name: Name) error{OutOfMemory}!Elem {
+    return switch (name.is) {
+        .node => |e| e,
+        .hole => |h| h orelse hole(a),
+        .generator => unreachable,
+    };
 }
 
 fn hole(a: *Analyser) error{OutOfMemory}!Elem {
@@ -227,15 +237,21 @@ fn failHole(a: *Analyser, tag: Analyser.Error.Tag, token: TokenIndex) error{OutO
 }
 
 /// A failed term is one hole. The edges declared inside it are bound to the
-/// hole, so references to them stay quiet.
+/// hole, so references to them stay quiet; so are the named nodes only it
+/// holds, until a later term makes them, so the levels above stay quiet.
 fn failedTerm(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     const cst = a.cst;
     const h = try hole(a);
     var t = cst.firstToken(node);
     while (t <= cst.lastToken(node)) : (t += 1) {
-        if (cst.tokenTag(t) != .edge_id) continue;
-        const gop = try a.scope.table.getOrPut(a.arena.allocator(), cst.tokenText(t));
-        if (!gop.found_existing) gop.value_ptr.* = .{ .level = 1, .is = .{ .hole = h } };
+        const key, const level: u32 = switch (cst.tokenTag(t)) {
+            .edge_id => .{ cst.tokenText(t), 1 },
+            .node_id => .{ cst.tokenText(t), 0 },
+            .at => .{ "@", 0 },
+            else => continue,
+        };
+        const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
+        if (!gop.found_existing) gop.value_ptr.* = .{ .level = level, .is = .{ .hole = h } };
     }
     return one(a, h);
 }
@@ -493,29 +509,51 @@ fn slash(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenInde
 // ---------------------------------------------------------------------------
 // The graph
 
-/// A cell goes between parallel cells (plan step 7c): at level 2, edges with
-/// the same source and target node; above, cells with the same sides. It is
-/// judged on the final graph, since a later diagram can merge nodes, and a
-/// cell that fails it stays drawn, marked. A hole says nothing more.
+/// A cell goes between parallel cells (plan steps 7c, 7d): its two sides
+/// leave the same place and reach the same place. It is judged on the final
+/// graph, since a later diagram can merge nodes, and a cell that fails it
+/// stays drawn, marked. A hole says nothing more.
 fn parallel(a: *Analyser) error{OutOfMemory}!void {
     const cells = a.builder.cells.slice();
-    const edges = a.builder.edges.slice();
-    const kinds = a.builder.nodes.items(.kind);
-    cell: for (0..cells.len) |i| {
-        const s = cells.items(.source)[i];
-        const t = cells.items(.target)[i];
-        const tag: Analyser.Error.Tag = if (cells.items(.level)[i] == 2) blk: {
-            if (!edges.items(.directed)[s] or !edges.items(.directed)[t]) break :blk .cell_on_undirected_edge;
-            const ends = [_]Ir.NodeIndex{ edges.items(.source)[s], edges.items(.target)[s], edges.items(.source)[t], edges.items(.target)[t] };
-            for (ends) |n| if (kinds[@backingInt(n)] == .hole) continue :cell;
-            if (ends[0] == ends[2] and ends[1] == ends[3]) continue :cell;
-            break :blk .cells_not_parallel;
-        } else blk: {
-            if (cells.items(.source)[s] == cells.items(.source)[t] and cells.items(.target)[s] == cells.items(.target)[t]) continue :cell;
-            break :blk .cells_not_parallel;
-        };
-        try a.errors.append(a.gpa, .{ .tag = tag, .token = a.cell_tokens.items[i], .subject = .{ .cell = @intCast(i) } });
+    for (0..cells.len) |i| {
+        const below = cells.items(.level)[i] - 1;
+        const s = boundary(a, cells.items(.source)[i], below);
+        const t = boundary(a, cells.items(.target)[i], below);
+        if (isHole(a, s.ends[0]) or isHole(a, s.ends[1]) or isHole(a, t.ends[0]) or isHole(a, t.ends[1])) continue;
+        if (std.meta.eql(s.ends, t.ends)) continue;
+        // An undirected side may be read either way.
+        if ((!s.directed or !t.directed) and std.meta.eql(s.ends, [2]Ir.Cell.Side{ t.ends[1], t.ends[0] })) continue;
+        try a.errors.append(a.gpa, .{ .tag = .cells_not_parallel, .token = a.cell_tokens.items[i], .subject = .{ .cell = @intCast(i) } });
     }
+}
+
+/// Where a side of a cell starts and ends, one level below the side's place
+/// at `level`. A side of that level has its own; a lower one stands for its
+/// identity there, which starts and ends on itself, an identity standing for
+/// itself at every level below (`f/α/#A` is α : f ⇒ 1_A).
+fn boundary(a: *Analyser, side: Ir.Cell.Side, level: u32) struct { ends: [2]Ir.Cell.Side, directed: bool } {
+    const level_of: u32 = switch (side) {
+        .node => 0,
+        .edge => 1,
+        .cell => |c| a.builder.cells.items(.level)[@backingInt(c)],
+    };
+    if (level_of < level) return .{ .ends = .{ side, side }, .directed = true };
+    return switch (side) {
+        .node => unreachable,
+        .edge => |e| blk: {
+            const edge = a.builder.edges.get(@backingInt(e));
+            break :blk .{ .ends = .{ .{ .node = edge.source }, .{ .node = edge.target } }, .directed = edge.directed };
+        },
+        .cell => |c| blk: {
+            const cell = a.builder.cells.get(@backingInt(c));
+            break :blk .{ .ends = .{ cell.source, cell.target }, .directed = cell.directed };
+        },
+    };
+}
+
+/// A hole among the ends: a node that failed.
+fn isHole(a: *Analyser, side: Ir.Cell.Side) bool {
+    return side == .node and a.builder.nodes.items(.kind)[@backingInt(side.node)] == .hole;
 }
 
 /// Every class becomes a node, in the order of its oldest element, and every
@@ -555,6 +593,12 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
         target.* = node_of[uf.find(ends[1])];
     }
 
+    // A node side was its element until now.
+    for (a.builder.cells.items(.source), a.builder.cells.items(.target)) |*source, *target| {
+        for ([_]*Ir.Cell.Side{ source, target }) |side| {
+            if (side.* == .node) side.* = .{ .node = node_of[uf.find(@backingInt(side.node))] };
+        }
+    }
     try parallel(a);
 
     // Issues: every error with a subject marks it, warnings and unsupported

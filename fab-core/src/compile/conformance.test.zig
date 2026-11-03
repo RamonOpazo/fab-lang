@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 7, .rule = 3 };
+const done: Progress = .{ .step = 7, .rule = 4 };
 
 const Progress = struct {
     step: u8,
@@ -935,13 +935,14 @@ test "Levels: a level inside a branch" {
     try check(.{ .step = 4, .source = "G :: f (g | α)", .codes = &.{.{ .syntax = .bar_in_group }} });
 }
 
-test "Levels: side from the wrong level" {
-    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/(α, β)/g | α/m/f", .codes = &.{.{ .analysis = .side_from_wrong_level }} });
+test "Levels: side not declared" {
+    try check(.{ .step = 7, .rule = 4, .source = "G :: +(f, g)+ | f/α/#B", .codes = &.{.{ .analysis = .side_not_declared }} });
 }
 
 test "Levels: not a cell" {
-    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/#A", .codes = &.{.{ .analysis = .not_a_cell }} });
-    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/*", .codes = &.{.{ .analysis = .not_a_cell }} });
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/α/*", .codes = &.{.{ .analysis = .not_a_cell }} });
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/α/?", .codes = &.{.{ .analysis = .not_a_cell }} });
+    try check(.{ .step = 7, .rule = 1, .source = "A :: #X/f\nG :: +(f, g)+ | f/α/A.#X", .codes = &.{.{ .analysis = .not_a_cell }} });
     try check(.{ .step = 7, .rule = 1, .source = "A :: f\nG :: +(f, g)+ | A.α", .codes = &.{.{ .analysis = .not_a_cell }} });
 }
 
@@ -964,10 +965,6 @@ test "Levels: two names for one side" {
     try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g, h, k)+ | f/α/g h/β/k", .codes = &.{.{ .analysis = .two_names_for_one_side }} });
 }
 
-test "Levels: undirected cell" {
-    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | f/α/", .codes = &.{.{ .analysis = .undirected_cell }} });
-}
-
 test "Levels: a cell declared twice" {
     try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | f/α/g, f/α/g", .codes = &.{.{ .analysis = .edge_declared_twice }} });
 }
@@ -979,10 +976,47 @@ test "Levels: a level inside a block" {
 test "Levels: cells between non-parallel cells" {
     try check(.{ .step = 7, .rule = 3, .source = "Sq :: +(f h, g k)+ | f/α/h", .codes = &.{.{ .analysis = .cells_not_parallel }} });
     try check(.{ .step = 7, .rule = 3, .source = "G :: +(f, g, h)+ | f/(α, β)/g, f/γ/h | α/m/γ", .codes = &.{.{ .analysis = .cells_not_parallel }} });
+    // 1_B starts at B, and f at A.
+    try check(.{ .step = 7, .rule = 4, .source = "G :: #A/f/#B | f/α/#B", .codes = &.{.{ .analysis = .cells_not_parallel }} });
 }
 
-test "Levels: reserved, a cell on an undirected edge" {
-    try check(.{ .step = 7, .rule = 3, .source = "U :: +(f/, g/)+ | f/α/g", .codes = &.{.{ .analysis = .cell_on_undirected_edge }} });
+test "Levels: a lower side is an identity" {
+    try check(.{ .step = 7, .rule = 4, .source = "C :: #A/f/#A | f/α/#A", .ir =
+        \\zone C
+        \\  node n0 #A
+        \\  edge f n0 -> n0
+        \\  cell α f => n0
+        \\
+    });
+    try check(.{ .step = 7, .rule = 4, .source = "D :: #A/f/#A | f/α/f | α/m/f", .ir =
+        \\zone D
+        \\  node n0 #A
+        \\  edge f n0 -> n0
+        \\  cell α f => f
+        \\  cell m α => f level 3
+        \\
+    });
+}
+
+test "Levels: undirected sides and cells" {
+    try check(.{ .step = 7, .rule = 4, .source = "U :: #A/f/#B/, #B/g/#A | f/α/g", .ir =
+        \\zone U
+        \\  node n0 #A
+        \\  node n1 #B
+        \\  edge f n0 -- n1
+        \\  edge g n1 -> n0
+        \\  cell α f => g
+        \\
+    });
+    try check(.{ .step = 7, .rule = 4, .source = "G :: +(f, g)+ | f/α/g/", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\  cell α f == g
+        \\
+    });
 }
 
 test "Levels: the spec's cells" {
