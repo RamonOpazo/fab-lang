@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 8, .rule = 1 };
+const done: Progress = .{ .step = 8, .rule = 2 };
 
 const Progress = struct {
     step: u8,
@@ -773,6 +773,48 @@ test "Definitions and values: a record binds tokens" {
 
 test "Definitions and values: a flag turned off" {
     try check(.{ .step = 8, .rule = 1, .source = "G :: f\nG :style := { f :hide! }" });
+}
+
+test "Definitions and values: uppercase name" {
+    try check(.{ .step = 8, .rule = 2, .source = "[Warn] := [#f00]", .codes = &.{.{ .analysis = .uppercase_name }} });
+    try check(.{ .step = 8, .rule = 2, .source = "[w] := [myColor]", .codes = &.{.{ .analysis = .uppercase_name }} });
+}
+
+test "Definitions and values: name malformed" {
+    try check(.{ .step = 8, .rule = 2, .source = "[w] := [warn_bg]", .codes = &.{.{ .analysis = .malformed_name }} });
+}
+
+test "Definitions and values: colour malformed" {
+    try check(.{ .step = 8, .rule = 2, .source = ":Color [w] := [#12345]", .codes = &.{.{ .analysis = .malformed_color }} });
+}
+
+test "Definitions and values: negative number" {
+    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG.f :bend := [-30]", .codes = &.{.{ .analysis = .negative_number }} });
+}
+
+test "Definitions and values: number malformed" {
+    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG :style := { f :at [.5], f :size [1.] }", .codes = &.{
+        .{ .analysis = .malformed_number }, .{ .analysis = .malformed_number },
+    } });
+    try check(.{ .step = 8, .rule = 2, .source = "[big] := [1234567890123456789]", .codes = &.{.{ .analysis = .malformed_number }} });
+}
+
+test "Definitions and values: empty range" {
+    try check(.{ .step = 8, .rule = 2, .source = "[card] := [5..2/1..*]", .codes = &.{.{ .analysis = .empty_range }} });
+}
+
+test "Definitions and values: symbol malformed" {
+    try check(.{ .step = 8, .rule = 2, .source = ":Head :: [>], [OX]", .codes = &.{.{ .analysis = .malformed_symbol }} });
+}
+
+test "Definitions and values: ! misplaced" {
+    try check(.{ .step = 8, .rule = 2, .source = "[a] := [/solid!!/>]", .codes = &.{.{ .analysis = .misplaced_bang }} });
+}
+
+test "Definitions and values: every element is read" {
+    try check(.{ .step = 8, .rule = 2, .source = "[a] := [Warn/-3]", .codes = &.{
+        .{ .analysis = .uppercase_name }, .{ .analysis = .negative_number },
+    } });
 }
 
 test "Statements: a signature's subjects are classes" {

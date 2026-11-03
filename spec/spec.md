@@ -497,7 +497,7 @@ Numbers go in brackets too: `:width [2]`. A record is written in braces, `{ … 
 | anything else                  | a symbol          | `[>]`, `[|>]`, `[X]`, `[O{]`                |
 | nothing                        | an empty slot     | the tail in `[/solid/>]`                    |
 
-A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one.
+A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one. Its glyphs are ASCII punctuation (less `/`, `!`, `#`, `[` and `]`, which a bracket uses itself) and the Unicode blocks of arrows, mathematical operators and geometric symbols: U+2190–23FF, U+25A0–27FF, U+2900–2BFF. Never a space, a control, a combining mark or a letter of any script; an allowlist, so nothing new in Unicode slips in. A **colour** is `#` and 3, 4, 6 or 8 hex digits, with alpha or without: without, it is opaque.
 
 **A bracket with slashes is a sequence.** What is written is a tuple of its elements' types: `[>/solid/>>]` is a tuple of a symbol, a label and a symbol, and `[1/1.5/2]` a tuple of three numbers. A tuple whose elements share a type is also a list of that type, and a single value is a list of one: `:theme [dark]`, `:theme [dark/compact]`. `[]` is the empty list.
 
@@ -540,7 +540,7 @@ Every value has a type, and so does every name. The kinds of type are fixed by t
 - **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, `{ … }`) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
 - **Aliases** give a type a second name: `:Length := :Number`, `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`. Type parameters are written with `.` and a group, as qualification is.
 - **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`.
-- **Numbers are exact decimals:** fAB never computes with them, so `0.1` stays `0.1` from the source to the renderer. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 significant digits.
+- **Numbers are exact decimals:** fAB never computes with them, so `0.1` stays `0.1` from the source to the renderer. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 digits from the first nonzero one. Numbers are normalised, and printed so: `[1.50]` is `1.5`, `[007]` is `7`.
 
 ### Units
 
@@ -928,7 +928,12 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Bare value                          | `:width 2`                               | Values are written `"…"`, `$…$`, `[…]` or `{ … }`                                     |
 | Space inside brackets               | `[0..* / 1]`                             | A bracket is one token                                                               |
 | Negative number                     | `[-30]`                                  | Numbers are never negative; for the inner side write `[30!]`                         |
-| Number malformed                    | `[.5]`, `[1.]`, 19 significant digits    | A number is digits, with digits on both sides of a point                             |
+| Number malformed                    | `[.5]`, `[1.]`, 19 digits                | A number is digits, with digits on both sides of a point                             |
+| Name malformed                      | `[warn_bg]`, `[warn-]`                   | Names are lowercase-kebab: letters and digits, words joined by single hyphens        |
+| Colour malformed                    | `[#ggg]`, `[#12345]`                     | A colour is `#` and 3, 4, 6 or 8 hex digits                                           |
+| Empty range                         | `[5..2]`, `[1..]`, `[*..3]`              | A range runs from a number up to a larger or equal one, or `*`                       |
+| Symbol malformed                    | `[>a]`, `[OX]`, `[>2]`, a space          | Glyphs from the allowed blocks, with at most one capital letter                     |
+| `!` misplaced                       | `[!]`, `[solid!!]`, `[so!lid]`           | `!` comes last in an element, once, after something                                  |
 | Value in a diagram's declaration    | `G :: +(g1, [f], g2)`                    | Brackets are values, never structure                                                 |
 | Type in a diagram's declaration     | `G :: f :Color`                          | Types are declared on their own and used in definitions and signatures               |
 | Wrong type                          | `:shape [red]`, `:theme [terminal]`      | A `:Color` where a `:Shape` is expected                                              |

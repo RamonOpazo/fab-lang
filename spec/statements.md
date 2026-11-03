@@ -745,7 +745,7 @@ Revises 1.7 and 2, `style.md` §3 (value types, the bracket reading), §4.6 (arr
 | Types | `:UpperCamel` | `:Color`, `:Shape`, `:Arrow`, `:Cardinality` |
 | Functions (attributes) | `:lowercase-kebab` | `:fill`, `:label-at`, `:terminal` |
 | Named values and labels | `[lowercase-kebab]` | `[red]`, `[circle]`, `[epi]`, `[base]` |
-| Symbols | glyphs, with at most one capital letter | `[>]`, `[|>]`, `[X]`, `[O{]` |
+| Symbols | glyphs, with at most one capital letter | `[>]`, `[|>]`, `[X]`, `[O{]`, `[⊸]` |
 
 **The constructors are closed; the names are open.** The language fixes the kinds of type. Every name of a type, a label or a function lives in source, the prelude's or a program's:
 
@@ -772,6 +772,8 @@ Revises 1.7 and 2, `style.md` §3 (value types, the bracket reading), §4.6 (arr
 - **One label, one type.** Declaring a label already declared in another type is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`, and `:bend` takes `:Union.(:Facing, :Angle)`. Where the words mean the same, the types merge instead: `:align` and `:label-at` share `:Span :: [start], [center], [end]` (`[mid]` became `[center]`).
 - **Nothing on its own is a label of its type:** `:shape [none]`, `:line [none]`, both through `:None :: [none]`. No label is the empty text, `:label ""`.
 
+**Symbols draw from an allowlist:** Its glyphs are ASCII punctuation (less `/`, `!`, `#`, `[` and `]`, which a bracket uses itself) and the Unicode blocks of arrows, mathematical operators and geometric symbols: U+2190–23FF, U+25A0–27FF, U+2900–2BFF. Never a space, a control, a combining mark or a letter of any script; an allowlist, so nothing new in Unicode slips in. **Colours** take 3, 4, 6 or 8 hex digits; without alpha, opaque.
+
 **Sequences: `[a/b/c]`.** `/` separates the elements of a bracket, everywhere.
 
 - **What is written is a tuple:** `[1/1.5/2]` is `:Tuple.(:Number, :Number, :Number)`. A tuple whose elements share a type fits where `:List.(T)` is expected, and a single value fits a list of one: `:theme [dark]`, `:theme [dark/compact]`.
@@ -781,7 +783,7 @@ Revises 1.7 and 2, `style.md` §3 (value types, the bracket reading), §4.6 (arr
 - **Arrows and cardinalities are tuples with names:** `:Arrow`, `:Cardinality := :Tuple.(:Range, :Range)`. The rule "two slashes make an arrow" goes; the type the function expects decides.
 - **`!` inverts the element it follows,** as before (2): a struck line `[/solid!/>]`, an inner hook `[?!/solid/>]`, an inward angle `[30!]`.
 
-**Numbers: one `:Number`, an exact decimal.** fAB does no arithmetic, so a number goes from the source to a renderer unchanged: a whole mantissa and a count of decimal places (`1.5` is 15 and 1). It is exact, compares exactly against the ranges functions check (a fraction is 0 to 1), and prints as written in JSON and DOT. A renderer converts to a float when it lays out geometry, and only then. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 significant digits. `:Length`, `:Angle` and `:Fraction` are aliases: the unit is the function's.
+**Numbers: one `:Number`, an exact decimal.** fAB does no arithmetic, so a number goes from the source to a renderer unchanged: a whole mantissa and a count of decimal places (`1.5` is 15 and 1). It is exact, compares exactly against the ranges functions check (a fraction is 0 to 1), and prints as written in JSON and DOT. A renderer converts to a float when it lays out geometry, and only then. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 digits from the first nonzero one, so mantissa and scale fit 64 bits. Normalised, and printed so: `1.50` is `1.5`. `:Length`, `:Angle` and `:Fraction` are aliases: the unit is the function's.
 
 **Functions: `subject :function :: type`.** A declaration with a function as its head and a type as its body states where the function applies and what it takes: `(&node, &zone) :fill :: :Color`. Anywhere else it is "does not apply". Zig gives each function its meaning; a function or a label a renderer does not know is a renderer issue ("no drawing for `[hexagon]`"), drawn with the type's fallback and marked like any other.
 

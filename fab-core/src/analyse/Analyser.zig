@@ -280,6 +280,7 @@ fn namedDiagram(a: *Analyser, head: Node.Index) ?Ir.ZoneIndex {
 fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!?Ir.ZoneIndex {
     const cst = a.cst;
     if (definitions.isVocabulary(cst, head)) {
+        try definitions.brackets(a, body);
         try a.fail(.unsupported_vocabulary, cst.firstToken(head));
         return null;
     }
@@ -347,4 +348,5 @@ fn declareZone(a: *Analyser, name: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
 test {
     _ = @import("analyse.test.zig");
     _ = @import("union_find.test.zig");
+    _ = @import("value.zig");
 }

@@ -159,6 +159,46 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A definition's left side is `[name]` (a value), `:attr` (a bundle) or `subject :attr` (an attribute at a subject).",
             .hint = "Add the attribute being defined, as in `G :style := { … }`, or use `::` to declare a diagram.",
         },
+        .uppercase_name => .{
+            .message = "{} has an uppercase letter in a name",
+            .explanation = "Names are lowercase, with single hyphens between words: `[warn-bg]`. Capitals belong to symbols, one at most: `[X]`, `[O{]`.",
+            .hint = "Write it in lowercase.",
+        },
+        .malformed_name => .{
+            .message = "{} is not a name",
+            .explanation = "A name is lowercase letters and digits, words joined by single hyphens, starting with a letter: `[red]`, `[warn-bg]`, `[h2]`.",
+            .hint = "Join words with one hyphen, and end with a letter or a digit.",
+        },
+        .malformed_color => .{
+            .message = "{} is not a colour",
+            .explanation = "A colour is `#` and 3, 4, 6 or 8 hex digits: `[#f00]`, `[#d1242f]`, and with alpha `[#f00a]`, `[#d1242f22]`. Without alpha it is opaque.",
+            .hint = "Check the number of digits, and that each is 0–9 or a–f.",
+        },
+        .negative_number => .{
+            .message = "{} is negative",
+            .explanation = "Numbers are never negative. The only signed value was an angle, and its sign meant a side, which `!` says: `[30!]` bows inward.",
+            .hint = "Write the number, then `!` for the inner side: `[30!]`.",
+        },
+        .malformed_number => .{
+            .message = "{} is not a number",
+            .explanation = "A number is digits, with digits on both sides of a point, and at most 18 of them from the first nonzero one: `[2]`, `[0.5]`. Numbers are kept exact.",
+            .hint = "Write `[0.5]` for `.5`, and `[1]` for `1.`.",
+        },
+        .empty_range => .{
+            .message = "{} is not a range",
+            .explanation = "A range runs from a number up to a larger or equal number, or to `*` for no bound: `[0..*]`, `[1..3]`.",
+            .hint = "Put the smaller number first.",
+        },
+        .malformed_symbol => .{
+            .message = "{} is not a symbol",
+            .explanation = "A symbol is glyphs, with at most one capital letter: `[>]`, `[|>]`, `[X]`, `[O{]`, `[⊸]`. Its glyphs are ASCII punctuation, or arrows and mathematical or geometric symbols; never letters, digits or spaces.",
+            .hint = "Use glyphs only, or a name in lowercase.",
+        },
+        .misplaced_bang => .{
+            .message = "{} has a misplaced `!`",
+            .explanation = "`!` inverts what it follows, so it comes last in an element, once, after something: `[/solid!/>]`, `[30!]`.",
+            .hint = "Keep one `!`, at the end of the element it inverts.",
+        },
         .mixed_operators => .{
             .message = "{} follows a different operator",
             .explanation = "Operators between chains share one level, with no precedence: a run may repeat one operator, and different ones need a group.",

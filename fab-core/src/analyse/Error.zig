@@ -43,6 +43,25 @@ pub const Tag = enum(u8) {
     /// Warning. `f g` then `h k` on the next line, in braces.
     chain_broken_across_lines,
 
+    // -- values: what a bracket holds (step 8b) ------------------------------
+
+    /// `[Warn]`, `[myColor]`.
+    uppercase_name,
+    /// `[warn_bg]`, `[warn-]`, `[warn--bg]`.
+    malformed_name,
+    /// `[#ggg]`, `[#12345]`.
+    malformed_color,
+    /// `[-30]`.
+    negative_number,
+    /// `[1.]`, `[.5]`, `[1.2.3]`, nineteen digits.
+    malformed_number,
+    /// `[5..2]`, `[1..]`, `[*..3]`.
+    empty_range,
+    /// `[>a]`, `[OX]`, `[>2]`, a space-like character.
+    malformed_symbol,
+    /// `[!]`, `[solid!!]`, `[so!lid]`.
+    misplaced_bang,
+
     // -- sorts (rule 1) ------------------------------------------------------
 
     /// `#A f`, `* f`, `@ (f)`, `? f`.

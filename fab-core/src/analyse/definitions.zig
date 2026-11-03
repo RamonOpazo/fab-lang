@@ -8,6 +8,7 @@
 const Token = @import("../lex/Token.zig");
 const Cst = @import("../parse/Cst.zig");
 const Analyser = @import("Analyser.zig");
+const value = @import("value.zig");
 
 const Node = Cst.Node;
 
@@ -21,7 +22,29 @@ pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.I
         // An alias's body is a type expression, read with step 8c.
         try entries(a, body);
     }
+    try brackets(a, head);
+    try brackets(a, body);
     try a.fail(.unsupported_definition, cst.mainToken(node));
+}
+
+/// Reads every bracket under `node`, and reports each element whose shape is
+/// wrong. What the elements mean waits for the environment (step 8c).
+pub fn brackets(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    if (cst.tag(node) == .leaf) {
+        const token = cst.mainToken(node);
+        if (cst.tokenTag(token) != .val) return;
+        var reader = value.read(cst.tokenText(token));
+        while (true) {
+            const element = reader.next() catch {
+                try a.fail(reader.failure, token);
+                continue;
+            };
+            if (element == null) break;
+        }
+        return;
+    }
+    for (cst.children(node)) |child| try brackets(a, child);
 }
 
 /// `[name]`, `:Type [name]`, `:Type` (an alias), `:attr` or `subject :attr`:
