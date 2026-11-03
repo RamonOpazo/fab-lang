@@ -21,6 +21,7 @@ const Parser = @import("../parse/Parser.zig");
 const Ir = @import("../analyse/Ir.zig");
 const Analyser = @import("../analyse/Analyser.zig");
 const Sheet = @import("../format/Sheet.zig");
+const Style = @import("../format/Style.zig");
 const Formatter = @import("../format/Formatter.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
@@ -35,6 +36,8 @@ lexed: ?std.MultiArrayList(Token) = null,
 parsed: ?Cst = null,
 analysed: ?Analyser.Result = null,
 formatted: ?Sheet = null,
+/// The severity each IR issue is drawn with, for the style pass.
+issue_marks: ?[]Style.Mark = null,
 /// Syntax diagnostics first, then analysis diagnostics, each in the order
 /// found: by statement, then what only the final graph shows (cells that are
 /// not parallel). Complete once analysis has run.
@@ -87,6 +90,7 @@ pub fn deinit(c: *Compilation) void {
     if (c.lexed) |*list| list.deinit(c.gpa);
     if (c.parsed) |*tree| tree.deinit(c.gpa);
     if (c.formatted) |*s| s.deinit();
+    if (c.issue_marks) |m| c.gpa.free(m);
     if (c.analysed) |*result| result.deinit(c.gpa);
     c.diags.deinit(c.gpa);
     c.gpa.free(c.source);
@@ -125,8 +129,25 @@ pub fn ir(c: *Compilation) error{OutOfMemory}!?*const Ir {
 /// null when `ir` is.
 pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
     const graph = try c.ir() orelse return null;
-    if (c.formatted == null) c.formatted = try Formatter.format(c.gpa, graph);
+    if (c.formatted == null) c.formatted = try Formatter.format(c.gpa, graph, try c.marks());
     return &c.formatted.?;
+}
+
+/// The severity each issue of the analysed IR is drawn with: its
+/// diagnostic's, under this tolerance. A promoted warning is drawn as an
+/// error (statements.md §18).
+fn marks(c: *Compilation) error{OutOfMemory}![]const Style.Mark {
+    if (c.issue_marks) |m| return m;
+    const graph = &(try c.analysis()).ir;
+    const list = try c.gpa.alloc(Style.Mark, graph.issues.len);
+    errdefer c.gpa.free(list);
+    for (list, 0..) |*m, i| m.* = switch ((try c.diagnosticOf(graph.issues.get(i))).severity) {
+        .unsupported => .unsupported,
+        .warning => .warning,
+        .promoted, .@"error" => .@"error",
+    };
+    c.issue_marks = list;
+    return list;
 }
 
 /// Every diagnostic of the program, from every stage.
@@ -145,30 +166,12 @@ pub fn status(c: *Compilation) error{OutOfMemory}!Status {
 /// How a diagram is drawn for its diagnostics (spec, Errors): a border in the
 /// colour of the most severe one, and a label while any is unsupported
 /// (spec/statements.md §15.3).
-pub const ZoneMark = struct {
-    border: ?Diagnostic.Severity = null,
-    unsupported: bool = false,
-};
+pub const ZoneMark = Formatter.ZoneMark;
 
-/// The mark of a zone: the issues on it, and on the nodes, edges and cells
-/// in it.
+/// The mark of a zone, as the style pass draws it, whether or not the IR is
+/// withheld.
 pub fn zoneMark(c: *Compilation, zone: Ir.ZoneIndex) error{OutOfMemory}!ZoneMark {
-    const graph = &(try c.analysis()).ir;
-    var mark: ZoneMark = .{};
-    for (0..graph.issues.len) |i| {
-        const issue = graph.issues.get(i);
-        const in = switch (issue.subject) {
-            .zone => |z| z,
-            .node => |n| graph.nodes.items(.zone)[@backingInt(n)],
-            .edge => |e| graph.edges.items(.zone)[@backingInt(e)],
-            .cell => |x| graph.cells.items(.zone)[@backingInt(x)],
-        };
-        if (in != zone) continue;
-        const severity = (try c.diagnosticOf(issue)).severity;
-        mark.border = if (mark.border) |b| b.max(severity) else severity;
-        mark.unsupported = mark.unsupported or severity == .unsupported;
-    }
-    return mark;
+    return Formatter.zoneMark(&(try c.analysis()).ir, try c.marks(), zone);
 }
 
 /// The diagnostic an IR issue comes from.

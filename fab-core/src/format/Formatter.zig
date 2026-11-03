@@ -2,7 +2,7 @@
 //!
 //! For each node, edge and zone, the cascade is folded once, in order:
 //!
-//!   kind defaults ⊕ built-in classes ⊕ named classes ⊕ direct attributes
+//!   kind defaults ⊕ built-in classes ⊕ named classes ⊕ direct attributes ⊕ marks
 //!
 //! The format layer (`:format`) isn't analysed yet, so today only the first
 //! two layers have content: kind defaults, and the built-in classes `.node`,
@@ -22,6 +22,14 @@
 //! a diamond, a parallel a bar. A null node is a start (a dot) if no edge
 //! arrives at it, else an end (a bullseye), as in UML activity diagrams.
 //!
+//! Marks (statements.md §15.3, §18) are the last layer, so they always win.
+//! Each issue has a severity, given beside the IR, since only the caller
+//! knows its tolerance. A marked node or edge has its lines in the colour of
+//! its worst issue, and a solid shape (a dot, a bar, an end) its fill too,
+//! since the fill is the shape. A diagram with any issue, on it or on what
+//! it holds, is framed in the colour of its worst, with "unsupported" above
+//! its name while any is unsupported. A placeholder is drawn as one.
+//!
 //! As with Parser and Analyser, the fields are the pass's working state, and
 //! `format` is the entry point.
 
@@ -30,6 +38,7 @@ const Ir = @import("../analyse/Ir.zig");
 const Style = @import("Style.zig");
 const Sheet = @import("Sheet.zig");
 const Attrs = Style.Attrs;
+const Mark = Style.Mark;
 
 const Formatter = @This();
 
@@ -43,8 +52,10 @@ spans: std.ArrayList(Span) = .empty,
 
 const Span = struct { node: usize, start: usize, end: usize };
 
-/// Resolves every node, edge and zone of `ir`. The Sheet borrows `ir`.
-pub fn format(gpa: std.mem.Allocator, ir: *const Ir) error{OutOfMemory}!Sheet {
+/// Resolves every node, edge and zone of `ir`, with `marks[i]` the severity
+/// of issue i. The Sheet borrows `ir`.
+pub fn format(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{OutOfMemory}!Sheet {
+    std.debug.assert(marks.len == ir.issues.len);
     var f: Formatter = .{ .gpa = gpa, .ir = ir };
     defer f.labels.deinit(gpa);
     defer f.spans.deinit(gpa);
@@ -55,20 +66,41 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir) error{OutOfMemory}!Sheet {
     @memset(reached, false);
     for (ir.edges.items(.target)) |t| reached[@backingInt(t)] = true;
 
+    // Each node's and edge's worst issue.
+    const node_marks = try gpa.alloc(?Mark, ir.nodes.len);
+    defer gpa.free(node_marks);
+    @memset(node_marks, null);
+    const edge_marks = try gpa.alloc(?Mark, ir.edges.len);
+    defer gpa.free(edge_marks);
+    @memset(edge_marks, null);
+    for (ir.issues.items(.subject), marks) |subject, m| switch (subject) {
+        .node => |n| join(&node_marks[@backingInt(n)], m),
+        .edge => |e| join(&edge_marks[@backingInt(e)], m),
+        .cell, .zone => {},
+    };
+
     const nodes = try gpa.alloc(Style, ir.nodes.len);
     errdefer gpa.free(nodes);
-    for (nodes, reached, 0..) |*style, arrived, i| style.* = try f.node(i, arrived);
+    for (nodes, reached, node_marks, 0..) |*style, arrived, m, i| {
+        const attrs = try f.node(i, arrived);
+        style.* = attrs.over(markLayer(m, attrs.shape)).resolve();
+    }
 
     const edges = try gpa.alloc(Style, ir.edges.len);
     errdefer gpa.free(edges);
-    for (edges, ir.edges.items(.name)) |*style, name| {
-        style.* = builtin.edge.over(.{ .label = ir.string(name) }).resolve();
+    for (edges, ir.edges.items(.name), edge_marks) |*style, name, m| {
+        style.* = builtin.edge.over(.{ .label = ir.string(name) }).over(markLayer(m, null)).resolve();
     }
 
     const zones = try gpa.alloc(Style, ir.zones.len);
     errdefer gpa.free(zones);
-    for (zones, ir.zones.items(.name)) |*style, name| {
-        style.* = builtin.zone.over(.{ .label = ir.string(name) }).resolve();
+    for (zones, ir.zones.items(.name), ir.zones.items(.placeholder), 0..) |*style, name, placeholder, z| {
+        var attrs = builtin.zone.over(.{ .label = ir.string(name) });
+        if (placeholder) attrs = attrs.over(.{ .as = .placeholder });
+        const mark = zoneMark(ir, marks, @fromBackingInt(@as(u32, @intCast(z))));
+        if (mark.border) |b| attrs = attrs.over(.{ .stroke = b.color() });
+        if (mark.unsupported) attrs = attrs.over(.{ .caption = "unsupported" });
+        style.* = attrs.resolve();
     }
 
     const owned = try f.labels.toOwnedSlice(gpa);
@@ -76,10 +108,47 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir) error{OutOfMemory}!Sheet {
     return .{ .ir = ir, .nodes = nodes, .edges = edges, .zones = zones, .labels = owned, .gpa = gpa };
 }
 
-/// The cascade for node `i`; `arrived` says whether some edge ends at it. A
-/// canonical label is recorded in `labels` and filled in by `format` at the
-/// end.
-fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Style {
+/// How a diagram is drawn for its issues: a border in the colour of the most
+/// severe, and the label "unsupported" while any is unsupported.
+pub const ZoneMark = struct {
+    border: ?Mark = null,
+    unsupported: bool = false,
+};
+
+/// The mark of `zone`: the issues on it, and on the nodes, edges and cells
+/// in it.
+pub fn zoneMark(ir: *const Ir, marks: []const Mark, zone: Ir.ZoneIndex) ZoneMark {
+    var mark: ZoneMark = .{};
+    for (ir.issues.items(.subject), marks) |subject, m| {
+        const in = switch (subject) {
+            .zone => |z| z,
+            .node => |n| ir.nodes.items(.zone)[@backingInt(n)],
+            .edge => |e| ir.edges.items(.zone)[@backingInt(e)],
+            .cell => |x| ir.cells.items(.zone)[@backingInt(x)],
+        };
+        if (in != zone) continue;
+        join(&mark.border, m);
+        mark.unsupported = mark.unsupported or m == .unsupported;
+    }
+    return mark;
+}
+
+fn join(worst: *?Mark, m: Mark) void {
+    worst.* = if (worst.*) |w| w.max(m) else m;
+}
+
+/// The last layer: a marked element's lines in its colour, and the fill of a
+/// solid shape too.
+fn markLayer(mark: ?Mark, shape: ?Style.Shape) Attrs {
+    const m = mark orelse return .empty;
+    const solid = if (shape) |s| s == .point or s == .bar or s == .bullseye else false;
+    return .{ .stroke = m.color(), .fill = if (solid) m.color() else null };
+}
+
+/// The cascade for node `i`, before marks; `arrived` says whether some edge
+/// ends at it. A canonical label is recorded in `labels` and filled in by
+/// `format` at the end.
+fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Attrs {
     const n = f.ir.nodes.get(i);
     var attrs = kindDefault(n.kind, arrived).over(builtin.node);
     if (isMark(n.kind)) {
@@ -92,7 +161,7 @@ fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Style {
         try f.writeCanonical(end);
         try f.spans.append(f.gpa, .{ .node = i, .start = start, .end = f.labels.items.len });
     }
-    return attrs.resolve();
+    return attrs;
 }
 
 /// `+f` for a domain, `f+` for a codomain.

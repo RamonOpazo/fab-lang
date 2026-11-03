@@ -107,6 +107,90 @@ test "the sheet stage follows the IR: withheld with it, and computed once" {
 }
 
 // ---------------------------------------------------------------------------
+// Marks: the last layer (statements.md §15.3, §18)
+
+const red: ?Style.Color = .{ .token = .@"error" };
+const amber: ?Style.Color = .{ .token = .warning };
+const violet: ?Style.Color = .{ .token = .unsupported };
+
+test "marks win: a hole keeps its dashes, in its error's colour, and frames its diagram" {
+    var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nH :: f", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    try testing.expectEqual(red, s.nodes[2].stroke);
+    try testing.expectEqual(Style.Line.dashed, s.nodes[2].line);
+    try testing.expectEqual(@as(?Style.Color, null), s.nodes[1].stroke);
+    try testing.expectEqual(@as(?Style.Color, null), s.edges[1].stroke);
+    // G is framed in red; H, clean, stays unframed.
+    try testing.expectEqual(red, s.zones[0].stroke);
+    try testing.expect(s.isFramed(@fromBackingInt(@as(u32, 0))));
+    try testing.expect(!s.isFramed(@fromBackingInt(@as(u32, 1))));
+    try testing.expectEqual(@as(?[]const u8, null), s.zones[0].caption);
+}
+
+test "a diagram's frame is its worst issue; unsupported adds the caption, even under red" {
+    var c = try Compilation.init(testing.allocator,
+        \\K :: (f/*, g) h
+        \\J :: f
+        \\J :style := f :label "x"
+        \\G :: f g/+k h
+        \\G :style := f :label "x"
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    try testing.expectEqual(amber, s.zones[0].stroke);
+    try testing.expectEqual(@as(?[]const u8, null), s.zones[0].caption);
+    try testing.expectEqual(violet, s.zones[1].stroke);
+    try testing.expectEqualStrings("unsupported", s.zones[1].caption.?);
+    try testing.expectEqual(red, s.zones[2].stroke);
+    try testing.expectEqualStrings("unsupported", s.zones[2].caption.?);
+}
+
+test "a promoted warning is drawn as an error" {
+    var c = try Compilation.init(testing.allocator, "K :: (f/*, g) h", .{ .warnings = .promote, .ir = .keep });
+    defer c.deinit();
+    try testing.expectEqual(red, (try c.sheet()).?.zones[0].stroke);
+}
+
+test "a placeholder is drawn as one, framed by its error" {
+    var c = try Compilation.init(testing.allocator, "G :: f\nH :: g /k", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    try testing.expectEqual(Style.As.cluster, s.drawnAs(@fromBackingInt(@as(u32, 0))));
+    try testing.expectEqual(Style.As.placeholder, s.drawnAs(@fromBackingInt(@as(u32, 1))));
+    try testing.expectEqual(red, s.zones[1].stroke);
+}
+
+test "a marked edge takes the colour; a solid shape's fill follows its line" {
+    // No analysis error marks an edge yet, so the IR is made by hand.
+    const Ir = @import("../analyse/Ir.zig");
+    const Formatter = @import("Formatter.zig");
+    var b: Ir.Builder = .init(testing.allocator);
+    errdefer b.deinit();
+    const z = try b.addZone(.{ .name = try b.addString("G"), .own = null });
+    const start = try b.addNode(.{ .kind = .null_node, .name = null, .zone = z, .canonical = null });
+    const end = try b.addNode(.{ .kind = .plain, .name = null, .zone = z, .canonical = .{ .edge = @fromBackingInt(@as(u32, 0)), .side = .cod } });
+    const f = try b.addEdge(.{ .name = try b.addString("f"), .source = start, .target = end, .directed = true, .zone = z });
+    try b.addIssue(.{ .subject = .{ .edge = f }, .err = .{ .analysis = 0 } });
+    try b.addIssue(.{ .subject = .{ .node = start }, .err = .{ .analysis = 1 } });
+    try b.addIssue(.{ .subject = .{ .node = end }, .err = .{ .analysis = 2 } });
+    var ir = try b.finish();
+    defer ir.deinit(testing.allocator);
+
+    var s = try Formatter.format(testing.allocator, &ir, &.{ .warning, .unsupported, .@"error" });
+    defer s.deinit();
+    try testing.expectEqual(amber, s.edges[0].stroke);
+    // The start is a dot: its fill is its line.
+    try testing.expectEqual(violet, s.nodes[0].stroke);
+    try testing.expectEqual(violet, s.nodes[0].fill);
+    // A circle keeps its fill.
+    try testing.expectEqual(red, s.nodes[1].stroke);
+    try testing.expectEqual(@as(?Style.Color, null), s.nodes[1].fill);
+    try testing.expectEqual(red, s.zones[0].stroke);
+    try testing.expectEqualStrings("unsupported", s.zones[0].caption.?);
+}
+
+// ---------------------------------------------------------------------------
 // The cascade is a monoid: `over` is associative, with `empty` as identity.
 
 fn randomAttrs(r: std.Random) Attrs {

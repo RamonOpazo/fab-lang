@@ -19,12 +19,19 @@ ink: u24,
 soft: u24,
 muted: u24,
 accent: u24,
+/// Marks: what is wrong, from most to least severe (statements.md §18).
+@"error": u24,
+warning: u24,
+unsupported: u24,
 
 pub const default: Theme = .{
     .ink = 0x333333,
     .soft = 0x555555,
     .muted = 0x888888,
     .accent = 0x1f6feb,
+    .@"error" = 0xd1242f,
+    .warning = 0xbf8700,
+    .unsupported = 0x8250df,
 };
 
 pub fn rgb(theme: Theme, c: Style.Color) u24 {
@@ -33,6 +40,9 @@ pub fn rgb(theme: Theme, c: Style.Color) u24 {
         .token => |t| switch (t) {
             .muted => theme.muted,
             .accent => theme.accent,
+            .@"error" => theme.@"error",
+            .warning => theme.warning,
+            .unsupported => theme.unsupported,
         },
     };
 }

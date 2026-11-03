@@ -131,6 +131,8 @@ fn compileEverything(gpa: std.mem.Allocator, source: []const u8) !void {
     defer c.deinit();
     _ = try c.tokens();
     _ = try c.ir();
+    _ = try c.sheet();
+    _ = try c.zoneMark(@fromBackingInt(@as(u32, 0)));
     _ = try c.status();
 }
 

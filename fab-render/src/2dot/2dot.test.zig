@@ -148,14 +148,15 @@ test "undirected edges have no arrowhead" {
     );
 }
 
-test "holes are dashed circles" {
+test "holes are dashed circles, marked by their error, which frames the diagram" {
     // `+k` is not declared: g's end is a hole, and the path goes on to h.
     try expectDot("G :: f g/+k h",
         \\  subgraph cluster_0 {
-        \\    peripheries=0
+        \\    label="G"
+        \\    pencolor="#d1242f"
         \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
-        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", style="dashed"]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", color="#d1242f", style="dashed"]
         \\    n3 [label="h+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
