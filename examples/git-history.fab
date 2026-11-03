@@ -3,14 +3,14 @@ Repo :: {
   (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
 }
 
-:ref := :shape [round]  :fill [muted]
+:ref := :shape [round], :fill [muted]
 
 Repo :style := {
   &node :shape [point],
-  #Head    :ref  :label "main",
-  #Feature :ref  :label "feature/auth",
-  #V1      :ref  :label "v1.0",
-  #Spike   :ref  :label "spike/cache",
+  #Head    { :ref, :label "main" },
+  #Feature { :ref, :label "feature/auth" },
+  #V1      { :ref, :label "v1.0" },
+  #Spike   { :ref, :label "spike/cache" },
   init    :label "a1f3 init",
   readme  :label "b27c add readme",
   fix     :label "c90e fix typo",

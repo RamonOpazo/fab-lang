@@ -729,7 +729,7 @@ test "Statements: a chain across lines in a group" {
 test "Statements: the three forms of definition" {
     try check(.{ .step = 5, .source =
         \\[red] := [#ff0000]
-        \\:terminal := { :shape [circle] :fill [red] }
+        \\:terminal := { :shape [circle], :fill [red] }
         \\G :: f
         \\&node :shape := [circle]
         \\G :style := { f :label "x", +f { :label $P$ } }
@@ -739,6 +739,10 @@ test "Statements: the three forms of definition" {
 
 test "Relations: a diagram declared twice" {
     try check(.{ .step = 5, .source = "G :: f\nG :: g", .codes = &.{.{ .analysis = .zone_declared_twice }} });
+}
+
+test "Definitions and values: attributes side by side" {
+    try check(.{ .step = 4, .source = "G :: f\nG :style := { f :label \"x\" :bend [inner] }", .codes = &.{.{ .syntax = .attributes_side_by_side }} });
 }
 
 test "Definitions and values: a value in a declaration" {
@@ -1114,7 +1118,7 @@ test "Examples: a flowchart: order fulfilment" {
         \\  #Rejected  :label "Rejected",
         \\  (yes, paid, reserved)  :label "yes",
         \\  (no, declined, short)  :label "no",
-        \\  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
+        \\  (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
         \\}
     });
 }
@@ -1151,12 +1155,12 @@ test "Examples: a database schema: documents and comments" {
         \\  (user, org)! :uk,
         \\  (doc, tag)! :uk,
         \\
-        \\  parent :nullable :card [0..*/0..1],
+        \\  parent { :nullable, :card [0..*/0..1] },
         \\  parent document == document         // a reply is on the same document as its parent
         \\}
         \\
         \\Db :style := writer :label "author_id"
-        \\User :style := :label "users"  :fill [muted]
+        \\User :style := :label "users", :fill [muted]
     });
 }
 
@@ -1169,14 +1173,14 @@ test "Examples: a git history: commits as arrows" {
         \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
         \\}
         \\
-        \\:ref := :shape [round]  :fill [muted]
+        \\:ref := :shape [round], :fill [muted]
         \\
         \\Repo :style := {
         \\  &node :shape [point],
-        \\  #Head    :ref  :label "main",
-        \\  #Feature :ref  :label "feature/auth",
-        \\  #V1      :ref  :label "v1.0",
-        \\  #Spike   :ref  :label "spike/cache",
+        \\  #Head    { :ref, :label "main" },
+        \\  #Feature { :ref, :label "feature/auth" },
+        \\  #V1      { :ref, :label "v1.0" },
+        \\  #Spike   { :ref, :label "spike/cache" },
         \\  init    :label "a1f3 init",
         \\  readme  :label "b27c add readme",
         \\  fix     :label "c90e fix typo",

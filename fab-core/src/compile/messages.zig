@@ -59,6 +59,11 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
             .explanation = "Items are separated by commas: terms in a declaration, entries and equations in a definition.",
             .hint = "Add `,` before this item.",
         },
+        .attributes_side_by_side => .{
+            .message = "Attributes side by side",
+            .explanation = "An entry binds one attribute. Several attributes of one subject go in braces, so the subject is written once; a comma alone would end the entry, and the next attribute would bind the owner instead.",
+            .hint = "Group them: `f { :label \"x\", :bend [inner] }`.",
+        },
         .trailing_comma => .{
             .message = "A comma with no item after it",
             .explanation = "A comma stands between items only, never after the last one.",

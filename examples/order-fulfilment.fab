@@ -18,5 +18,5 @@ Order :style := {
   #Rejected  :label "Rejected",
   (yes, paid, reserved)  :label "yes",
   (no, declined, short)  :label "no",
-  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
+  (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
 }

@@ -141,6 +141,9 @@ pub const Error = struct {
         missing_comma,
         /// `(f, g,)`: a comma with no item after it.
         trailing_comma,
+        /// `f :label "x" :bend [inner]`: an entry has one attribute; several
+        /// go in braces (statements.md §19).
+        attributes_side_by_side,
         /// `G :: {}`.
         empty_braces,
         /// `f | | m`: a level with nothing in it.

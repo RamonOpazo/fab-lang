@@ -40,7 +40,7 @@ items
     ;
 
 item
-    = [ chain ] ( attr { attr } | block )
+    = [ chain ] ( attr | block )
     | chain { operator chain }
     ;
 

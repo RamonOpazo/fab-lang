@@ -226,7 +226,7 @@ fn parseItemRecovering(p: *Parser) Error!Node.Index {
     };
 }
 
-/// item = [ chain ] ( attr { attr } | block ) | chain { operator chain }
+/// item = [ chain ] ( attr | block ) | chain { operator chain }
 fn parseItem(p: *Parser) Error!Node.Index {
     _ = p.cur(); // skip newlines first, so `start` is a real token
     const start = p.tok_i;
@@ -243,13 +243,17 @@ fn parseItem(p: *Parser) Error!Node.Index {
     };
 }
 
-/// The rest of an entry: its attributes, or its block.
+/// The rest of an entry: its attribute, or its block. Attributes side by
+/// side are an error, never a missing comma: an assumed comma would make the
+/// next one bind the owner. The tree keeps them all.
 fn parseEntry(p: *Parser, subject: Node.Index, start: TokenIndex) Error!Node.Index {
     const top = p.scratch.items.len;
     try p.scratch.append(p.gpa, subject);
     if (p.cur() == .l_cur) {
         try p.scratch.append(p.gpa, try p.parseBlock());
     } else {
+        try p.scratch.append(p.gpa, try p.parseAttr());
+        if (p.cur() == .attr_id) try p.warnAt(.attributes_side_by_side, p.tok_i);
         while (p.cur() == .attr_id) try p.scratch.append(p.gpa, try p.parseAttr());
     }
     return p.addNode(.entry, start, .{ .range = try p.listFrom(top) });

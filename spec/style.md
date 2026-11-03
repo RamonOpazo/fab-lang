@@ -347,8 +347,8 @@ A start is a null node no edge arrives at; an end is one some edge arrives at (a
 
 ```
 [dark] := {
-  &zone :fill [#1e1e1e]
-  &node :stroke [#dddddd]
+  &zone :fill [#1e1e1e],
+  &node :stroke [#dddddd],
   &edge :ink [#aaaaaa]
 }
 ```
@@ -416,8 +416,8 @@ base  <  themes, left to right  <  the program's own bindings
 **Decided.** An attribute written with no value means **apply it**:
 
 - a built-in flag: `G.f :hide`;
-- a bundle: `:terminal := { :shape [circle] :fill [ink] }`, then `G.#Done :terminal`.
-  So `:hide` needs no `[on]`/`[off]`, and flags and bundles read the same way. Bundles can be refined afterwards; the later setting wins: `G.#Done :terminal :fill [red]`.
+- a bundle: `:terminal := { :shape [circle], :fill [ink] }`, then `G.#Done :terminal`.
+  So `:hide` needs no `[on]`/`[off]`, and flags and bundles read the same way. Bundles can be refined afterwards; the later setting wins: `G.#Done { :terminal, :fill [red] }`.
 
 ---
 
@@ -451,26 +451,28 @@ base  <  themes, left to right  <  the program's own bindings
 ## 11. Example
 
 ```
-Order :: *receive #Received validate #Valid? (
-    yes #Accepted! (
-        charge #Charged? (paid, declined #Waiting retry/charge+)
-      , reserve #InStock? (reserved, short #Backorder restock/reserve+)
-    )! #Ready ship #Shipped close*
-  , no #Rejected notify*
-)
+Order :: {
+  */receive/#Received validate/? +(
+      yes/#Accepted fork/! +(
+          charge/? +(paid, declined/#Waiting/retry)
+        , reserve/? +(reserved, short/#Backorder/restock)
+      )! ready/#Ready ship/#Shipped close/*
+    , no/#Rejected notify/*
+  )
+}
 
 [warn] := [#c0392b]
-:terminal := { :stroke [warn] :pen [thick] }
+:terminal := { :stroke [warn], :pen [thick] }
 
 Order :theme := [print]
 Order :style := {
-  &node :shape [round]
-  #Valid :label "Valid?"
-  #Charged :label "Payment accepted?"
-  #Rejected :terminal
-  retry, restock :arrow [/dashed/>] :bend [20!]
-  yes, paid, reserved :label "yes"
-  no, declined, short :label "no"
+  &node :shape [round],
+  validate+ :label "Valid?",
+  charge+ :label "Payment accepted?",
+  #Rejected :terminal,
+  (retry, restock) { :arrow [/dashed/>], :bend [20!] },
+  (yes, paid, reserved) :label "yes",
+  (no, declined, short) :label "no"
 }
 ```
 

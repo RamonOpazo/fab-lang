@@ -28,9 +28,9 @@ Db :prove := {
   (user, org)! :uk,
   (doc, tag)! :uk,
 
-  parent :nullable :card [0..*/0..1],
+  parent { :nullable, :card [0..*/0..1] },
   parent document == document         // a reply is on the same document as its parent
 }
 
 Db :style := writer :label "author_id"
-User :style := :label "users"  :fill [muted]
+User :style := :label "users", :fill [muted]

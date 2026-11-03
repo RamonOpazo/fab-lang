@@ -35,7 +35,7 @@ Its parts are optional, which gives exactly three kinds of definition:
 | Left side       | Defines                           | Examples                                                                                          |
 | --------------- | --------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `[name]`        | a value                           | `[red] := [#ff0000]`, `[warn] := [red]`                                                           |
-| `:attr`         | a new attribute, everywhere       | `:terminal := { :shape [circle] :fill [red] }`                                                    |
+| `:attr`         | a new attribute, everywhere       | `:terminal := { :shape [circle], :fill [red] }`                                                    |
 | `subject :attr` | an attribute's value at a subject | `&node :shape := [circle]`, `G :style := { … }`, `G.f :style := { … }`, `G.&edge :style := { … }` |
 
 Why subject first: inside blocks entries were already written _subject, attribute, value_ (`f :label "x"`). The top level now uses the same order, with `:=` marking that a binding is made. The language reads as one cohesive syntax rather than glued, disparate forms. "The context of `:func` is to the left, and the value is to the right."
@@ -67,9 +67,9 @@ G.f :label := "x"
 ```
 
 - An entry with a subject, `s :attr v`, inside the block of owner `X`, binds `X.s :attr`.
-- An entry with no subject, `:attr v`, binds the owner itself: `&node :style := { :shape [circle] :ink [black] }` binds `&node :shape` and `&node :ink`.
+- An entry with no subject, `:attr v`, binds the owner itself: `&node :style := { :shape [circle], :ink [black] }` binds `&node :shape` and `&node :ink`.
 - **Inside blocks, entries use the light form, without `:=`.** `:=` appears once per statement, at the top level, so every binding statement is visible at the left margin.
-- **Entries are delimited by their values.** Values are never bare, so a bare name after an attribute always starts a new entry: `#Done :terminal  f :label "x"` is two entries. (Added in the spec.)
+- **Entries are delimited by their values.** Values are never bare, so a bare name after an attribute always starts a new entry: `#Done :terminal  f :label "x"` is two entries. (Added in the spec.) (Revised in 19: an entry has one attribute, and several go in braces.)
   **Mathematical reading.** A style is a partial function from (subject, attribute) pairs to values. `G :style := { … }` gives the part of it whose subjects start with G, as a function of the rest: it is **currying**. A block is a curried group of bindings.
 
 ### 1.4 Each binding once; overlap resolved by specificity
@@ -97,7 +97,7 @@ G.f :label := "x"
 ### 1.7 What can be defined
 
 - **Values:** `[red] := [#ff0000]`, `[warn] := [red]` (aliases allowed). The type is inferred from the right side (section 2).
-- **Attributes (bundles):** `:terminal := { :shape [circle] :fill [red] }`. A bundle is a named element of the Attrs monoid. Using it lays its contents over the cascade, exactly like writing them, so `#Done :terminal :fill [green]` works, and the later setting wins. This is the `:=` user-defined attribute that was postponed during the format-layer discussion ("expand in place").
+- **Attributes (bundles):** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a named element of the Attrs monoid. Using it lays its contents over the cascade, exactly like writing them, so `#Done :terminal :fill [green]` works, and the later setting wins. This is the `:=` user-defined attribute that was postponed during the format-layer discussion ("expand in place").
 - **Attributes at subjects:** `&node :shape := [circle]`, `G :style := { … }`.
 - **Themes:** named styles, defined in the style document.
 - **Not yet:** new shapes or arrow heads. Renderers would have to know how to draw them, so that is a bigger feature for later.
@@ -702,4 +702,22 @@ How 15.3 is drawn (plan step 6).
 - The style pass reading the `Compilation`: a dependency upward, and tests that need a whole compilation.
 - Letting the program style marks: an error could be painted over.
 - Graphviz's `Msquare` for the placeholder (its corners are cut, not crossed), and an HTML label drawing the cross (fragile across Graphviz versions).
+
+## 19. One attribute per entry, 2026-11-03
+
+Revises 1.3 and 12.
+
+### 19.1 Decided
+
+- **An entry has one attribute, or a block.** Several attributes of one subject go in braces, the block that already factors a subject: `retry { :arrow [/dashed/>], :bend [inner] }`. The grammar's `entry` loses `{ attr }`.
+- **The comma always means "next entry".** It ends an entry and its subject, and an entry with no subject binds the owner (1.3). Side by side, `retry :arrow [/dashed/>] :bend [inner]`, was the only place where a space separated two things of one kind, and a reader had to know that values delimit entries.
+- **Side by side is an error, never a missing comma.** Recovering by assuming a comma would change the meaning in silence: in `Order :style := { retry :arrow [/dashed/>] :bend [inner] }`, an assumed comma makes `:bend` bind Order. The error's hint gives the braces.
+- **Right after `:=` the comma suffices,** since the owner is the subject: `User :style := :label "users", :fill [muted]` binds both to User, and `:ref := :shape [round], :fill [muted]` both to the bundle. Braces work there too.
+- **Inside a block, braces nest:** `Repo :style := { #Head { :ref, :label "main" }, … }`. A block holds items, so its entries are separated by commas on one line or several.
+
+### 19.2 Rejected
+
+- **Keeping attributes side by side:** shorter for two attributes, but it gives the space a second meaning, and the comma two (next attribute of this subject, or next subject).
+- **Parentheses for a group of attributes,** `retry (:arrow [/dashed/>], :bend [inner])`: parentheses already group subjects (`(yes, paid) :label "yes"`) and terms; braces already factor a subject.
+- **The rule only at the top level:** there the comma already means the same as side by side, so the problem is only inside blocks.
 

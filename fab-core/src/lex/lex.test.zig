@@ -187,7 +187,7 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  #Rejected  :label "Rejected",
         \\  (yes, paid, reserved)  :label "yes",
         \\  (no, declined, short)  :label "no",
-        \\  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
+        \\  (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
         \\}
         ,
         \\T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
@@ -220,26 +220,26 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  (user, org)! :uk,
         \\  (doc, tag)! :uk,
         \\
-        \\  parent :nullable :card [0..*/0..1],
+        \\  parent { :nullable, :card [0..*/0..1] },
         \\  parent document == document         // a reply is on the same document as its parent
         \\}
         \\
         \\Db :style := writer :label "author_id"
-        \\User :style := :label "users"  :fill [muted]
+        \\User :style := :label "users", :fill [muted]
         ,
         \\Repo :: {
         \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
         \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
         \\}
         \\
-        \\:ref := :shape [round]  :fill [muted]
+        \\:ref := :shape [round], :fill [muted]
         \\
         \\Repo :style := {
         \\  &node :shape [point],
-        \\  #Head    :ref  :label "main",
-        \\  #Feature :ref  :label "feature/auth",
-        \\  #V1      :ref  :label "v1.0",
-        \\  #Spike   :ref  :label "spike/cache",
+        \\  #Head    { :ref, :label "main" },
+        \\  #Feature { :ref, :label "feature/auth" },
+        \\  #V1      { :ref, :label "v1.0" },
+        \\  #Spike   { :ref, :label "spike/cache" },
         \\  init    :label "a1f3 init",
         \\  readme  :label "b27c add readme",
         \\  fix     :label "c90e fix typo",

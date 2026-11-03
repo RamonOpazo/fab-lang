@@ -40,7 +40,7 @@ Its parts are optional, which gives exactly three kinds of definition:
 | Left side       | Defines                                | Examples                                                               |
 | --------------- | -------------------------------------- | ---------------------------------------------------------------------- |
 | `[name]`        | a value                                | `[red] := [#ff0000]`, `[warn] := [red]`                                |
-| `:attr`         | a new attribute (a bundle), everywhere | `:terminal := { :shape [circle] :fill [red] }`                         |
+| `:attr`         | a new attribute (a bundle), everywhere | `:terminal := { :shape [circle], :fill [red] }`                         |
 | `subject :attr` | an attribute's value at a subject      | `&node :shape := [circle]`, `G :style := { … }`, `G.f :arrow := [epi]` |
 
 **Layers.** Three attributes of a diagram take a list of entries as their value, usually written in braces. Each is a five-letter verb, and each accepts its own vocabulary:
@@ -64,6 +64,7 @@ G.f :label := "x"
 - An entry with no subject, `:attr v`, binds the owner itself.
 - Inside blocks, entries use the light form, without `:=`. `:=` appears once per statement, at the left margin, so every binding statement is visible there.
 - Several subjects are a group, and the attributes distribute over it, as `/` distributes over a group: `(yes, paid) :label "yes"`.
+- **An entry has one attribute.** Several attributes of one subject go in braces: `retry { :arrow [/dashed/>], :bend [inner] }`. Side by side (`retry :arrow [/dashed/>] :bend [inner]`) is an error: a comma there would end the entry, and `:bend` would bind the owner instead. Right after `:=` the owner is the subject, so the comma suffices: `User :style := :label "users", :fill [muted]`.
 
 **Items and lines.** Both statements take the same right side: items separated by commas, written on one line or in braces.
 
@@ -513,7 +514,7 @@ Lengths are numbers in **em**, relative to the theme's text size. Angles are in 
 ### Definitions
 
 - **Values:** `[red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]`. The type is inferred from the right side.
-- **Bundles:** `:terminal := { :shape [circle] :fill [red] }`. A bundle is a named set of attributes. Writing it applies its contents, exactly as if they were written there; later settings refine it: `#Done :terminal :fill [green]`.
+- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a named set of attributes. Writing it applies its contents, exactly as if they were written there; later settings refine it: `#Done :terminal :fill [green]`.
 - **Themes:** `[dark] := { &zone :fill [#1e1e1e], &node :stroke [#dddddd] }`. A theme is a named style: subjects with attributes. A bundle holds attributes only; a theme holds subjects.
 - **Names** start with a lowercase letter, are defined once, and come before their first use. Built-in names cannot be redefined.
 
@@ -566,9 +567,9 @@ Specificity orders bindings within a layer of style; layers compose on top (see 
 G :: f g
 
 G :style := {
-  f  :arrow [epi]  :stroke [#c0392b],
+  f  { :arrow [epi], :stroke [#c0392b] },
   +f {
-    :label $\mathbb{R}$
+    :label $\mathbb{R}$,
     :shape [circle]
   },
   f+ :label $\mathbb{N}$,
@@ -893,6 +894,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Definition at an undeclared subject | `G :style := …` before `G ::` | A definition comes after what it talks about                 |
 | Unknown class                       | `&nodes`                      | Classes are built in, or defined                             |
 | Theme and bundle mixed up           | a bundle in `:theme`          | A theme holds subjects; a bundle holds attributes            |
+| Attributes side by side             | `f :label "x" :bend [inner]` | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }` |
 
 ### Style
 
@@ -994,7 +996,7 @@ Order :style := {
   #Rejected  :label "Rejected",
   (yes, paid, reserved)  :label "yes",
   (no, declined, short)  :label "no",
-  (retry, restock)       :arrow [/dashed/>]  :bend [inner]
+  (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
 }
 ```
 
@@ -1039,12 +1041,12 @@ Db :prove := {
   (user, org)! :uk,
   (doc, tag)! :uk,
 
-  parent :nullable :card [0..*/0..1],
+  parent { :nullable, :card [0..*/0..1] },
   parent document == document         // a reply is on the same document as its parent
 }
 
 Db :style := writer :label "author_id"
-User :style := :label "users"  :fill [muted]
+User :style := :label "users", :fill [muted]
 ```
 
 - Every foreign key goes from the table holding it to the table it references, so foreign keys compose like functions, and `parent document == document` is a real path equation: both sides go from Comment to Document.
@@ -1064,14 +1066,14 @@ Repo :: {
   (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
 }
 
-:ref := :shape [round]  :fill [muted]
+:ref := :shape [round], :fill [muted]
 
 Repo :style := {
   &node :shape [point],
-  #Head    :ref  :label "main",
-  #Feature :ref  :label "feature/auth",
-  #V1      :ref  :label "v1.0",
-  #Spike   :ref  :label "spike/cache",
+  #Head    { :ref, :label "main" },
+  #Feature { :ref, :label "feature/auth" },
+  #V1      { :ref, :label "v1.0" },
+  #Spike   { :ref, :label "spike/cache" },
   init    :label "a1f3 init",
   readme  :label "b27c add readme",
   fix     :label "c90e fix typo",

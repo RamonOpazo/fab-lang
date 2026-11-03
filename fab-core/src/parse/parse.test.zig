@@ -300,7 +300,7 @@ test "definitions: entries, groups of subjects, and blocks as factored subjects"
 test "the heads of definitions: a value, a bundle, an attribute at a subject" {
     try expectDump(
         \\[red] := [#ff0000]
-        \\:terminal := :shape [circle] :fill [red]
+        \\:terminal := :shape [circle], :fill [red]
         \\G.f :arrow := [epi]
     ,
         \\root
@@ -310,11 +310,13 @@ test "the heads of definitions: a value, a bundle, an attribute at a subject" {
         \\  statement :=
         \\    entry
         \\      attr :terminal
-        \\    entry
-        \\      attr :shape
-        \\        leaf val [circle]
-        \\      attr :fill
-        \\        leaf val [red]
+        \\    items
+        \\      entry
+        \\        attr :shape
+        \\          leaf val [circle]
+        \\      entry
+        \\        attr :fill
+        \\          leaf val [red]
         \\  statement :=
         \\    entry
         \\      juxtafix
@@ -558,6 +560,34 @@ test "recovery: a stray token after the first item of a group in braces keeps th
         defer cst.deinit(testing.allocator);
         try testing.expect(cst.errors.len > 0);
     }
+}
+
+test "an entry has one attribute; several go in braces" {
+    try expectDump("G :style := { f { :label \"x\", :bend [inner] } }",
+        \\root
+        \\  statement :=
+        \\    entry
+        \\      leaf zone_id G
+        \\      attr :style
+        \\    block
+        \\      entry
+        \\        leaf edge_id f
+        \\        block
+        \\          items
+        \\            entry
+        \\              attr :label
+        \\                leaf str "x"
+        \\            entry
+        \\              attr :bend
+        \\                leaf val [inner]
+        \\
+    );
+}
+
+test "attributes side by side are an error, never a missing comma" {
+    // An assumed comma would make `:bend` bind G.
+    try expectErrors("G :style := { f :label \"x\" :bend [inner] }", &.{.{ .attributes_side_by_side, ":bend" }});
+    try expectErrors("User :style := :label \"users\" :fill [muted] :ink [red]", &.{.{ .attributes_side_by_side, ":fill" }});
 }
 
 test "recovery: a missing comma is assumed, a trailing comma ends the list" {
