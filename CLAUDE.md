@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors (3 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -164,9 +164,13 @@ Done when `fab render` draws every example and the JSON tests pass.
 ### C. Levels
 
 **7. Levels.**
-- The IR's `Cell` generalises from 2-cells to level k, with source and target in level k−1.
-- The analyser elaborates `|` levels with the level-1 rules one dimension up. Sides are single named cells; there are no anonymous or undirected cells; cells sit only between parallel cells.
-- The renderer keeps its note that Graphviz doesn't draw cells. The two tests skipped since step 3 come back, written with `|`: fab-render's "cells are left out, with one note each" and fab-cli's "notes follow the diagnostics, and never change the exit code".
+Level k is level 1 one dimension up (`statements.md` §16). Each zone keeps one table of names with their levels, named nodes at level 0; it replaces the zone's `edges` and `names` maps. At level k, sorts read the table: a new name is a k-cell (an edge), a name of level k−1 a side (a named node), any other level an error. Each level has its own union-find, whose classes must each hold one side name. Done after step 5, before step 6. In increments:
+
+- **7a.** The IR's `Cell` generalises to level k: `level`, and source and target in level k−1 (edges at level 2, cells above); the dump and JSON follow. The table of names. `sort.of` takes the level and the table. The driver elaborates every level, and `unsupported_levels` goes. Rows: not a cell, pinch above level 1, side from the wrong level.
+- **7b.** Elaborating cells with rules 2–5: attachment, cycles, distribution, a space landing on a named side (`f/α g/β/h`). Rows: unnamed side, undirected cell, path as a side.
+- **7c.** Parallel cells, checked in `graph()` once level 1 is final (a later diagram can merge nodes). A non-parallel cell is kept and marked; a cell whose sides failed is dropped, its error on the zone. The corpus: the level rows and the spec's examples (Nat, Eq, Vc, Vs, Mod).
+
+A flow draws no cells but declares them as any diagram does: there is no "cells in flow mode" error. The header waits until fab-core is complete. fab-render's "cells are left out, with one note each" and fab-cli's "notes follow the diagnostics, and never change the exit code" come back with step 6.
 
 Done when every level case passes.
 
@@ -203,7 +207,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents                                          | step 8             |
-| The header's attributes (`:kind`, strictness, boundary)         | step 7             |
+| The header's attributes (`:kind`, strictness, boundary)         | after fab-core     |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |
 | The place vocabulary                                            | later              |

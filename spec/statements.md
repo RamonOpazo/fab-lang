@@ -610,3 +610,22 @@ The parser recovers by skipping to the next statement, and keeps what it read be
 - Analysing what the parser kept, with a red border: it draws what was not written (`f` undirected, `g` missing) with confidence, and a truncated tree has errors of its own.
 - Ownership by the statement's own tokens: the skipped tail lies outside them, which is how the wrong drawings went unmarked.
 - Copying syntax errors into the analyser's list: two copies of one diagnostic, free to drift.
+
+## 16. Levels, 2026-11-03
+
+Revises section 3 for the implementation of levels (plan step 7).
+
+### 16.1 Decided
+
+- **Level k is level 1 one dimension up.** Each diagram keeps one table of names with their levels; named nodes are level 0. At level k a new name is a k-cell, a name of level k−1 is a side, standing as a named node does at level 1, and any other level is an error ("side from the wrong level", "declared twice").
+- **No unnamed sides.** Level 1 nodes may be unnamed because nodes are derived; above it a node is a (k−1)-cell, an edge one level down, and fAB has no nameless edges. An unnamed node at level k would be an undeclared generator of the polygraph, with no boundary. The row is *unnamed side*, not *anonymous cell*: in `f/α β/g` the cells are named, and the missing thing is the side between them.
+- **No pinches above level 1.** A pinch merges unnamed ends; above level 1 there are none, so a pinch there is an error, never a synonym (`+α` for f).
+- **Not a cell.** Named nodes, `@`, `*`, `?`, `!` and other diagrams' nodes belong to level 1.
+- **The space is legal above level 1.** `f/α g/β/h` is α : f ⇒ g and β : g ⇒ h: the space lands on g, which is named. Both spellings of vertical composition are fAB.
+- **Describe once, draw what fits.** A flow has cells like any diagram and draws none of them; nothing forbids them. Drawing follows the kind; declarations describe the whole system.
+
+### 16.2 Rejected
+
+- Forbidding cells in flows: the relations exist whatever the diagram shows, and the program states them once.
+- Forbidding the space above level 1: it breaks "the same grammar one dimension up" for no gain in meaning.
+- The header in this step: the header's scope and syntax are tied to the CLI, so it waits until fab-core is complete.

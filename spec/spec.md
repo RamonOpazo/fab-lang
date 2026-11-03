@@ -13,6 +13,7 @@ fAB describes a diagram by its edges only. Nodes are never written: they are der
 - **Honesty rule.** Every edge has a name, and every node is a quotient. No construct creates an anonymous edge.
 - **Collapses are written.** Anonymous ends become one node only where a pinch says so. A space joins one end to one end, a slash attaches to a written node or closes a cycle, and nothing merges silently.
 - **Declare once, refer backwards.** A bare name declares an edge. A name that already exists is a reference, and a reference always points left, to something declared before it. The same holds for every name in a program: nothing is used before it is created.
+- **Describe once, draw what fits.** A program states the whole system of relations once, at every level. What a diagram draws is the part of that system its kind can show: a flow has cells like any diagram, and draws none of them.
 - **Structure, then data about it.** Declarations (`::`) build the structure. Definitions (`:=`) give it data: how it looks, what holds in it, where it goes. Data never changes structure.
 - **Topology, not geometry.** fAB says what connects to what. Nothing in the language names a direction on the page; layout decides that.
 - **One symbol, one meaning.** Every operator means the same thing wherever it appears, at every level of a diagram.
@@ -81,7 +82,7 @@ G.f :label := "x"
 
 **The header.** A diagram's kind (flow, category, schema, plain graph), its strictness and its boundary are naturally definitions at the zone, such as `Sq :kind := [category]`. Which header attributes exist, and what each changes, is open.
 
-- **Kind** decides what the relations mean. In category mode `f g` also implies that the composite exists; in flow mode it is two steps. The kind also decides whether `?`, `!` and cells are allowed.
+- **Kind** decides what the relations mean. In category mode `f g` also implies that the composite exists; in flow mode it is two steps. The kind also decides what is drawn: a flow draws no cells.
 - **Strictness** decides which warnings are errors, for example an unmatched `!` fork.
 - **Boundary** decides which open ends the diagram exposes when it is used inside another diagram.
 
@@ -416,7 +417,9 @@ A diagram with cells is a presentation graded by dimension, which mathematicians
 
 - **Each level uses the same grammar as level 1, one dimension up.** At level k ≥ 2, a declared name refers to a cell of level k−1, and a new name creates a cell of level k. No sigil is needed.
 - **Cells are placed with `/`.** The slash rules hold unchanged: one cell between two sides is attached to them, and two or more cells in a chain form a cycle. `f/α/g` is α : f ⇒ g, and the pair there and back is `f/α/g/β`.
-- **No anonymous cells.** `f/α β/g` would need a 1-cell between α and β, so it is an error at level 2. Vertical composition is written as two attachments: `f/α/g, g/β/h`.
+- **Each diagram keeps one table of names, each with its level.** At level k, a name not in the table is a new k-cell; a name of level k−1 is a side, standing where a named node stands at level 1; any other level is an error. Named nodes are level 0, which is why level 1 reads them as nodes.
+- **No unnamed sides.** At level 1 a node may be unnamed, since nodes are derived. Above it, a node is a (k−1)-cell, and fAB has no nameless edges, so every side is a name: `f/α β/g` would need a 1-cell between α and β, and is an error at level 2. For the same reason there is nothing to pinch above level 1, and named nodes, `@`, `*`, `?`, `!` and other diagrams belong to level 1 only.
+- **Vertical composition** is two attachments, `f/α/g, g/β/h`, or a space landing on the shared side, `f/α g/β/h`: α's target meets g, which is named.
 - **Sides are always single, named cells.** There are never paths as sides, and never parentheses around a side.
 - **No undirected cells** above level 1.
 - **`|` appears only at the top of a declaration's right side,** inline or in its braces. A group never holds `|`: `G :: f (g | α)` is an error, because a level cannot live inside a branch.
@@ -431,6 +434,7 @@ A diagram with cells is a presentation graded by dimension, which mathematicians
 Nat :: +(f, g)+ | f/α/g                    // a natural transformation
 Eq  :: +(f, g)+ | f/α/g/β                  // α : f ⇒ g and β : g ⇒ f
 Vc  :: +(f, g, h)+ | f/α/g, g/β/h          // α then β: vertical composition
+Vs  :: +(f, g, h)+ | f/α g/β/h             // the same, with a space
 Mod :: +(f, g)+ | f/(α, β)/g | α/m/β       // two 2-cells and a modification
 ```
 
@@ -452,7 +456,7 @@ Iso :: {
 }
 ```
 
-**Kind.** In category mode cells are 2-cells and above. In flow mode they have no meaning yet, and the header forbids them.
+**Kind.** Cells are declared the same way in every diagram. A category draws them as 2-cells and above; a flow draws none of them, since a flow shows steps, not relations between steps. They stay part of the program: other layers can still refer to them.
 
 ## Values and definitions
 
@@ -863,9 +867,10 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Side from the wrong level        | `α/m/f` at level 3             | Level 3 relates 2-cells; f is a 1-cell                          |
 | Cells between non-parallel cells | `f/α/h` in a square            | α : f ⇒ h needs f and h to share start and end                  |
 | Path as a side                   | `(f h)/α/g`                    | Sides are single named cells; name the composite first          |
-| Anonymous cell                   | `f/α β/g` at level 2           | It needs a 1-cell between α and β; write `f/α/g/β` for the pair |
+| Unnamed side                     | `f/α β/g` at level 2           | It needs a 1-cell between α and β; write `f/α/g/β` for the pair |
 | Undirected cell                  | `f/α/` at level 2              | Cells always have a direction                                   |
-| Cells in flow mode               | `\| f/α/g` under a flow header | Cells have no flow meaning yet                                  |
+| Not a cell                       | `+(f, g)+ \| f/#A`, `f/*`, `A.α` | Named nodes, `@`, `*`, kinds and other diagrams are level 1 only |
+| Pinch above level 1              | `+(α, β)`, `+α/β/g` at level 2 | Sides are named, so there is nothing to pinch                    |
 
 ### Definitions and values
 
@@ -1130,7 +1135,8 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 - **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
 - **The header.** Which attributes (`:kind`, strictness, boundary) and what each changes.
 - **Diagram composition.** How one diagram is used inside another, through its boundary.
-- **Meaning of cells in flows,** and how many levels stay readable.
+- **What a flow could draw of its cells,** if anything, and how many levels stay readable.
+- **How a category draws `?` and `!`.** They are declared the same way in every diagram; what a category shows of them is the renderer's to decide.
 - **Well-structuredness.** Whether to warn on a `!` fork with no matching `!` join, especially inside a loop, where tokens multiply without bound.
 - **Open name sets.** Whether a diagram may admit names on mention. Deferred: types are listed explicitly for now.
 - **Patterns of edges.** A way to build several edges from one pattern, such as `f +(3/g)` for g1, g2 and g3. Not decided; every edge still has its own name, and nameless edges are not part of fAB.
