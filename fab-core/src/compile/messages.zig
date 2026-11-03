@@ -240,8 +240,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Write it on each edge: `f/ g/`.",
         },
         .edge_declared_twice => .{
-            .message = "The edge {} is already declared",
-            .explanation = "A bare name declares an edge, once per diagram. Only `f/f` writes the same edge twice, as a loop.",
+            .message = "{} is already declared",
+            .explanation = "A bare name declares an edge, or a cell above level 1, once per diagram. Only `f/f` writes the same one twice, as a loop.",
             .hint = "Refer to one of its ends instead: `+f`, `f+`.",
         },
         .self_reference_outside_loop => .{
@@ -354,15 +354,35 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A pinch merges unnamed ends into one node. Above level 1 every side is a named cell, so there are no unnamed ends to merge.",
             .hint = "Attach the cells to their sides: `f/(α, β)/g`.",
         },
+        .undirected_cell => .{
+            .message = "Cells always have a direction",
+            .explanation = "A trailing `/` makes an edge undirected. A cell goes from its source to its target, so it always has one.",
+            .hint = "Remove the trailing `/`.",
+        },
+        .path_as_side => .{
+            .message = "A path is not a side",
+            .explanation = "The sides of a cell are single named cells of the level below. A composite is named there first, and the proof layer states what it is.",
+            .hint = "Name the composite at the level below: `+(f h, k, g)+ | k/α/g`, with `k == f h` in a proof.",
+        },
+        .level_inside_branch => .{
+            .message = "Levels are written at the top of a body",
+            .explanation = "A level is the whole body one dimension up, so `|` stands only at the top of a declaration's right side, or in the braces that hold it.",
+            .hint = "Move the level to the top: `G :: f, g | α`.",
+        },
+        .unnamed_side => .{
+            .message = "This side has no name",
+            .explanation = "Above level 1, every end of a cell lands on a named cell of the level below. Here an end lands on nothing, or on another unnamed end, so its side would be a cell nobody declared.",
+            .hint = "Attach it to a named side: `f/α/g`, or `f/α/g/β` for a pair.",
+        },
+        .two_names_for_one_side => .{
+            .message = "{} lands where another side already is",
+            .explanation = "A space puts the end before it and the end after it in one place. Here both are sides, and different ones; a place has one side.",
+            .hint = "Use the same side on both: `f/α/g g/β/h`, or separate the items with a comma.",
+        },
         .side_from_wrong_level => .{
             .message = "{} is not a cell of the level below",
             .explanation = "At level k, the sides of a cell are cells of level k−1: level 3 relates 2-cells, so a 1-cell can't be a side there.",
             .hint = "Use a cell of the level just below as the side.",
-        },
-        .unsupported_levels => .{
-            .message = "Levels above the first are checked, but not drawn yet",
-            .explanation = "This compiler checks the names in levels above the first, but does not elaborate them into cells yet. The first level is drawn.",
-            .hint = "Nothing to fix in the program.",
         },
         .unsupported_definition => .{
             .message = "Definitions are not supported yet",

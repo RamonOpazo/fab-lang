@@ -17,12 +17,12 @@ pub fn items(a: *Analyser, node: Node.Index, place: Place) error{OutOfMemory}!vo
     const cst = a.cst;
     switch (cst.tag(node)) {
         .items => for (cst.children(node)) |item| try items(a, item, place),
-        // Braces without a subject only organise; levels inside them are
-        // levels of the same body.
+        // Braces without a subject only organise. A body's braces may hold
+        // its levels; nested ones may not, since a level is the whole body.
         .block => {
             const inner = cst.children(node)[0];
             if (cst.tag(inner) == .levels) {
-                try a.fail(.unsupported_levels, cst.mainToken(inner));
+                try a.fail(.level_inside_branch, cst.mainToken(inner));
                 try items(a, cst.children(inner)[0], place);
             } else try items(a, inner, place);
         },
@@ -69,7 +69,11 @@ fn cellsOnly(a: *Analyser, node: Node.Index) error{OutOfMemory}!bool {
                 try a.failTerm(.not_a_cell, node, main);
                 return false;
             },
-            // A trailing `/`: its operand is judged, the slash in plan step 7b.
+            // A trailing `/`: a cell always has a direction.
+            .slash => {
+                try a.failTerm(.undirected_cell, node, main);
+                return false;
+            },
             else => return cellsOnly(a, cst.data(node).node),
         },
         .invalid => return true,
@@ -95,11 +99,15 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             else => {},
         },
         .group => try items(a, cst.children(node)[0], .group),
-        .o_chain => for (cst.children(node)) |step| {
+        .o_chain => for (cst.children(node), 0..) |step, i| {
             if (sort.of(a, step) == .edges) {
                 try term(a, step);
             } else if (sort.isPinchedEdge(a, step)) {
                 try a.failTerm(.pinched_edge_beside_space, step, cst.firstToken(step));
+            } else if (a.scope.level > 1 and isPath(a, cst.children(node), i)) {
+                // Two sides side by side: a composite, which is no side.
+                try a.failTerm(.path_as_side, node, cst.firstToken(node));
+                return;
             } else {
                 try a.failTerm(.node_beside_space, step, cst.firstToken(step));
             }
@@ -121,6 +129,11 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
         .invalid => {},
         else => for (cst.children(node)) |child| try term(a, child),
     }
+}
+
+/// Above level 1, whether a step and the one after it are both sides.
+fn isPath(a: *Analyser, steps: []const Node.Index, i: usize) bool {
+    return i + 1 < steps.len and sort.of(a, steps[i + 1]) == .node;
 }
 
 /// `A.+f`, `A.f+`, `A.#X`, `A.@` (rule 6): in relations, `.` reaches a node

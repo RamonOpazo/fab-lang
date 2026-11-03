@@ -71,16 +71,17 @@ test "a diagram's mark: the border of its worst issue, and the unsupported label
     var c = try Compilation.init(testing.allocator,
         \\G :: f g/+k h
         \\H :: (f/*, g) h
-        \\J :: f | f/α/f
+        \\J :: f
         \\K :: f
         \\review :: a b
+        \\J :style := f :label "x"
     , preview);
     defer c.deinit();
     const Mark = Compilation.ZoneMark;
     // An error on a hole in G, a warning on a node in H.
     try testing.expectEqual(Mark{ .border = .@"error" }, try c.zoneMark(@fromBackingInt(@intCast(0))));
     try testing.expectEqual(Mark{ .border = .warning }, try c.zoneMark(@fromBackingInt(@intCast(1))));
-    // Levels are skipped: J is drawn with the unsupported label.
+    // Its style is skipped: J is drawn with the unsupported label.
     try testing.expectEqual(Mark{ .border = .unsupported, .unsupported = true }, try c.zoneMark(@fromBackingInt(@intCast(2))));
     try testing.expectEqual(Mark{}, try c.zoneMark(@fromBackingInt(@intCast(3))));
     // The reserved head draws a placeholder, bordered by its error.
@@ -144,7 +145,7 @@ test "running out of memory at any allocation leaks nothing" {
         \\H :: x /y
         \\review :: a b
         \\G :style := f :label "x" | g
-        \\J :: f | f/α/f
+        \\J :: +(f, g)+ | f/α/g, f/β/g | α/m/β, f/γ
         \\
     ;
     var fixed: FixedInPlace = .{ .backing = testing.allocator };

@@ -623,6 +623,9 @@ Revises section 3 for the implementation of levels (plan step 7).
 - **Not a cell.** Named nodes, `@`, `*`, `?`, `!` and other diagrams' nodes belong to level 1.
 - **The space is legal above level 1.** `f/α g/β/h` is α : f ⇒ g and β : g ⇒ h: the space lands on g, which is named. Both spellings of vertical composition are fAB.
 - **Describe once, draw what fits.** A flow has cells like any diagram and draws none of them; nothing forbids them. Drawing follows the kind; declarations describe the whole system.
+- **No union-find above level 1.** Every side is named, and nothing glues ends later (no pinches, no references), so each end of a cell is settled in its own term: it lands on a side, meets another open end (an unnamed side, reported where they meet), meets a different side (two names for one side), or is left open (an unnamed side, at the cell's name). `α/β` reports two unnamed sides: it lacks two 1-cells. Edges and cells are one kind of name, a generator with a level and two sides.
+- **Two names for one side** keeps both cells as written: above level 1 there is nothing to merge, since each cell already has its sides.
+- **Declared twice** is one rule for edges and cells: the same rule, one dimension up.
 
 ### 16.2 Rejected
 

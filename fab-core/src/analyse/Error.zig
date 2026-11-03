@@ -137,6 +137,19 @@ pub const Tag = enum(u8) {
     pinch_above_level_one,
     /// `α/m/f` at level 3: f is a 1-cell, and level 3 relates 2-cells.
     side_from_wrong_level,
+    /// `f/α/` at level 2.
+    undirected_cell,
+    /// `(f h)/α/g` at level 2: two sides side by side.
+    path_as_side,
+    /// `G :: f, { g | α }`: braces inside a body hold no levels.
+    level_inside_branch,
+
+    // -- levels (elaboration, one dimension up) -------------------------------
+
+    /// `f/α β/g`, `α`, `(α, β)/g` at level 2: an end on no named cell.
+    unnamed_side,
+    /// `f/α/g h/β/k` at level 2: g and h in one place.
+    two_names_for_one_side,
 
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
@@ -145,15 +158,13 @@ pub const Tag = enum(u8) {
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 
-    /// Levels above the first: checked, not drawn, until plan step 7b.
-    unsupported_levels,
     /// The contents of a definition, until plan steps 8–11.
     unsupported_definition,
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
             .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
-            .unsupported_levels, .unsupported_definition => .unsupported,
+            .unsupported_definition => .unsupported,
             else => .@"error",
         };
     }

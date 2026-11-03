@@ -35,14 +35,25 @@ pub const Name = struct {
     is: union(enum) {
         /// A named node or `@`, at level 0.
         node: Elem,
-        /// An edge, at level 1.
-        edge: struct { index: Ir.EdgeIndex, dom: Elem, cod: Elem, token: TokenIndex },
-        /// A cell, at level 2 and up: declared, and elaborated from plan step
-        /// 7b.
-        cell: TokenIndex,
-        /// Declared in a failed term.
-        hole: Elem,
+        /// An edge, at level 1, or a cell above it.
+        generator: Generator,
+        /// Declared in a failed term: what refers to it stays quiet. At level
+        /// 1, the hole it is bound to; above, nothing.
+        hole: ?Elem,
     },
+};
+
+/// An edge or a cell: a generator of the polygraph, with a side on each end.
+pub const Generator = struct {
+    /// The IR edge at level 1, the IR cell above.
+    index: u32,
+    /// At level 1, the union-find elements of its two ends, from which the
+    /// nodes are derived. Above, its sides: an edge at level 2, a cell of the
+    /// level below above that.
+    left: u32,
+    right: u32,
+    /// Where it is declared.
+    token: TokenIndex,
 };
 
 /// The items of a declaration's first level.
@@ -55,19 +66,6 @@ pub fn items(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             try items(a, if (cst.tag(inner) == .levels) cst.children(inner)[0] else inner);
         },
         else => _ = try term(a, node),
-    }
-}
-
-/// The cells of a level above the first. Until plan step 7b they are only
-/// declared: each new name enters the table at this level, so the level
-/// above can read it as a side.
-pub fn cells(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
-    const cst = a.cst;
-    for (cst.firstToken(node)..cst.lastToken(node) + 1) |t| {
-        const token: TokenIndex = @intCast(t);
-        if (cst.tokenTag(token) != .edge_id) continue;
-        const gop = try a.scope.table.getOrPut(a.arena.allocator(), cst.tokenText(token));
-        if (!gop.found_existing) gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .cell = token } };
     }
 }
 
@@ -131,7 +129,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     if (gop.found_existing) {
         const h = try hole(a);
         switch (gop.value_ptr.is) {
-            .edge => |first| {
+            .generator => |first| {
                 const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
                 try a.errors.append(a.gpa, .{
                     .subject = .{ .elem = h },
@@ -145,7 +143,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
                     .related = first.token,
                 });
             },
-            .hole, .node, .cell => {},
+            .hole, .node => {},
         }
         return one(a, h);
     }
@@ -160,7 +158,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const dom = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .dom }, .{});
     const cod = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .cod }, .{});
     try a.edge_ends.append(a.arena.allocator(), .{ dom, cod });
-    gop.value_ptr.* = .{ .level = 1, .is = .{ .edge = .{ .index = index, .dom = dom, .cod = cod, .token = token } } };
+    gop.value_ptr.* = .{ .level = 1, .is = .{ .generator = .{ .index = @backingInt(index), .left = dom, .right = cod, .token = token } } };
 
     const ends = try a.arena.allocator().alloc(Elem, 2);
     ends[0] = dom;
@@ -237,7 +235,7 @@ fn failedTerm(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     while (t <= cst.lastToken(node)) : (t += 1) {
         if (cst.tokenTag(t) != .edge_id) continue;
         const gop = try a.scope.table.getOrPut(a.arena.allocator(), cst.tokenText(t));
-        if (!gop.found_existing) gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .hole = h } };
+        if (!gop.found_existing) gop.value_ptr.* = .{ .level = 1, .is = .{ .hole = h } };
     }
     return one(a, h);
 }
@@ -361,10 +359,10 @@ fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemor
 /// (rule 5), so a reference to it is an error at the edge's name. A cell has
 /// no ends at level 1.
 fn endOf(a: *Analyser, edge: Name, side: Ir.End.Side, name: TokenIndex) error{OutOfMemory}!Elem {
+    if (edge.level != 1) return failHole(a, .undeclared_name_in_diagram, name);
     const elem = switch (edge.is) {
-        .edge => |e| if (side == .dom) e.dom else e.cod,
-        .hole => |h| return h,
-        .cell => return failHole(a, .undeclared_name_in_diagram, name),
+        .generator => |e| if (side == .dom) e.left else e.right,
+        .hole => |h| return h.?,
         .node => unreachable,
     };
     const class = a.uf.class(elem);
@@ -384,8 +382,8 @@ fn undirect(a: *Analyser, node: Node.Index) void {
     if (!sort.isSingleEdge(a, node)) return;
     const name = cst.tokenText(cst.mainToken(singleEdge(cst, node)));
     switch ((a.scope.table.get(name) orelse return).is) {
-        .edge => |e| a.builder.edges.items(.directed)[@backingInt(e.index)] = false,
-        .hole, .node, .cell => {},
+        .generator => |e| a.builder.edges.items(.directed)[e.index] = false,
+        .hole, .node => {},
     }
 }
 

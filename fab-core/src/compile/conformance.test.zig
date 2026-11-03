@@ -7,7 +7,7 @@
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in step 7
-//! (1 for 7a). `done` is the last one finished; later cases
+//! (1 for 7a, 2 for 7b). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 7, .rule = 1 };
+const done: Progress = .{ .step = 7, .rule = 2 };
 
 const Progress = struct {
     step: u8,
@@ -948,6 +948,57 @@ test "Levels: not a cell" {
 test "Levels: pinch above level 1" {
     try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | +(α, β)", .codes = &.{.{ .analysis = .pinch_above_level_one }} });
     try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/α/g, +α/β/g", .codes = &.{.{ .analysis = .pinch_above_level_one }} });
+}
+
+test "Levels: path as a side" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f h, g)+ | (f h)/α/g", .codes = &.{.{ .analysis = .path_as_side }} });
+}
+
+test "Levels: unnamed side" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | f/α β/g", .codes = &.{.{ .analysis = .unnamed_side }} });
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | α", .codes = &.{.{ .analysis = .unnamed_side }} });
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | (α, β)/g", .codes = &.{ .{ .analysis = .unnamed_side }, .{ .analysis = .unnamed_side } } });
+}
+
+test "Levels: two names for one side" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g, h, k)+ | f/α/g h/β/k", .codes = &.{.{ .analysis = .two_names_for_one_side }} });
+}
+
+test "Levels: undirected cell" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | f/α/", .codes = &.{.{ .analysis = .undirected_cell }} });
+}
+
+test "Levels: a cell declared twice" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: +(f, g)+ | f/α/g, f/α/g", .codes = &.{.{ .analysis = .edge_declared_twice }} });
+}
+
+test "Levels: a level inside a block" {
+    try check(.{ .step = 7, .rule = 2, .source = "G :: f, { g | α }", .codes = &.{.{ .analysis = .level_inside_branch }} });
+}
+
+test "Levels: the spec's cells" {
+    try check(.{ .step = 7, .rule = 2, .source = "Mod :: +(f, g)+ | f/(α, β)/g | α/m/β", .ir =
+        \\zone Mod
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\  cell α f => g
+        \\  cell β f => g
+        \\  cell m α => β level 3
+        \\
+    });
+    try check(.{ .step = 7, .rule = 2, .source = "Vc :: +(f, g, h)+ | f/α/g, g/β/h", .ir =
+        \\zone Vc
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\  edge h n0 -> n1
+        \\  cell α f => g
+        \\  cell β g => h
+        \\
+    });
 }
 
 test "Levels: the spec's examples" {

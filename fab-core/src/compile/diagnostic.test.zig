@@ -44,7 +44,7 @@ test "an analysis error: spans, related span, message and hint" {
     try testing.expectEqual(Diagnostic.Severity.@"error", d.severity);
     try testing.expectEqual(Diagnostic.Span{ .start = 9, .end = 10 }, d.span);
     try testing.expectEqual(Diagnostic.Span{ .start = 5, .end = 6 }, d.related.?);
-    try expectLayer(d, .message, source, "The edge `f` is already declared");
+    try expectLayer(d, .message, source, "`f` is already declared");
 }
 
 test "a syntax error: the operator is the subject" {

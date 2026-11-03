@@ -822,7 +822,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Error                             | Example                                         | Why                                                                        |
 | --------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
 | Diagram declared twice            | `G :: f` … `G :: g`                             | One declaration per diagram                                                |
-| Edge declared twice               | `f g f`                                         | A bare name declares; only `f/f` repeats it                                |
+| Edge or cell declared twice       | `f g f`, `f/α/g, f/α/g` at level 2              | A bare name declares; only `f/f` repeats it                                |
 | Self-reference outside `f/f`      | `(f g)/f`                                       | A loop needs a single edge on the left                                     |
 | Redundant self-attachment         | `f/+f`                                          | Same graph as `f/f`                                                        |
 | Vacuous self-attachment           | `f/f+`                                          | Glues an end to itself                                                     |
@@ -867,7 +867,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Side from the wrong level        | `α/m/f` at level 3             | Level 3 relates 2-cells; f is a 1-cell                          |
 | Cells between non-parallel cells | `f/α/h` in a square            | α : f ⇒ h needs f and h to share start and end                  |
 | Path as a side                   | `(f h)/α/g`                    | Sides are single named cells; name the composite first          |
-| Unnamed side                     | `f/α β/g` at level 2           | It needs a 1-cell between α and β; write `f/α/g/β` for the pair |
+| Unnamed side                     | `f/α β/g`, `α`, `(α, β)/g` at level 2 | Every end of a cell lands on a named cell; `f/α β/g` needs a 1-cell between α and β |
+| Two names for one side           | `f/α/g h/β/k` at level 2       | The space puts g and h in one place; each cell keeps its own sides |
 | Undirected cell                  | `f/α/` at level 2              | Cells always have a direction                                   |
 | Not a cell                       | `+(f, g)+ \| f/#A`, `f/*`, `A.α` | Named nodes, `@`, `*`, kinds and other diagrams are level 1 only |
 | Pinch above level 1              | `+(α, β)`, `+α/β/g` at level 2 | Sides are named, so there is nothing to pinch                    |

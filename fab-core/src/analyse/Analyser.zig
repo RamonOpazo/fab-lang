@@ -30,6 +30,7 @@ const Ir = @import("Ir.zig");
 const terms = @import("terms.zig");
 const interface = @import("interface.zig");
 const elaborate = @import("elaborate.zig");
+const cells = @import("cells.zig");
 const UnionFind = @import("UnionFind.zig");
 const definitions = @import("definitions.zig");
 
@@ -286,11 +287,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     // `f | g`, or the same in braces: levels of the body.
     var levels: []const Node.Index = (&body)[0..1];
     const inner = if (cst.tag(body) == .block) cst.children(body)[0] else body;
-    if (cst.tag(inner) == .levels) {
-        levels = cst.children(inner);
-        // Checked, not drawn, until plan step 7b.
-        try a.fail(.unsupported_levels, cst.mainToken(inner));
-    }
+    if (cst.tag(inner) == .levels) levels = cst.children(inner);
 
     a.scope = .{ .zone = zone_index orelse undefined, .end = cst.lastToken(body) };
     try terms.items(a, levels[0], .item);
@@ -305,7 +302,8 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     for (levels[1..], 2..) |level, k| {
         a.scope.level = @intCast(k);
         try terms.items(a, level, .item);
-        try elaborate.cells(a, level);
+        try interface.items(a, level);
+        try cells.level(a, level);
     }
 
     // The first declaration is the one other diagrams refer to.
