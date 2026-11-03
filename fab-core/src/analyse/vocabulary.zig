@@ -89,7 +89,7 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMe
 
     const gop = try a.env.functions.getOrPut(a.gpa, cst.tokenText(function_token));
     if (gop.found_existing) {
-        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = gop.value_ptr.token });
+        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
     }
     gop.value_ptr.* = .{ .classes = classes, .type = t, .token = function_token };
@@ -123,7 +123,7 @@ pub fn alias(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory
     const gop = try a.env.type_table.getOrPut(a.gpa, cst.tokenText(token));
     if (gop.found_existing) {
         const first: ?TokenIndex = switch (gop.value_ptr.*) {
-            .type => |declared| declared.token,
+            .type => |declared| if (declared.prelude) null else declared.token,
             .constructor => null,
         };
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = token, .related = first });
@@ -174,7 +174,7 @@ fn define(a: *Analyser, text: []const u8, entry: Env.Value) error{OutOfMemory}!v
             .label_in_two_types
         else
             .name_defined_twice;
-        try a.errors.append(a.gpa, .{ .tag = tag, .token = entry.token.?, .related = first.token });
+        try a.errors.append(a.gpa, .{ .tag = tag, .token = entry.token.?, .related = if (first.prelude) null else first.token });
         return;
     }
     gop.value_ptr.* = entry;

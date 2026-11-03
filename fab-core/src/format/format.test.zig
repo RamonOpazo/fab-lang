@@ -246,5 +246,7 @@ fn styleEverything(gpa: std.mem.Allocator) !void {
 }
 
 test "running out of memory while styling leaks nothing" {
-    try testing.checkAllAllocationFailures(testing.allocator, styleEverything, .{});
+    // In-place growth makes the count of allocations drift from run to run.
+    var fixed: @import("../compile/compilation.test.zig").FixedInPlace = .{ .backing = testing.allocator };
+    try testing.checkAllAllocationFailures(fixed.allocator(), styleEverything, .{});
 }

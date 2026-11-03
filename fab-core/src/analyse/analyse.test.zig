@@ -29,7 +29,7 @@ const Analysed = struct {
 fn analyse(source: [:0]const u8) !Analysed {
     var cst = try Parser.parse(testing.allocator, source);
     errdefer cst.deinit(testing.allocator);
-    return .{ .cst = cst, .result = try Analyser.analyse(testing.allocator, &cst) };
+    return .{ .cst = cst, .result = try Analyser.analyse(testing.allocator, &cst, null) };
 }
 
 fn expectTags(source: [:0]const u8, want: []const Analyser.Error.Tag) !void {

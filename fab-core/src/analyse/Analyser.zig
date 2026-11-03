@@ -129,8 +129,13 @@ pub const Zone = struct {
     broken: bool = false,
 };
 
-/// Analyses a program. A program with syntax errors is analysed too.
-pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Result {
+/// Analyses a program. A program with syntax errors is analysed too. Its
+/// names start as `base`'s, the prelude's (the Result takes it), or else
+/// only the built-in types.
+pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfMemory}!Result {
+    // Owned from here, even if analysis fails: freed here until `a` takes it.
+    var owned = base;
+    errdefer if (owned) |*env| env.deinit(gpa);
     var a: Analyser = .{
         .gpa = gpa,
         .cst = cst,
@@ -146,7 +151,8 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
     errdefer a.builder.deinit();
     errdefer a.errors.deinit(gpa);
     // Last, so the defers above are in place if it fails; the Result takes it.
-    a.env = try .init(gpa);
+    a.env = if (owned) |env| env else try .init(gpa);
+    owned = null;
     errdefer a.env.deinit(gpa);
 
     const statements = cst.children(.root);

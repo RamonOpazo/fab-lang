@@ -17,10 +17,10 @@ fn message(c: *Compilation, d: Diagnostic) ![]u8 {
 }
 
 test "the prelude checks with nothing to report but what is unsupported" {
-    // Until step 8e, when it is read before every program and stops being
-    // unsupported (statements.md §21).
-    var c = try Compilation.init(testing.allocator, @embedFile("../prelude.fab"), strict);
+    // Its records stay unsupported until step 8e (statements.md §21).
+    var c = try Compilation.init(testing.allocator, Compilation.prelude_source, strict);
     defer c.deinit();
+    c.prelude = false; // it is the prelude
     for (try c.diagnostics()) |d| {
         if (d.severity != .unsupported) {
             const text = try message(&c, d);
@@ -29,6 +29,37 @@ test "the prelude checks with nothing to report but what is unsupported" {
             return error.TestUnexpectedResult;
         }
     }
+}
+
+test "the prelude's labels are the ones Zig gives meaning to" {
+    // :Line waits for step 9: the prelude has [triple], Style.Line not yet.
+    const Style = @import("../format/Style.zig");
+    var c = try Compilation.init(testing.allocator, "", strict);
+    defer c.deinit();
+    _ = try c.ir();
+    const env = &c.analysed.?.env;
+    try expectLabels(env, ":Shape", Style.Shape, &.{"none"});
+    try expectLabels(env, ":As", Style.As, &.{"placeholder"});
+}
+
+/// Every label of `type_name` is a value of `E`, hyphens read as
+/// underscores, and every value of `E` but `internal` is a label of it.
+fn expectLabels(env: *const @import("../analyse/Env.zig"), type_name: []const u8, E: type, internal: []const []const u8) !void {
+    const t = env.type_table.get(type_name).?.type.index;
+    var count: usize = 0;
+    var it = env.values.iterator();
+    while (it.next()) |entry| {
+        if (entry.value_ptr.type != t) continue;
+        count += 1;
+        var buffer: [32]u8 = undefined;
+        const name = buffer[0..entry.key_ptr.len];
+        _ = std.mem.replace(u8, entry.key_ptr.*, "-", "_", name);
+        if (std.meta.stringToEnum(E, name) == null) {
+            std.debug.print("{s}: [{s}] has no meaning in Zig\n", .{ type_name, entry.key_ptr.* });
+            return error.TestUnexpectedResult;
+        }
+    }
+    try testing.expectEqual(std.enums.values(E).len - internal.len, count);
 }
 
 test "a valid program: an IR under any tolerance, and status ok" {
@@ -173,10 +204,10 @@ test "running out of memory at any allocation leaks nothing" {
 /// only, and whether the testing allocator can grow a list in place depends
 /// on what earlier runs left free, so with in-place growth the count drifts
 /// from run to run. Without it, every growth is a counted allocation.
-const FixedInPlace = struct {
+pub const FixedInPlace = struct {
     backing: std.mem.Allocator,
 
-    fn allocator(f: *FixedInPlace) std.mem.Allocator {
+    pub fn allocator(f: *FixedInPlace) std.mem.Allocator {
         return .{ .ptr = f, .vtable = &.{
             .alloc = alloc,
             .resize = std.mem.Allocator.noResize,

@@ -736,8 +736,8 @@ test "Statements: a chain across lines in a group" {
 
 test "Statements: the three forms of definition" {
     try check(.{ .step = 5, .source =
-        \\[red] := [#ff0000]
-        \\:terminal := { :shape [circle], :fill [red] }
+        \\[brand] := [#ff0000]
+        \\:terminal := { :shape [circle], :fill [brand] }
         \\G :: f
         \\&node :shape := [circle]
         \\G :style := { f :label "x", +f { :label $P$ } }
@@ -765,18 +765,18 @@ test "Definitions and values: a type in a diagram's declaration" {
 test "Definitions and values: types, labels and signatures are accepted" {
     // Their meaning comes with step 8c; until then they are unsupported,
     // which the corpus leaves out.
-    try check(.{ .step = 8, .rule = 1, .source = ":Shape :: [circle], [box]" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Shape :: {\n  [circle],\n  [box]\n}" });
-    try check(.{ .step = 8, .rule = 1, .source = "(&node, &zone) :fill :: :Color" });
-    try check(.{ .step = 8, .rule = 1, .source = "&zone :theme :: :List.(:Record)" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Length := :Number" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Head :: [>]\n:Line :: [solid]\n:None :: [none]\n:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Color [red] := [#d1242f]" });
-    try check(.{ .step = 8, .rule = 1, .source = ":theme := []" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Mood :: [calm], [busy]" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Mood :: {\n  [calm],\n  [busy]\n}" });
+    try check(.{ .step = 8, .rule = 1, .source = "(&node, &zone) :glow :: :Color" });
+    try check(.{ .step = 8, .rule = 1, .source = "&zone :backdrops :: :List.(:Record)" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Width := :Number" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Tip :: [=>]\n:Stroke :: [clean]\n:Gap :: [nil]\n:Pointer := :Tuple.(:Tip, :Union.(:Stroke, :Gap), :Tip)" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Color [brand] := [#d1242f]" });
+    try check(.{ .step = 8, .rule = 1, .source = ":spare := []" });
 }
 
 test "Definitions and values: a record binds tokens" {
-    try check(.{ .step = 8, .rule = 1, .source = ":Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Record [night] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }" });
 }
 
 test "Definitions and values: a flag turned off" {
@@ -812,7 +812,7 @@ test "Definitions and values: empty range" {
 }
 
 test "Definitions and values: symbol malformed" {
-    try check(.{ .step = 8, .rule = 2, .source = ":Head :: [>], [OX]", .codes = &.{.{ .analysis = .malformed_symbol }} });
+    try check(.{ .step = 8, .rule = 2, .source = ":Tip :: [=>], [OX]", .codes = &.{.{ .analysis = .malformed_symbol }} });
 }
 
 test "Definitions and values: ! misplaced" {
@@ -828,38 +828,45 @@ test "Definitions and values: every element is read" {
 test "Definitions and values: undefined name" {
     try check(.{ .step = 8, .rule = 3, .source = "[w] := [wran]", .codes = &.{.{ .analysis = .undefined_name }} });
     // Before use: a name defined further down is not seen.
-    try check(.{ .step = 8, .rule = 3, .source = "[w] := [red]\n[red] := [#f00]", .codes = &.{.{ .analysis = .undefined_name }} });
-    try check(.{ .step = 8, .rule = 3, .source = "[x] := [>/solid/>]", .codes = &.{
-        .{ .analysis = .undefined_name }, .{ .analysis = .undefined_name }, .{ .analysis = .undefined_name },
+    try check(.{ .step = 8, .rule = 3, .source = "[w] := [brand]\n[brand] := [#f00]", .codes = &.{.{ .analysis = .undefined_name }} });
+    try check(.{ .step = 8, .rule = 3, .source = "[x] := [>/zigzag/~>]", .codes = &.{
+        .{ .analysis = .undefined_name }, .{ .analysis = .undefined_name },
     } });
 }
 
 test "Definitions and values: name defined twice" {
-    try check(.{ .step = 8, .rule = 3, .source = "[red] := [#f00]\n[red] := [#e00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [box]\n:Shape :: [box]", .codes = &.{.{ .analysis = .name_defined_twice }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [box]\n[box] := [#f00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":Length := :Number\n:Length := :Text", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = "[brand] := [#f00]\n[brand] := [#e00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Mood :: [calm]\n:Mood :: [calm]", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Mood :: [calm]\n[calm] := [#f00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Width := :Number\n:Width := :Text", .codes = &.{.{ .analysis = .name_defined_twice }} });
     try check(.{ .step = 8, .rule = 3, .source = ":List := :Text", .codes = &.{.{ .analysis = .name_defined_twice }} });
     try check(.{ .step = 8, .rule = 3, .source = "&node :glow :: :Color\n&edge :glow :: :Color", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    // The prelude comes first, and its names count.
+    try check(.{ .step = 8, .rule = 3, .source = "[red] := [#f00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [circle]", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    // Labels added to a type of the prelude are fine.
+    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [blob]" });
+    try check(.{ .step = 8, .rule = 3, .source = "&node :fill :: :Color", .codes = &.{.{ .analysis = .name_defined_twice }} });
 }
 
 test "Definitions and values: label in two types" {
-    try check(.{ .step = 8, .rule = 3, .source = ":Facing :: [outer], [inner]\n:Bow :: [outer]", .codes = &.{.{ .analysis = .label_in_two_types }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Bow :: [outer]", .codes = &.{.{ .analysis = .label_in_two_types }} });
 }
 
 test "Definitions and values: shared words get a type of their own" {
     try check(.{ .step = 8, .rule = 3, .source =
-        \\:Facing :: [outer], [inner]
-        \\:On :: [on]
-        \\:Side := :Union.(:Facing, :On)
-        \\:Side [away] := [outer]
-        \\:Side [here] := [on]
+        \\:Near :: [close], [far]
+        \\:Here :: [here]
+        \\:Where := :Union.(:Near, :Here)
+        \\:Where [away] := [far]
+        \\:Where [now] := [here]
+        \\:Side [around] := [outer]
     });
 }
 
 test "Definitions and values: not a type" {
     try check(.{ .step = 8, .rule = 3, .source = ":Colour [x] := [#f00]", .codes = &.{.{ .analysis = .not_a_type }} });
-    try check(.{ .step = 8, .rule = 3, .source = "&node :fill :: [red]", .codes = &.{.{ .analysis = .not_a_type }} });
+    try check(.{ .step = 8, .rule = 3, .source = "&node :glow :: [red]", .codes = &.{.{ .analysis = .not_a_type }} });
 }
 
 test "Definitions and values: wrong type parameters" {
@@ -869,19 +876,16 @@ test "Definitions and values: wrong type parameters" {
 }
 
 test "Definitions and values: contract broken" {
-    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [circle]\n:Color [w] := [circle]", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Color [w] := [circle]", .codes = &.{.{ .analysis = .contract_broken }} });
     try check(.{ .step = 8, .rule = 3, .source = ":Pair := :Tuple.(:Number, :Number)\n:Pair [p] := [1/2/3]", .codes = &.{.{ .analysis = .contract_broken }} });
     try check(.{ .step = 8, .rule = 3, .source = ":Color [w] := { :fill [#f00] }", .codes = &.{.{ .analysis = .contract_broken }} });
 }
 
 test "Definitions and values: contracts that hold" {
     try check(.{ .step = 8, .rule = 3, .source =
-        \\:Head :: [>], [>>]
-        \\:Line :: [solid]
-        \\:None :: [none]
-        \\:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)
-        \\:Arrow [epi] := [/solid/>>]
+        \\:Arrow [twice] := [/solid/>>]
         \\:Arrow [ends] := [>//>]
+        \\:Arrow [lineless] := [>/none/>]
         \\:Sizes := :List.(:Number)
         \\:Sizes [some] := [1/1.5/2]
         \\:Sizes [one] := [2]
@@ -889,11 +893,12 @@ test "Definitions and values: contracts that hold" {
         \\:Color [warn] := [#d1242f]
         \\[alias] := [warn]
         \\:Color [again] := [alias]
+        \\:Color [fg] := [ink]
     });
 }
 
 test "Definitions and values: not a label" {
-    try check(.{ .step = 8, .rule = 3, .source = ":Shape :: [#f00], [a/b], [x!]", .codes = &.{
+    try check(.{ .step = 8, .rule = 3, .source = ":Mood :: [#f00], [a/b], [x!]", .codes = &.{
         .{ .analysis = .not_a_label }, .{ .analysis = .not_a_label }, .{ .analysis = .not_a_label },
     } });
 }
@@ -904,7 +909,7 @@ test "Definitions and values: labels on structure" {
 }
 
 test "Definitions and values: tokens are labels added to a colour" {
-    try check(.{ .step = 8, .rule = 3, .source = ":Color :: [ink]\n:Color [text] := [ink]" });
+    try check(.{ .step = 8, .rule = 3, .source = ":Color :: [highlight]\n:Color [text] := [highlight]" });
 }
 
 test "Definitions and values: unknown class" {

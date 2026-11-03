@@ -8,6 +8,10 @@
 //! The environment stores where a name was defined, not what it evaluates
 //! to: a value is read again from its node when it is needed. Names are
 //! slices of the source, which outlives it.
+//!
+//! A program's environment starts as the prelude's (`adopt`). Its entries
+//! keep their tokens and nodes, which are the prelude's, so each is marked:
+//! an error can't point into another source.
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
@@ -69,7 +73,7 @@ pub const Type = union(enum) {
 pub const Constructor = enum { tuple, list, @"union" };
 
 pub const Named = union(enum) {
-    type: struct { index: TypeIndex, token: ?TokenIndex },
+    type: struct { index: TypeIndex, token: ?TokenIndex, prelude: bool = false },
     constructor: Constructor,
 };
 
@@ -79,6 +83,8 @@ pub const Value = struct {
     token: ?TokenIndex,
     /// The value it is bound to; null for a label, which has no definition.
     body: ?Node.Index,
+    /// Defined in the prelude: `token` and `body` are the prelude's.
+    prelude: bool = false,
 };
 
 pub const Function = struct {
@@ -86,6 +92,7 @@ pub const Function = struct {
     classes: Classes,
     type: TypeIndex,
     token: TokenIndex,
+    prelude: bool = false,
 };
 
 /// The built-in classes (spec, Subjects and classes).
@@ -120,6 +127,19 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.functions.deinit(gpa);
     env.arena.deinit();
     env.* = undefined;
+}
+
+/// Marks every entry as the prelude's, before a program is analysed in it.
+pub fn adopt(env: *Env) void {
+    var types = env.type_table.valueIterator();
+    while (types.next()) |named| switch (named.*) {
+        .type => |*t| t.prelude = true,
+        .constructor => {},
+    };
+    var values = env.values.valueIterator();
+    while (values.next()) |v| v.prelude = true;
+    var functions = env.functions.valueIterator();
+    while (functions.next()) |f| f.prelude = true;
 }
 
 pub fn get(env: *const Env, index: TypeIndex) Type {

@@ -24,13 +24,23 @@ const Sheet = @import("../format/Sheet.zig");
 const Style = @import("../format/Style.zig");
 const Formatter = @import("../format/Formatter.zig");
 const Diagnostic = @import("Diagnostic.zig");
+const Env = @import("../analyse/Env.zig");
 
 const Compilation = @This();
+
+/// The prelude (statements.md §21): ordinary fAB, read before every program.
+pub const prelude_source: [:0]const u8 = @embedFile("../prelude.fab");
 
 gpa: std.mem.Allocator,
 /// A copy of the source, owned by the compilation.
 source: [:0]const u8,
 tolerance: Tolerance,
+
+/// Whether the program is read after the prelude. Only the prelude's own
+/// checks, and tests of the analyser alone, turn it off.
+prelude: bool = true,
+/// The prelude's tree, kept for the nodes its names point to.
+prelude_cst: ?Cst = null,
 
 lexed: ?std.MultiArrayList(Token) = null,
 parsed: ?Cst = null,
@@ -92,6 +102,7 @@ pub fn deinit(c: *Compilation) void {
     if (c.formatted) |*s| s.deinit();
     if (c.issue_marks) |m| c.gpa.free(m);
     if (c.analysed) |*result| result.deinit(c.gpa);
+    if (c.prelude_cst) |*tree| tree.deinit(c.gpa);
     c.diags.deinit(c.gpa);
     c.gpa.free(c.source);
     c.* = undefined;
@@ -193,12 +204,27 @@ pub fn diagnosticIndex(c: *Compilation, issue: Ir.Issue) error{OutOfMemory}!usiz
 fn analysis(c: *Compilation) error{OutOfMemory}!*const Analyser.Result {
     if (c.analysed == null) {
         const tree = try c.cst();
-        var result = try Analyser.analyse(c.gpa, tree);
+        const base: ?Env = if (c.prelude) try c.preludeEnv() else null;
+        var result = try Analyser.analyse(c.gpa, tree, base);
         errdefer result.deinit(c.gpa);
         for (result.errors) |err| try c.addDiagnostic(.fromAnalysis(tree, err));
         c.analysed = result;
     }
     return &c.analysed.?;
+}
+
+/// The prelude's names, for the program to start from. Its IR and its
+/// diagnostics are dropped: it has no diagrams, and what it leaves
+/// unsupported is no program's concern. It has no errors: a test sees to it.
+fn preludeEnv(c: *Compilation) error{OutOfMemory}!Env {
+    var tree = try Parser.parse(c.gpa, prelude_source);
+    errdefer tree.deinit(c.gpa);
+    var result = try Analyser.analyse(c.gpa, &tree, null);
+    result.ir.deinit(c.gpa);
+    c.gpa.free(result.errors);
+    c.prelude_cst = tree;
+    result.env.adopt();
+    return result.env;
 }
 
 /// Records a diagnostic, promoting a warning if the tolerance says so.

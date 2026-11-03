@@ -20,7 +20,7 @@ fn diagnose(source: [:0]const u8) ![]Diagnostic {
         for (cst.errors) |e| try list.append(gpa, .fromSyntax(&cst, e));
         return list.toOwnedSlice(gpa);
     }
-    var result = try Analyser.analyse(gpa, &cst);
+    var result = try Analyser.analyse(gpa, &cst, null);
     defer result.deinit(gpa);
     for (result.errors) |e| try list.append(gpa, .fromAnalysis(&cst, e));
     return list.toOwnedSlice(gpa);

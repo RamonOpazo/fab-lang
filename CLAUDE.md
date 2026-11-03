@@ -187,15 +187,15 @@ Done when every level case passes.
 - **8a. Lexer and parser.** `TYPE_ID` (`:Color`); `[]`; `!` touching an attribute (`:hide!`); the new heads: `:Type :: labels`, `subjects :attr :: type`, `:Type [name] :=`, `:Type := type`; `:Tuple.( … )` as a juxtafix of a type; a record entry keyed by a label (`[ink] [#ddd]`). `parse.test.zig` and the corpus's syntax rows.
 - **8b. Values.** `value.zig`, the bracket reader: elements split by `/`, each read by its shape (name or label, colour, number, range, symbol, empty slot), with its `!`. `:Number` is an exact decimal (mantissa and scale), never a float. Rows: uppercase name, negative number, number malformed, value in a term.
 - **8c. The environment.** `Env.zig`: types (constructors, aliases, label types), labels (one type each), signatures and named values, defined once and before use; type expressions; types read from shape and from definitions; contracts; tuples matched against lists and unions. Rows: undefined name, defined twice, label in two types, not a type, contract broken.
-- **8d. Records.** Bundles (keys are attributes) and themes (`:Record [x] := { … }`: subjects and tokens); a token binds a value of its type. Rows: subject in a bundle, key of the wrong type, value given to a flag, only a flag inverts.
-- **8e. The prelude.** `src/prelude.fab`, embedded, analysed before the program with the same analyser; a test checks it compiles clean, and that its label types and signatures match what Zig gives meaning to (`Style.Shape` and the rest). Its definitions stop drawing placeholders (§20).
+- **8d. The prelude.** `src/prelude.fab`, embedded, analysed before every program with the same analyser; the program's environment starts as the prelude's, whose entries are marked so no error points into it. Tests: it checks with nothing but its records unsupported, and its label types match what Zig gives meaning to (`Style.Shape`, `Style.As`; `:Line` waits for step 9, since `[triple]` has no `Style.Line` yet). Its definitions stop drawing placeholders (§20).
+- **8e. Records.** Bundles (keys are functions; the signature is a flag applying where all its contents apply) and themes (`:Record [x] := { … }`: class subjects, tokens, and function keys with no subject, which bind the diagram the theme is applied to); a token binds a value of its type. "Does not apply" reads the class hierarchy: `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole` and `&canonical` lie inside `&node`. Rows: subject in a bundle, element in a theme, key of the wrong type, value given to a flag, value missing, only a flag inverts, does not apply.
 
 **9. Style layer.** `fab-core/src/format/` becomes the style pass, with `style.md` as the reference.
 - `:style` replaces `:format`. Blocks are factored subjects. Groups of subjects take attributes distributed over them. Each (subject, attribute) is bound once per layer.
 - Classes with `&`, and specificity: class, narrower class, class in a diagram, single element.
 - Type checks at use, against the prelude's signatures, and "does not apply".
 - The cascade: computed defaults, then `[base]` (replacing `kindDefault`), then themes left to right, then the program; tokens bound by records; `:hide!`.
-- Arrows: the `:Arrow` tuple given its meaning, its `:Head` symbols and `:Line` words.
+- Arrows: the `:Arrow` tuple given its meaning, its `:Head` symbols and `:Line` words; `Style.Line` follows the prelude (`[triple]`), and the label test covers `:Line`.
 
 **10. Renderer.** fab-render realises the new Style: arrows, ends, `:bend`, `:side`, theme tokens.
 
@@ -214,7 +214,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
-| The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 8e |
+| The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 9 |
 | The header's attributes (`:kind`, boundary); `:kind` is the same attribute as the proof's, which wins | after fab-core |
 | Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
