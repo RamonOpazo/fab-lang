@@ -199,6 +199,51 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "`!` inverts what it follows, so it comes last in an element, once, after something: `[/solid!/>]`, `[30!]`.",
             .hint = "Keep one `!`, at the end of the element it inverts.",
         },
+        .undefined_name => .{
+            .message = "{} names something not defined",
+            .explanation = "Every name is defined before its first use: a value with `[name] := …`, a label with `:Type :: [name]`. Names defined further down are not seen yet.",
+            .hint = "Check the spelling, or move its definition above this line.",
+        },
+        .name_defined_twice => .{
+            .message = "{} is already defined",
+            .explanation = "Each name is defined once: a value, a label, a type or a function. The prelude's names count, since it comes first.",
+            .hint = "Rename one of them.",
+        },
+        .label_in_two_types => .{
+            .message = "{} is already a label of another type",
+            .explanation = "A label belongs to one type. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, then `:Side := :Union.(:Facing, :On)`.",
+            .hint = "Declare the shared labels once, in a type of their own, and include it with `:Union`.",
+        },
+        .not_a_type => .{
+            .message = "{} is not a type",
+            .explanation = "A type is `:Text`, `:Math`, `:Color`, `:Number`, `:Range`, `:Flag`, `:Record`, a type declared or aliased before, or one built with `:Tuple.(…)`, `:List.(…)` or `:Union.(…)`.",
+            .hint = "Check the spelling, or declare the type first: `:Shape :: [circle]`.",
+        },
+        .wrong_type_parameters => .{
+            .message = "{} has the wrong parameters",
+            .explanation = "`:Tuple.(…)` and `:Union.(…)` take one type or more, `:List.(…)` exactly one; they are no type without them. Other types take none.",
+            .hint = "Write `:List.(:Color)`, or drop the parameters.",
+        },
+        .contract_broken => .{
+            .message = "{} does not fit the type written before its name",
+            .explanation = "A type written in a definition is a contract: the value must be of that type, or fit it (a label of a type in a union, a tuple matching element by element).",
+            .hint = "Change the value, or the type.",
+        },
+        .not_a_label => .{
+            .message = "{} is not a label",
+            .explanation = "A type declares labels one by one: a name or a symbol alone in its bracket, `[circle]`, `[>]`, with no `!`.",
+            .hint = "Write one label per bracket: `:Shape :: [circle], [box]`.",
+        },
+        .labels_on_structure => .{
+            .message = "{} cannot take labels",
+            .explanation = "A label is a single value. Tuples, lists, unions, records and flags are built from other types, so they take none; their parts do.",
+            .hint = "Declare a label type and use it inside: `:Head :: [>]`, then `:Tuple.(:Head, …)`.",
+        },
+        .unknown_class => .{
+            .message = "{} is not a class",
+            .explanation = "The classes are `&node`, `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole`, `&canonical`, `&edge`, `&cell` and `&zone`.",
+            .hint = "Check the spelling: `&node`, not `&nodes`.",
+        },
         .mixed_operators => .{
             .message = "{} follows a different operator",
             .explanation = "Operators between chains share one level, with no precedence: a run may repeat one operator, and different ones need a group.",
@@ -437,11 +482,6 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         .unsupported_definition => .{
             .message = "Definitions are not supported yet",
             .explanation = "The program is valid, but this compiler only checks a definition's shape so far. Its value is not applied.",
-            .hint = "Nothing to fix in the program.",
-        },
-        .unsupported_vocabulary => .{
-            .message = "Type and function declarations are not supported yet",
-            .explanation = "The program is valid, but this compiler does not read the labels a type declares, or a function's signature, so far.",
             .hint = "Nothing to fix in the program.",
         },
     };

@@ -62,6 +62,27 @@ pub const Tag = enum(u8) {
     /// `[!]`, `[solid!!]`, `[so!lid]`.
     misplaced_bang,
 
+    // -- the environment (step 8c) -------------------------------------------
+
+    /// `[w] := [wran]`, or a name defined further down.
+    undefined_name,
+    /// `[red] := …` twice; a type, a label or a signature again.
+    name_defined_twice,
+    /// `:Bow :: [outer]` when `[outer]` is a `:Facing`.
+    label_in_two_types,
+    /// `:Colour [x] := …`, `(&node) :fill :: [red]`.
+    not_a_type,
+    /// `:List`, `:Color.(:Text)`, `:List.(:A, :B)`.
+    wrong_type_parameters,
+    /// `:Color [w] := [circle]`.
+    contract_broken,
+    /// `:Shape :: [#f00]`, `[a/b]`, `[x!]`, `f`.
+    not_a_label,
+    /// `:Arrow :: [x]`.
+    labels_on_structure,
+    /// `(&nodes) :fill :: :Color`.
+    unknown_class,
+
     // -- sorts (rule 1) ------------------------------------------------------
 
     /// `#A f`, `* f`, `@ (f)`, `? f`.
@@ -183,14 +204,11 @@ pub const Tag = enum(u8) {
 
     /// The contents of a definition, until plan steps 8–11.
     unsupported_definition,
-    /// `:Shape :: [circle]`, `(&node) :fill :: :Color`: declarations of
-    /// labels and functions, until plan step 8c.
-    unsupported_vocabulary,
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
             .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
-            .unsupported_definition, .unsupported_vocabulary => .unsupported,
+            .unsupported_definition => .unsupported,
             else => .@"error",
         };
     }

@@ -924,6 +924,9 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Label in two types                  | `:Bow :: [outer]` after `:Facing`        | A label belongs to one type; shared words get a type of their own                    |
 | Not a type                          | `:Colour [x] := …`                       | Types are declared or aliased before their use                                       |
 | Contract broken                     | `:Color [warn] := [circle]`              | A type written in a definition is checked                                            |
+| Wrong type parameters               | `:List`, `:Color.(:Text)`, `:List.(:A, :B)` | `:Tuple` and `:Union` take one type or more, `:List` one; other types none          |
+| Not a label                         | `:Shape :: [#f00]`, `[a/b]`, `[x!]`      | A label is one name or one symbol, alone in its bracket                              |
+| Labels on structure                 | `:Arrow :: [x]`                          | Labels are single values; tuples, lists, unions, records and flags take none          |
 | Uppercase name                      | `[Warn]`                                 | Names start with a lowercase letter; a symbol has at most one capital, and no letter after it |
 | Bare value                          | `:width 2`                               | Values are written `"…"`, `$…$`, `[…]` or `{ … }`                                     |
 | Space inside brackets               | `[0..* / 1]`                             | A bracket is one token                                                               |

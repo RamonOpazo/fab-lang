@@ -20,6 +20,8 @@
 //! | `interface.zig`  | each term's sides, and what a space joins (rule 2)|
 //! | `elaborate.zig`  | terms into nodes and edges (rules 3 on)           |
 //! | `definitions.zig`| the heads and entries of a definition (rule 0)    |
+//! | `value.zig`      | what a bracket holds (step 8b)                    |
+//! | `vocabulary.zig` | types, labels, signatures, named values (8c)      |
 //!
 //! Rewritten for the 1 November spec in plan step 5 (CLAUDE.md), one rule at a
 //! time. So far, rules 0 to 3.
@@ -33,6 +35,8 @@ const elaborate = @import("elaborate.zig");
 const cells = @import("cells.zig");
 const UnionFind = @import("UnionFind.zig");
 const definitions = @import("definitions.zig");
+const vocabulary = @import("vocabulary.zig");
+pub const Env = @import("Env.zig");
 
 const Analyser = @This();
 const Node = Cst.Node;
@@ -54,9 +58,12 @@ pub const Subject = union(enum) {
 pub const Result = struct {
     ir: Ir,
     errors: []const Error,
+    /// The names the program defined: types, values, labels, functions.
+    env: Env,
 
     pub fn deinit(result: *Result, gpa: std.mem.Allocator) void {
         result.ir.deinit(gpa);
+        result.env.deinit(gpa);
         gpa.free(result.errors);
         result.* = undefined;
     }
@@ -66,6 +73,8 @@ gpa: std.mem.Allocator,
 cst: *const Cst,
 builder: Ir.Builder,
 errors: std.ArrayList(Error) = .empty,
+/// The names defined so far, in source order (statements.md §21).
+env: Env,
 /// The zones declared so far, by name: the first declaration of each.
 zones: std.StringHashMapUnmanaged(Zone) = .empty,
 /// The CST nodes of terms with an error. A failed term becomes a hole, so
@@ -128,6 +137,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
         .builder = .init(gpa),
         .failed = try .initEmpty(gpa, cst.nodes.len),
         .arena = .init(gpa),
+        .env = undefined,
     };
     a.uf = .init(a.arena.allocator());
     defer a.arena.deinit();
@@ -135,6 +145,9 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
     defer a.failed.deinit(gpa);
     errdefer a.builder.deinit();
     errdefer a.errors.deinit(gpa);
+    // Last, so the defers above are in place if it fails; the Result takes it.
+    a.env = try .init(gpa);
+    errdefer a.env.deinit(gpa);
 
     const statements = cst.children(.root);
     for (statements, 0..) |node, i| {
@@ -149,7 +162,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
 
     const errors = try a.errors.toOwnedSlice(gpa);
     errdefer gpa.free(errors);
-    return .{ .ir = try a.builder.finish(), .errors = errors };
+    return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env };
 }
 
 /// The zone of the declaration being elaborated.
@@ -281,7 +294,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     const cst = a.cst;
     if (definitions.isVocabulary(cst, head)) {
         try definitions.brackets(a, body);
-        try a.fail(.unsupported_vocabulary, cst.firstToken(head));
+        if (cst.tag(head) == .leaf) try vocabulary.labels(a, head, body) else try vocabulary.signature(a, head, body);
         return null;
     }
     const name = cst.mainToken(head);
@@ -349,4 +362,5 @@ test {
     _ = @import("analyse.test.zig");
     _ = @import("union_find.test.zig");
     _ = @import("value.zig");
+    _ = @import("env.test.zig");
 }

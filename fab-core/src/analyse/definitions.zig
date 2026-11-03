@@ -1,6 +1,8 @@
 //! `head := body`. The head has one of five forms; the body holds entries,
-//! operations and, alone, a literal or a type. What a definition means waits
-//! for plan steps 8–11, so each one is reported as unsupported once checked.
+//! operations and, alone, a literal or a type. Aliases and named values are
+//! read into the environment (`vocabulary.zig`); the rest, and the records
+//! named values hold, wait for plan steps 8d–11, so they are reported as
+//! unsupported once checked.
 //!
 //! Also the heads of the declarations that make vocabulary, not structure:
 //! a type's labels and a function's signature (statements.md §21).
@@ -9,21 +11,38 @@ const Token = @import("../lex/Token.zig");
 const Cst = @import("../parse/Cst.zig");
 const Analyser = @import("Analyser.zig");
 const value = @import("value.zig");
+const vocabulary = @import("vocabulary.zig");
 
 const Node = Cst.Node;
 
 pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
-    if (!isHead(cst, head)) try a.fail(.bad_definition_head, cst.firstToken(head));
+    // A head of no known form says nothing of what its body holds, so the
+    // body's items are not checked: their errors would be guesses. Its
+    // brackets are, since a bracket's shape doesn't depend on the head.
+    if (!isHead(cst, head)) {
+        try a.fail(.bad_definition_head, cst.firstToken(head));
+        try brackets(a, body);
+        return;
+    }
+
+    // `:Side := :Union.(…)`: an alias, whose body is a type expression.
+    if (isLeafOf(cst, head, .type_id)) return vocabulary.alias(a, head, body);
 
     if (cst.tag(body) == .levels) {
         try a.fail(.levels_in_definition, cst.mainToken(body));
-    } else if (!isLiteral(cst, body) and !isLeafOf(cst, head, .type_id)) {
-        // An alias's body is a type expression, read with step 8c.
+    } else if (!isLiteral(cst, body)) {
         try entries(a, body);
     }
     try brackets(a, head);
     try brackets(a, body);
+
+    // `[warn] := [red]`, `:Color [warn] := [red]`: a named value. A record's
+    // contents wait for step 8d.
+    if (isLeafOf(cst, head, .val) or (cst.tag(head) == .o_chain and isPair(cst, head, .type_id))) {
+        try vocabulary.namedValue(a, head, body);
+        if (cst.tag(body) != .block) return;
+    }
     try a.fail(.unsupported_definition, cst.mainToken(node));
 }
 
