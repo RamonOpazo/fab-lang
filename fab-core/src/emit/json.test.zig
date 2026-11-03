@@ -31,29 +31,25 @@ test "a valid program, in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(
-        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","own":null}],"nodes":[{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}}
+        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","own":null,"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}}
     , doc);
 }
 
 test "a broken program: diagnostics, holes and issues" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const doc = try document("G :: f g/+k h", preview);
     defer testing.allocator.free(doc);
     try expectContains(doc,
-        \\"status":"error","diagnostics":[{"code":"undeclared_edge","stage":"analysis","severity":"error","span":{"bytes":[10,11],"utf16":[10,11],"range":{"start":{"line":0,"character":10},"end":{"line":0,"character":11}}},"related":null,"message":"Edge `k` is not declared
+        \\"status":"error","diagnostics":[{"code":"reference_not_declared","stage":"analysis","severity":"error","span":{"bytes":[10,11],"utf16":[10,11],"range":{"start":{"line":0,"character":10},"end":{"line":0,"character":11}}},"related":null,"message":"The edge `k` is not declared
     );
     try expectContains(doc,
-        \\{"kind":"hole","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}}
+        \\{"kind":"hole","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}
     );
     try expectContains(doc,
-        \\"issues":[{"subject":{"node":1},"diagnostic":0}]}}
+        \\"issues":[{"subject":{"node":2},"diagnostic":0}]}}
     );
 }
 
 test "a withheld IR is null" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const doc = try document("G :: f g/+k h", strict);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"status\":\"error\"");
@@ -61,8 +57,6 @@ test "a withheld IR is null" {
 }
 
 test "issues point into the document's diagnostics, after the syntax ones" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const doc = try document("G :: f\nH :: g /k\nJ :: m/+x", preview);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"code\":\"slash_has_no_prefix_form\",\"stage\":\"syntax\"");

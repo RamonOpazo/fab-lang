@@ -43,6 +43,11 @@ pub const Zone = struct {
     name: String,
     /// The node `@`, if the zone has one.
     own: ?NodeIndex,
+    /// Stands for a statement that names no diagram (`review :: a b`,
+    /// `:x := …`): it has no elements, only the issues that say what went
+    /// wrong, and draws as a crossed square. Its name is the head's first
+    /// token.
+    placeholder: bool = false,
 };
 
 pub const Node = struct {
@@ -191,7 +196,7 @@ pub const Builder = struct {
 // Dump: zone by zone, its nodes, then its edges, then its cells; issues last.
 // The format of `fab ir` and of the golden files in test/cases/ir/.
 //
-//   zone G own n0
+//   zone G own n0                    a placeholder: `placeholder review`
 //     node n0 canon +f
 //     node n1 choice #Valid canon f+
 //     edge f n0 -> n1          directed
@@ -202,7 +207,7 @@ pub const Builder = struct {
 pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     for (0..ir.zones.len) |z| {
         const zone = ir.zones.get(z);
-        try w.print("zone {s}", .{ir.string(zone.name)});
+        try w.print("{s} {s}", .{ if (zone.placeholder) "placeholder" else "zone", ir.string(zone.name) });
         if (zone.own) |own| try w.print(" own n{d}", .{@backingInt(own)});
         try w.writeAll("\n");
 

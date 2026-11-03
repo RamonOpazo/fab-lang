@@ -33,9 +33,7 @@ fn expectNodes(source: []const u8, expected: []const Expected) !void {
 const muted: ?Style.Color = .{ .token = .muted };
 
 test "labels: a name without its #, else the canonical end, in the canonical class" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
-    try expectNodes("G :: #A f #B g", &.{
+    try expectNodes("G :: #A/f #B/g", &.{
         .{ "A", false, null, .circle },
         .{ "B", false, null, .circle },
         .{ "g+", true, muted, .circle },
@@ -46,47 +44,39 @@ test "labels: a name without its #, else the canonical end, in the canonical cla
     });
 }
 
-test "kind defaults: plain circles, and marks with no label, even when named" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
-    // `(g, h)?` merges both branches' ends into one choice node.
-    try expectNodes("G :: *f #Fork! (g, h)? #Pick k", &.{
+test "kind defaults: plain circles, and marks with no label" {
+    // A start, a fork after f, the join of g and h, and a choice after k.
+    try expectNodes("G :: */f/! +(g, h)+ k/?", &.{
         .{ "", false, null, .point },
         .{ "", false, null, .bar },
+        .{ "g+", true, muted, .circle },
         .{ "", false, null, .diamond },
-        .{ "k+", true, muted, .circle },
     });
 }
 
 test "a null node is a start if nothing arrives at it, else an end" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
-    try expectNodes("G :: *f g*", &.{
+    try expectNodes("G :: */f g/*", &.{
         .{ "", false, null, .point },
         .{ "f+", true, muted, .circle },
         .{ "", false, null, .bullseye },
     });
 }
 
-test "holes are dashed circles, labelled by their canonical end if they have one" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
-    var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nDb :: Doc owner User", preview);
+test "holes are dashed circles, labelled by their canonical end" {
+    var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nDb :: Doc/owner/User", preview);
     defer c.deinit();
     const s = (try c.sheet()).?;
-    // n1 is the hole that replaced `g/+k`, glued to f's codomain.
-    try testing.expectEqualStrings("f+", s.nodes[1].label);
-    try testing.expectEqual(Style.Shape.circle, s.nodes[1].shape);
-    try testing.expectEqual(Style.Line.dashed, s.nodes[1].line);
-    // In Db, the holes for Doc and User have no end of their own on one side.
+    // n2 is the hole that replaced `+k`, glued to g's codomain.
+    try testing.expectEqualStrings("g+", s.nodes[2].label);
+    try testing.expectEqual(Style.Shape.circle, s.nodes[2].shape);
+    try testing.expectEqual(Style.Line.dashed, s.nodes[2].line);
+    // In Db, the holes for Doc and User take owner's ends, which created them.
     const doc = s.nodes[s.nodes.len - 2];
-    try testing.expectEqualStrings("", doc.label);
-    try testing.expectEqual(Style.Shape.circle, doc.shape);
+    try testing.expectEqualStrings("+owner", doc.label);
+    try testing.expectEqual(Style.Line.dashed, doc.line);
 }
 
 test "edges and zones are labelled by name, and zones are unframed clusters by default" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     var c = try Compilation.init(testing.allocator, "A :: f g\nB :: h/A.+f", preview);
     defer c.deinit();
     const s = (try c.sheet()).?;
@@ -104,8 +94,6 @@ test "edges and zones are labelled by name, and zones are unframed clusters by d
 }
 
 test "the sheet stage follows the IR: withheld with it, and computed once" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     var withheld = try Compilation.init(testing.allocator, "G :: f g f", strict);
     defer withheld.deinit();
     try testing.expectEqual(@as(?*const Sheet, null), try withheld.sheet());
@@ -114,7 +102,8 @@ test "the sheet stage follows the IR: withheld with it, and computed once" {
     defer kept.deinit();
     const first = (try kept.sheet()).?;
     try testing.expectEqual(first, (try kept.sheet()).?);
-    try testing.expectEqual(@as(usize, 3), first.edges.len);
+    // The second f is a hole, not an edge.
+    try testing.expectEqual(@as(usize, 2), first.edges.len);
 }
 
 // ---------------------------------------------------------------------------

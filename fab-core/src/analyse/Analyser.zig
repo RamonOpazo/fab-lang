@@ -78,6 +78,13 @@ uf: UnionFind = undefined,
 edge_ends: std.ArrayList([2]u32) = .empty,
 /// The names of the declaration being elaborated.
 scope: Scope = .{},
+/// Errors reported before the graph exists, waiting for the element that
+/// elaboration makes for their CST node: a term (its hole, its node), or
+/// the space before a step (`joins`, by that step).
+pending: Pending = .empty,
+pending_joins: Pending = .empty,
+
+pub const Pending = std.AutoHashMapUnmanaged(Node.Index, std.ArrayList(u32));
 
 /// What names mean inside one declaration.
 const Scope = struct {
@@ -135,14 +142,48 @@ pub fn zone(a: *const Analyser) Ir.ZoneIndex {
     return a.scope.zone;
 }
 
+/// Reports an error. Its subject is its statement's diagram, or the
+/// statement's placeholder, unless something more precise claims it.
 pub fn fail(a: *Analyser, tag: Error.Tag, token: TokenIndex) error{OutOfMemory}!void {
     try a.errors.append(a.gpa, .{ .tag = tag, .token = token });
 }
 
-/// Reports an error in a term, and marks the term as failed.
+/// Reports an error that marks an element already made.
+pub fn failOn(a: *Analyser, tag: Error.Tag, token: TokenIndex, subject: Subject) error{OutOfMemory}!void {
+    try a.errors.append(a.gpa, .{ .tag = tag, .token = token, .subject = subject });
+}
+
+/// Reports an error about a term, to mark whatever elaboration makes of it.
+pub fn failAt(a: *Analyser, tag: Error.Tag, token: TokenIndex, node: Node.Index) error{OutOfMemory}!void {
+    try a.wait(&a.pending, node);
+    try a.fail(tag, token);
+}
+
+/// Reports an error in a term, and marks the term as failed: it becomes a
+/// hole, which the error marks.
 pub fn failTerm(a: *Analyser, tag: Error.Tag, node: Node.Index, token: TokenIndex) error{OutOfMemory}!void {
     a.failed.set(@backingInt(node));
+    try a.failAt(tag, token, node);
+}
+
+/// Reports an error about the space before `step`, to mark the node it makes.
+pub fn failJoin(a: *Analyser, tag: Error.Tag, token: TokenIndex, step: Node.Index) error{OutOfMemory}!void {
+    try a.wait(&a.pending_joins, step);
     try a.fail(tag, token);
+}
+
+/// The next error waits in `map`, under `node`.
+fn wait(a: *Analyser, map: *Pending, node: Node.Index) error{OutOfMemory}!void {
+    const arena = a.arena.allocator();
+    const gop = try map.getOrPut(arena, node);
+    if (!gop.found_existing) gop.value_ptr.* = .empty;
+    try gop.value_ptr.append(arena, @intCast(a.errors.items.len));
+}
+
+/// Gives the errors waiting under `node` their element.
+pub fn settle(a: *Analyser, map: *Pending, node: Node.Index, elem: u32) void {
+    const entry = map.fetchRemove(node) orelse return;
+    for (entry.value.items) |i| a.errors.items[i].subject = .{ .elem = elem };
 }
 
 /// Whether the parser reported anything inside a statement.
@@ -158,18 +199,50 @@ fn hasSyntaxError(a: *Analyser, node: Node.Index) bool {
 // ---------------------------------------------------------------------------
 // Statements
 
+/// A statement, and the subject of its errors that have none of their own:
+/// its diagram, or a placeholder when it names none, so that every
+/// statement with an issue draws something.
 fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
-    const head, const body = a.cst.data(node).nodes;
-    switch (a.cst.tokenTag(a.cst.mainToken(node))) {
+    const cst = a.cst;
+    const head, const body = cst.data(node).nodes;
+    const first = a.errors.items.len;
+    const zone_index: ?Ir.ZoneIndex = switch (cst.tokenTag(cst.mainToken(node))) {
         .decl => try a.declaration(head, body),
-        .defn => try definitions.definition(a, node, head, body),
+        .defn => blk: {
+            try definitions.definition(a, node, head, body);
+            break :blk a.namedDiagram(head);
+        },
         else => unreachable,
+    };
+    a.pending.clearRetainingCapacity();
+    a.pending_joins.clearRetainingCapacity();
+
+    const rest = a.errors.items[first..];
+    for (rest) |err| {
+        if (err.subject == null) break;
+    } else return;
+    const z = zone_index orelse try a.builder.addZone(.{
+        .name = try a.builder.addString(cst.tokenText(cst.firstToken(head))),
+        .own = null,
+        .placeholder = true,
+    });
+    for (rest) |*err| {
+        if (err.subject == null) err.subject = .{ .zone = @backingInt(z) };
     }
 }
 
+/// The diagram a definition is about: `G :style`, `G.f :label`. Its first
+/// declaration, if it has one.
+fn namedDiagram(a: *Analyser, head: Node.Index) ?Ir.ZoneIndex {
+    const token = a.cst.firstToken(head);
+    if (a.cst.tokenTag(token) != .zone_id) return null;
+    const zone_entry = a.zones.get(a.cst.tokenText(token)) orelse return null;
+    return zone_entry.index;
+}
+
 /// `G :: body`. Only diagrams are declared today; nodes and edges are
-/// reserved.
-fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
+/// reserved. Returns the diagram, if it is one.
+fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!?Ir.ZoneIndex {
     const cst = a.cst;
     const name = cst.mainToken(head);
     var zone_index: ?Ir.ZoneIndex = null;
@@ -189,7 +262,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     try interface.items(a, first);
 
     // Only a diagram has a graph; a reserved head is checked, not drawn.
-    const z = zone_index orelse return;
+    const z = zone_index orelse return null;
     a.scope = .{ .zone = z, .end = cst.lastToken(body) };
     try elaborate.items(a, first);
 
@@ -199,6 +272,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
         entry.edges = a.scope.edges;
         entry.names = a.scope.names;
     }
+    return z;
 }
 
 /// A diagram is declared once. A second declaration is still drawn, as a zone

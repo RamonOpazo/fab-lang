@@ -794,6 +794,8 @@ The three group forms are the three ways columns combine: each on its own, toget
 
 A program that hits any of these is rejected, each with its precise cause. Warnings are marked as such. Rows marked *reserved* are errors because their meaning is still open (see Open questions); lifting one later breaks no program.
 
+**Every program draws something.** A diagnostic that belongs to an element of the graph marks that element: a hole, an edge, the node where two names met. Each diagram is drawn with a border in the colour of its most severe diagnostic: error, then warning. A diagnostic with no element of its own, such as one in a statement or in a definition about the diagram, shows only as that border. A statement that names no diagram (`review :: a b`, `[red] :: f`, `:x := a | b`) draws a placeholder in its place: a small square with that border, crossed corner to corner. So even a program with nothing valid in it renders, and an image embedded in a document always shows what went wrong.
+
 ### Statements
 
 | Error                              | Example                                      | Why                                                              |

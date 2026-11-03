@@ -27,7 +27,7 @@
 //!     as in the Language Server Protocol. Lines end at "\n".
 //!
 //!   IR: the tables of Ir.zig. Every reference is an index into a table.
-//!     { "zones": [{"name": "G", "own": null | node}],
+//!     { "zones": [{"name": "G", "own": null | node, "placeholder": false}],
 //!       "nodes": [{"kind": "plain" | "choice" | "parallel" | "null_node" | "hole",
 //!                  "name": null | "#A", "zone": zone,
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
@@ -125,12 +125,13 @@ fn writeSpan(lines: *const Lines, span: Diagnostic.Span, w: *Writer) Writer.Erro
 
 fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
     try w.writeAll("{\"zones\":[");
-    for (ir.zones.items(.name), ir.zones.items(.own), 0..) |name, own, i| {
+    for (ir.zones.items(.name), ir.zones.items(.own), ir.zones.items(.placeholder), 0..) |name, own, placeholder, i| {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"name\":");
         try string(w, ir.string(name));
         try w.writeAll(",\"own\":");
         try optionalIndex(w, own);
+        try w.print(",\"placeholder\":{}", .{placeholder});
         try w.writeByte('}');
     }
 

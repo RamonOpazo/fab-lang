@@ -154,7 +154,7 @@ fn kindAfter(a: *Analyser, before: Node.Index, kind: Node.Index) error{OutOfMemo
     switch (cst.tag(before)) {
         .leaf => {},
         .group => if (sort.isSingleEdge(cst, before)) {
-            try a.fail(.kind_after_group_of_one, token);
+            try a.failAt(.kind_after_group_of_one, token, kind);
         } else try a.failTerm(.kind_after_group, kind, token),
         .prefix, .postfix => if (sort.isPinchedEdge(cst, before)) {
             try a.failTerm(.kind_on_reference, kind, token);

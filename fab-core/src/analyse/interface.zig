@@ -129,9 +129,9 @@ fn space(a: *Analyser, left: ?Side, right: ?Side, after: Node.Index) error{OutOf
     const l = left orelse return;
     const r = right orelse return;
     const token = a.cst.firstToken(after);
-    if (l.total() == 0 or r.total() == 0) return a.fail(.nothing_to_join, token);
-    if (l.total() > 1 or r.total() > 1) return a.fail(.ends_dont_match, token);
-    if (l.skipped or r.skipped) try a.fail(.space_reaches_one_branch, token);
+    if (l.total() == 0 or r.total() == 0) return a.failJoin(.nothing_to_join, token, after);
+    if (l.total() > 1 or r.total() > 1) return a.failJoin(.ends_dont_match, token, after);
+    if (l.skipped or r.skipped) try a.failJoin(.space_reaches_one_branch, token, after);
 }
 
 /// `+t`, `t+`, `t?`, `t!`: one pinched node on the marker's side. A pinched
@@ -165,7 +165,7 @@ fn pinchCount(a: *Analyser, node: Node.Index, side: ?Side) error{OutOfMemory}!bo
             try a.failTerm(.pinch_of_nothing, node, token);
             return false;
         },
-        1 => try a.fail(.pinch_of_one_end, token),
+        1 => try a.failAt(.pinch_of_one_end, token, node),
         else => {},
     }
     return true;

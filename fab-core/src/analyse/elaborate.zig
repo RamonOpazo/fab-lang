@@ -49,7 +49,19 @@ pub fn items(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     }
 }
 
+/// A term's ports. The errors waiting for this term mark what it became:
+/// its hole, or the node on its marked side.
 fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
+    const p = try portsOf(a, node);
+    const marked = if (a.cst.tag(node) == .postfix) p.right else p.left;
+    const other = if (a.cst.tag(node) == .postfix) p.left else p.right;
+    if (marked.len > 0) {
+        a.settle(&a.pending, node, marked[0]);
+    } else if (other.len > 0) a.settle(&a.pending, node, other[0]);
+    return p;
+}
+
+fn portsOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     if (a.failed.isSet(@backingInt(node))) return failedTerm(a, node);
     const cst = a.cst;
     return switch (cst.tag(node)) {
@@ -95,10 +107,12 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const text = a.cst.tokenText(token);
     const gop = try a.scope.edges.getOrPut(a.arena.allocator(), text);
     if (gop.found_existing) {
+        const h = try hole(a);
         switch (gop.value_ptr.*) {
             .edge => |first| {
                 const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
                 try a.errors.append(a.gpa, .{
+                    .subject = .{ .elem = h },
                     .tag = if (in_chain)
                         .self_reference_outside_loop
                     else if (a.scope.pinches > 0)
@@ -111,7 +125,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
             },
             .hole => {},
         }
-        return one(a, try hole(a));
+        return one(a, h);
     }
 
     const index = try a.builder.addEdge(.{
@@ -137,22 +151,15 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
 
 /// A diagram declared before this one, by the token of its name. Its own
 /// declaration is not before it: it names its own node with `@`.
-fn diagram(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?Analyser.Zone {
-    const zone = a.zones.get(a.cst.tokenText(token));
-    if (zone == null or zone.?.index == a.zone()) {
-        try a.fail(.diagram_not_declared, token);
-        return null;
-    }
-    return zone.?;
+fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
+    const zone = a.zones.get(a.cst.tokenText(token)) orelse return null;
+    return if (zone.index == a.zone()) null else zone;
 }
 
 /// `A` as a node: A's own node.
 fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
-    const zone = try diagram(a, token) orelse return hole(a);
-    return zone.names.get("@") orelse {
-        try a.fail(.diagram_without_own_node, token);
-        return hole(a);
-    };
+    const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
+    return zone.names.get("@") orelse failHole(a, .diagram_without_own_node, token);
 }
 
 /// `A.+f`, `A.f+`, `A.#X`, `A.@`: a node of another diagram, shared. It
@@ -163,22 +170,16 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     const right = sort.ofOne(cst, right_);
     const zone_token = cst.mainToken(left);
     if (sort.isLeaf(cst, right, .at)) return own(a, zone_token);
-    const zone = try diagram(a, zone_token) orelse return hole(a);
+    const zone = diagram(a, zone_token) orelse return failHole(a, .diagram_not_declared, zone_token);
 
     if (sort.isLeaf(cst, right, .node_id)) {
         const token = cst.mainToken(right);
-        return zone.names.get(cst.tokenText(token)) orelse {
-            try a.fail(.undeclared_name_in_diagram, token);
-            return hole(a);
-        };
+        return zone.names.get(cst.tokenText(token)) orelse failHole(a, .undeclared_name_in_diagram, token);
     }
     // Another shape was reported by rule 1, or by the kind after it.
     if (!sort.isPinchedEdge(cst, right)) return hole(a);
     const name = cst.mainToken(singleEdge(cst, cst.data(right).node));
-    const binding = zone.edges.get(cst.tokenText(name)) orelse {
-        try a.fail(.undeclared_name_in_diagram, name);
-        return hole(a);
-    };
+    const binding = zone.edges.get(cst.tokenText(name)) orelse return failHole(a, .undeclared_name_in_diagram, name);
     return endOf(a, binding, if (cst.tag(right) == .prefix) .dom else .cod, name);
 }
 
@@ -192,6 +193,13 @@ fn named(a: *Analyser, key: []const u8, class: @import("UnionFind.zig").Class) e
 
 fn hole(a: *Analyser) error{OutOfMemory}!Elem {
     return a.uf.add(@backingInt(a.zone()), null, .{ .hole = true });
+}
+
+/// Reports an error, and makes the hole it marks.
+fn failHole(a: *Analyser, tag: Analyser.Error.Tag, token: TokenIndex) error{OutOfMemory}!Elem {
+    const h = try hole(a);
+    try a.failOn(tag, token, .{ .elem = h });
+    return h;
 }
 
 /// A failed term is one hole. The edges declared inside it are bound to the
@@ -229,7 +237,7 @@ fn openChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     var prev = first;
     for (steps[1..]) |step| {
         const next = try term(a, step);
-        try space(a, prev.right, next.left, a.cst.firstToken(step));
+        try space(a, prev.right, next.left, a.cst.firstToken(step), step);
         prev = next;
     }
     return .{ .left = first.left, .right = prev.right };
@@ -237,14 +245,18 @@ fn openChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 
 /// One to one is a glue. Anything else was reported by rule 2, and becomes a
 /// hole holding both sides.
-fn space(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenIndex) error{OutOfMemory}!void {
-    if (left.len == 1 and right.len == 1) return glue(a, left[0], right[0], token);
-    try holeOf(a, &.{ left, right });
+/// The errors about the space, waiting under `step`, mark the node it makes.
+fn space(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenIndex, step: Node.Index) error{OutOfMemory}!void {
+    if (left.len == 1 and right.len == 1) {
+        try glue(a, left[0], right[0], token);
+        a.settle(&a.pending_joins, step, left[0]);
+    } else a.settle(&a.pending_joins, step, try holeOf(a, &.{ left, right }));
 }
 
-fn holeOf(a: *Analyser, sides: []const []const Elem) error{OutOfMemory}!void {
+fn holeOf(a: *Analyser, sides: []const []const Elem) error{OutOfMemory}!Elem {
     const h = try hole(a);
     for (sides) |side| for (side) |e| try glue(a, h, e, null);
+    return h;
 }
 
 /// Merges two classes where they meet, at `token` (rule 5). A node has at
@@ -261,7 +273,7 @@ fn glue(a: *Analyser, x: Elem, y: Elem, token: ?TokenIndex) error{OutOfMemory}!v
             // Classes stand for outer cells from plan step 7.
             .two_outer_edges => unreachable,
         };
-        try a.errors.append(a.gpa, .{ .tag = tag, .token = t, .related = conflict.related });
+        try a.errors.append(a.gpa, .{ .tag = tag, .token = t, .related = conflict.related, .subject = .{ .elem = x } });
     }
     try a.uf.force(x, y);
 }
@@ -314,8 +326,7 @@ fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemor
             const i: TokenIndex = @intCast(t);
             if (cst.tokenTag(i) == .edge_id and std.mem.eql(u8, cst.tokenText(i), name)) break true;
         } else false;
-        try a.fail(if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
-        return hole(a);
+        return failHole(a, if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
     };
     return endOf(a, binding, side, cst.mainToken(singleEdge(cst, cst.data(node).node)));
 }
@@ -329,8 +340,7 @@ fn endOf(a: *Analyser, binding: Binding, side: Ir.End.Side, name: TokenIndex) er
     };
     const class = a.uf.class(elem);
     if (class.sealed and !class.hole) {
-        try a.fail(.reference_to_null_node, name);
-        return hole(a);
+        return failHole(a, .reference_to_null_node, name);
     }
     return elem;
 }
@@ -364,7 +374,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 
     const links = cst.children(node);
     const last = links.len - 1;
-    if (try selfAttachment(a, links)) return failedTerm(a, node);
+    if (try selfAttachment(a, node)) return failedTerm(a, node);
     if (isLoop(cst, links)) {
         const p = try term(a, links[0]);
         try glue(a, p.right[0], p.left[0], null);
@@ -388,7 +398,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     if (edges > 1) {
         const end = if (trailing) cst.data(links[last]).node else links[last];
         if (sort.of(cst, end) == .node and !closes(a, ports[last].right, ports[0].left)) {
-            try a.fail(.cycle_does_not_close, cst.firstToken(links[last]));
+            try a.failOn(.cycle_does_not_close, cst.firstToken(links[last]), .{ .elem = ports[last].right[0] });
         } else try slash(a, ports[last].right, ports[0].left, cst.lastToken(links[last - 1]) + 1);
     }
 
@@ -416,8 +426,9 @@ fn closes(a: *Analyser, end: []const Elem, start: []const Elem) bool {
 /// `f/+f` and `f/f+`: a chain whose one edge is declared here, then a
 /// reference to that edge. To its other end it is `f/f`; to the same end it
 /// glues the end to itself.
-fn selfAttachment(a: *Analyser, links: []const Node.Index) error{OutOfMemory}!bool {
+fn selfAttachment(a: *Analyser, chain: Node.Index) error{OutOfMemory}!bool {
     const cst = a.cst;
+    const links = cst.children(chain);
     const at = for (links, 0..) |link, i| {
         if (sort.of(cst, link) == .edges) break i;
     } else return false;
@@ -430,7 +441,7 @@ fn selfAttachment(a: *Analyser, links: []const Node.Index) error{OutOfMemory}!bo
         if (!sort.isPinchedEdge(cst, link)) continue;
         if (!std.mem.eql(u8, cst.tokenText(cst.mainToken(singleEdge(cst, cst.data(link).node))), name)) continue;
         const to_start = cst.tag(link) == .prefix;
-        try a.fail(if (to_start) .redundant_self_attachment else .vacuous_self_attachment, cst.mainToken(singleEdge(cst, cst.data(link).node)));
+        try a.failAt(if (to_start) .redundant_self_attachment else .vacuous_self_attachment, cst.mainToken(singleEdge(cst, cst.data(link).node)), chain);
         return true;
     }
     return false;
@@ -449,7 +460,7 @@ fn slash(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenInde
         for (right) |e| try glue(a, left[0], e, token);
     } else if (right.len == 1 and left.len >= 1) {
         for (left) |e| try glue(a, e, right[0], token);
-    } else try holeOf(a, &.{ left, right });
+    } else _ = try holeOf(a, &.{ left, right });
 }
 
 // ---------------------------------------------------------------------------
@@ -490,5 +501,17 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
     for (a.edge_ends.items, sources, targets) |ends, *source, *target| {
         source.* = node_of[uf.find(ends[0])];
         target.* = node_of[uf.find(ends[1])];
+    }
+
+    // Issues: every error with a subject marks it, warnings and unsupported
+    // included; renderers read the severity from the diagnostic.
+    for (a.errors.items, 0..) |err, i| {
+        const subject = err.subject orelse continue;
+        try a.builder.addIssue(.{ .err = @intCast(i), .subject = switch (subject) {
+            .elem => |e| .{ .node = node_of[uf.find(e)] },
+            .edge => |e| .{ .edge = @fromBackingInt(e) },
+            .cell => |c| .{ .cell = @fromBackingInt(c) },
+            .zone => |z| .{ .zone = @fromBackingInt(z) },
+        } });
     }
 }

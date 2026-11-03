@@ -141,6 +141,35 @@ pub fn status(c: *Compilation) error{OutOfMemory}!Status {
     return s;
 }
 
+/// How a diagram is drawn for its diagnostics (spec, Errors): a border in the
+/// colour of the most severe one, and a label while any is unsupported
+/// (spec/statements.md §15.3).
+pub const ZoneMark = struct {
+    border: ?Diagnostic.Severity = null,
+    unsupported: bool = false,
+};
+
+/// The mark of a zone: the issues on it, and on the nodes, edges and cells
+/// in it.
+pub fn zoneMark(c: *Compilation, zone: Ir.ZoneIndex) error{OutOfMemory}!ZoneMark {
+    const graph = &(try c.analysis()).ir;
+    var mark: ZoneMark = .{};
+    for (0..graph.issues.len) |i| {
+        const issue = graph.issues.get(i);
+        const in = switch (issue.subject) {
+            .zone => |z| z,
+            .node => |n| graph.nodes.items(.zone)[@backingInt(n)],
+            .edge => |e| graph.edges.items(.zone)[@backingInt(e)],
+            .cell => |x| graph.cells.items(.zone)[@backingInt(x)],
+        };
+        if (in != zone) continue;
+        const severity = (try c.diagnosticOf(issue)).severity;
+        mark.border = if (mark.border) |b| b.max(severity) else severity;
+        mark.unsupported = mark.unsupported or severity == .unsupported;
+    }
+    return mark;
+}
+
 /// The diagnostic an IR issue comes from.
 pub fn diagnosticOf(c: *Compilation, issue: Ir.Issue) error{OutOfMemory}!Diagnostic {
     const all = try c.diagnostics();

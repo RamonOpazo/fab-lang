@@ -586,3 +586,9 @@ Decided while designing the analyser (plan step 5). Some programs have no meanin
 - **Implementation-defined meaning:** programs would come to depend on what this compiler happens to do, and the spec would inherit it.
 - **Unsupported as an error:** a valid program would be reported as wrong, and the examples could not draw until every step had landed.
 - **Unsupported as a warning:** it would mix with warnings about the user's program, and promoting warnings would fail a valid program for a gap in the compiler.
+
+### 15.3 Drawing them, 2026-11-03
+
+**Decided.** Every program draws something (the spec, Errors): diagnostics mark their elements, each diagram has a border in the colour of its most severe one, and a statement that names no diagram draws a placeholder, a small square crossed corner to corner. Unsupported is drawn the same way, in its own colour, below error and warning, with the label "unsupported" above the diagram whenever one is present, even when the border is red. A diagram with skipped parts still draws what is supported (`G :: +(f, g)+ | f/α/g` draws level 1), and a definition about a diagram (`G :style := …`) marks that diagram rather than drawing a square of its own: you see as much as the compiler can draw, and the label says it is incomplete. Since unsupported never ships, this is for testing only.
+
+**Rejected.** Replacing a diagram with skipped parts by the placeholder: one line of style would turn a whole diagram into a square.

@@ -29,8 +29,6 @@ test "a valid program: an IR under any tolerance, and status ok" {
 }
 
 test "a broken program: withheld, or kept with its issues" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     const source = "G :: f g/+k h";
 
     var withheld = try Compilation.init(testing.allocator, source, strict);
@@ -45,12 +43,10 @@ test "a broken program: withheld, or kept with its issues" {
     const d = try kept.diagnosticOf(ir.issues.get(0));
     const text = try message(&kept, d);
     defer testing.allocator.free(text);
-    try testing.expectEqualStrings("Edge `k` is not declared before this point", text);
+    try testing.expectEqualStrings("The edge `k` is not declared", text);
 }
 
 test "syntax diagnostics come first, and issues still find their own" {
-    // Needs an analysed program: back with the new analyser (plan step 5).
-    if (true) return error.SkipZigTest;
     // A syntax error in H, then an analysis error in J.
     var c = try Compilation.init(testing.allocator, "G :: f\nH :: g /k\nJ :: m/+x", preview);
     defer c.deinit();
@@ -58,13 +54,35 @@ test "syntax diagnostics come first, and issues still find their own" {
     const all = try c.diagnostics();
     try testing.expectEqual(@as(usize, 2), all.len);
     try testing.expectEqualStrings("slash_has_no_prefix_form", all[0].code.name());
-    try testing.expectEqualStrings("undeclared_edge", all[1].code.name());
+    try testing.expectEqualStrings("reference_not_declared", all[1].code.name());
 
     const ir = (try c.ir()).?;
     try testing.expectEqual(@as(usize, 1), ir.issues.len);
     const d = try c.diagnosticOf(ir.issues.get(0));
-    try testing.expectEqualStrings("undeclared_edge", d.code.name());
+    try testing.expectEqualStrings("reference_not_declared", d.code.name());
     try testing.expectEqualStrings("x", d.span.text(c.source));
+}
+
+test "a diagram's mark: the border of its worst issue, and the unsupported label" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: f g/+k h
+        \\H :: (f/*, g) h
+        \\J :: f | f/α/f
+        \\K :: f
+        \\review :: a b
+    , preview);
+    defer c.deinit();
+    const Mark = Compilation.ZoneMark;
+    // An error on a hole in G, a warning on a node in H.
+    try testing.expectEqual(Mark{ .border = .@"error" }, try c.zoneMark(@fromBackingInt(@intCast(0))));
+    try testing.expectEqual(Mark{ .border = .warning }, try c.zoneMark(@fromBackingInt(@intCast(1))));
+    // Levels are skipped: J is drawn with the unsupported label.
+    try testing.expectEqual(Mark{ .border = .unsupported, .unsupported = true }, try c.zoneMark(@fromBackingInt(@intCast(2))));
+    try testing.expectEqual(Mark{}, try c.zoneMark(@fromBackingInt(@intCast(3))));
+    // The reserved head draws a placeholder, bordered by its error.
+    const ir = (try c.ir()).?;
+    try testing.expect(ir.zones.items(.placeholder)[4]);
+    try testing.expectEqual(Mark{ .border = .@"error" }, try c.zoneMark(@fromBackingInt(@intCast(4))));
 }
 
 test "stages run on demand, and only once" {
@@ -112,19 +130,46 @@ fn compileEverything(gpa: std.mem.Allocator, source: []const u8) !void {
 }
 
 test "running out of memory at any allocation leaks nothing" {
-    // Fails with NondeterministicMemoryUsage since the old analyser went (step
-    // 4a): tokenizing grows a MultiArrayList, and whether the testing allocator
-    // grows it in place depends on what else is allocated, so the allocation
-    // count is not fixed. Back, with a fix, in plan step 5.
-    if (true) return error.SkipZigTest;
-    // A program with syntax errors, analysis errors, holes and repairs, so
-    // that every stage and every recovery path allocates.
+    // A program with syntax errors, analysis errors, warnings, holes,
+    // placeholders, other diagrams and unsupported parts, so that every stage
+    // and every recovery path allocates.
     const source =
-        \\T :: #UUID7
-        \\User :: @ (id T.#UUID7, name T.#String)
-        \\G :: f? (g/+k, h) f, [f α g]
+        \\T :: #UUID7/u, #String/s
+        \\User :: id/T.#UUID7, name/T.#String, (f/*, g) h
+        \\G :: f? (g/+k, h) f, (a, b)/?, a/#A #B/b
         \\H :: x /y
-        \\G :format { f :label "x" }
+        \\review :: a b
+        \\G :style := f :label "x" | g
+        \\J :: f | f/α/f
+        \\
     ;
-    try testing.checkAllAllocationFailures(testing.allocator, compileEverything, .{source});
+    var fixed: FixedInPlace = .{ .backing = testing.allocator };
+    try testing.checkAllAllocationFailures(fixed.allocator(), compileEverything, .{source});
 }
+
+/// An allocator that never resizes in place. The checker counts allocations
+/// only, and whether the testing allocator can grow a list in place depends
+/// on what earlier runs left free, so with in-place growth the count drifts
+/// from run to run. Without it, every growth is a counted allocation.
+const FixedInPlace = struct {
+    backing: std.mem.Allocator,
+
+    fn allocator(f: *FixedInPlace) std.mem.Allocator {
+        return .{ .ptr = f, .vtable = &.{
+            .alloc = alloc,
+            .resize = std.mem.Allocator.noResize,
+            .remap = std.mem.Allocator.noRemap,
+            .free = free,
+        } };
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
+        const f: *FixedInPlace = @ptrCast(@alignCast(ctx));
+        return f.backing.rawAlloc(len, alignment, ra);
+    }
+
+    fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ra: usize) void {
+        const f: *FixedInPlace = @ptrCast(@alignCast(ctx));
+        f.backing.rawFree(memory, alignment, ra);
+    }
+};

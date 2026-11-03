@@ -60,10 +60,14 @@ test "a diagram declared twice is drawn twice, and points back to the first" {
     try testing.expectEqual(@as(?Cst.TokenIndex, 0), err.related);
 }
 
-test "a reserved or bad head declares no zone" {
-    var a = try analyse("review :: a b\n[red] :: f");
-    defer a.deinit();
-    try testing.expectEqual(@as(usize, 0), a.result.ir.zones.len);
+test "a reserved or bad head declares no diagram: it draws a placeholder" {
+    try expectGraph("review :: a b\n[red] :: f",
+        \\placeholder review
+        \\placeholder [red]
+        \\issue e0 zone review
+        \\issue e1 zone [red]
+        \\
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +177,8 @@ test "a join that doesn't match is a hole holding both sides, and the path goes 
         \\  edge g n1 -> n2
         \\  edge h n1 -> n2
         \\  edge k n2 -> n3
+        \\issue e0 node n1
+        \\issue e1 node n2
         \\
     );
 }
@@ -187,6 +193,7 @@ test "a failed link is a hole, and the edges beside it stay declared" {
         \\  edge a n0 -> n1
         \\  edge b n2 -> n1
         \\  edge x n0 -> n3
+        \\issue e0 node n1
         \\
     );
 }
