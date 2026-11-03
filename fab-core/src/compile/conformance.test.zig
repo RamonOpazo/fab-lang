@@ -7,7 +7,7 @@
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in step 7
-//! (1 for 7a, 2 for 7b). `done` is the last one finished; later cases
+//! (1 for 7a, 2 for 7b, 3 for 7c). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 7, .rule = 2 };
+const done: Progress = .{ .step = 7, .rule = 3 };
 
 const Progress = struct {
     step: u8,
@@ -974,6 +974,15 @@ test "Levels: a cell declared twice" {
 
 test "Levels: a level inside a block" {
     try check(.{ .step = 7, .rule = 2, .source = "G :: f, { g | α }", .codes = &.{.{ .analysis = .level_inside_branch }} });
+}
+
+test "Levels: cells between non-parallel cells" {
+    try check(.{ .step = 7, .rule = 3, .source = "Sq :: +(f h, g k)+ | f/α/h", .codes = &.{.{ .analysis = .cells_not_parallel }} });
+    try check(.{ .step = 7, .rule = 3, .source = "G :: +(f, g, h)+ | f/(α, β)/g, f/γ/h | α/m/γ", .codes = &.{.{ .analysis = .cells_not_parallel }} });
+}
+
+test "Levels: reserved, a cell on an undirected edge" {
+    try check(.{ .step = 7, .rule = 3, .source = "U :: +(f/, g/)+ | f/α/g", .codes = &.{.{ .analysis = .cell_on_undirected_edge }} });
 }
 
 test "Levels: the spec's cells" {

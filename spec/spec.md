@@ -870,6 +870,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Unnamed side                     | `f/α β/g`, `α`, `(α, β)/g` at level 2 | Every end of a cell lands on a named cell; `f/α β/g` needs a 1-cell between α and β |
 | Two names for one side           | `f/α/g h/β/k` at level 2       | The space puts g and h in one place; each cell keeps its own sides |
 | Undirected cell                  | `f/α/` at level 2              | Cells always have a direction                                   |
+| Reserved: cell on an undirected edge | `+(f/, g/)+ \| f/α/g`      | An undirected edge has no source or target to be parallel by    |
 | Not a cell                       | `+(f, g)+ \| f/#A`, `f/*`, `A.α` | Named nodes, `@`, `*`, kinds and other diagrams are level 1 only |
 | Pinch above level 1              | `+(α, β)`, `+α/β/g` at level 2 | Sides are named, so there is nothing to pinch                    |
 
@@ -1134,7 +1135,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Structure**
 
 - **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
-- **The header.** Which attributes (`:kind`, strictness, boundary) and what each changes.
+- **The header.** Which attributes (`:kind`, strictness, boundary) and what each changes. Among them, errors that depend on the kind: an undirected edge declares a relation any diagram may hold, but a commutative diagram may refuse to draw one.
 - **Diagram composition.** How one diagram is used inside another, through its boundary.
 - **What a flow could draw of its cells,** if anything, and how many levels stay readable.
 - **How a category draws `?` and `!`.** They are declared the same way in every diagram; what a category shows of them is the renderer's to decide.
@@ -1170,6 +1171,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 
 - Declaring a node or an edge on its own (Declaring nodes and edges, above).
+- A cell on an undirected edge: what parallel means without a direction.
 
 **Settled since the first revision:** name scope (local to a diagram); precedence of `/` chains (left to right); the clash between colours and named nodes on `#` (colours are values in brackets); the format vocabulary and arrow grammar (now the style layer); styling proof-derived marks (`:marks`, as a definition after the proof).
 

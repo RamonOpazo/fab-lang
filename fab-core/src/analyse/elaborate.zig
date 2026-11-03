@@ -493,6 +493,31 @@ fn slash(a: *Analyser, left: []const Elem, right: []const Elem, token: TokenInde
 // ---------------------------------------------------------------------------
 // The graph
 
+/// A cell goes between parallel cells (plan step 7c): at level 2, edges with
+/// the same source and target node; above, cells with the same sides. It is
+/// judged on the final graph, since a later diagram can merge nodes, and a
+/// cell that fails it stays drawn, marked. A hole says nothing more.
+fn parallel(a: *Analyser) error{OutOfMemory}!void {
+    const cells = a.builder.cells.slice();
+    const edges = a.builder.edges.slice();
+    const kinds = a.builder.nodes.items(.kind);
+    cell: for (0..cells.len) |i| {
+        const s = cells.items(.source)[i];
+        const t = cells.items(.target)[i];
+        const tag: Analyser.Error.Tag = if (cells.items(.level)[i] == 2) blk: {
+            if (!edges.items(.directed)[s] or !edges.items(.directed)[t]) break :blk .cell_on_undirected_edge;
+            const ends = [_]Ir.NodeIndex{ edges.items(.source)[s], edges.items(.target)[s], edges.items(.source)[t], edges.items(.target)[t] };
+            for (ends) |n| if (kinds[@backingInt(n)] == .hole) continue :cell;
+            if (ends[0] == ends[2] and ends[1] == ends[3]) continue :cell;
+            break :blk .cells_not_parallel;
+        } else blk: {
+            if (cells.items(.source)[s] == cells.items(.source)[t] and cells.items(.target)[s] == cells.items(.target)[t]) continue :cell;
+            break :blk .cells_not_parallel;
+        };
+        try a.errors.append(a.gpa, .{ .tag = tag, .token = a.cell_tokens.items[i], .subject = .{ .cell = @intCast(i) } });
+    }
+}
+
 /// Every class becomes a node, in the order of its oldest element, and every
 /// edge goes from the class of its start to the class of its end. A node's
 /// zone is its oldest element's: the diagram that created it.
@@ -529,6 +554,8 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
         source.* = node_of[uf.find(ends[0])];
         target.* = node_of[uf.find(ends[1])];
     }
+
+    try parallel(a);
 
     // Issues: every error with a subject marks it, warnings and unsupported
     // included; renderers read the severity from the diagnostic.

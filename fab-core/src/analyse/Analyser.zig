@@ -77,6 +77,8 @@ arena: std.heap.ArenaAllocator,
 uf: UnionFind = undefined,
 /// The start and end elements of each IR edge, by edge index.
 edge_ends: std.ArrayList([2]u32) = .empty,
+/// The name of each IR cell, by cell index: where the graph reports it.
+cell_tokens: std.ArrayList(TokenIndex) = .empty,
 /// The names of the declaration being elaborated.
 scope: Scope = .{},
 /// Errors reported before the graph exists, waiting for the element that

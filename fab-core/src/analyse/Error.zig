@@ -150,11 +150,15 @@ pub const Tag = enum(u8) {
     unnamed_side,
     /// `f/α/g h/β/k` at level 2: g and h in one place.
     two_names_for_one_side,
+    /// `+(f h, g k)+ | f/α/h`: f and h don't share their start and end.
+    cells_not_parallel,
 
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
     /// `#User :: @/(id, name)`, `review :: a b`.
     reserved_node_or_edge_declaration,
+    /// `+(f/, g/)+ | f/α/g`: parallel, without a direction.
+    cell_on_undirected_edge,
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 

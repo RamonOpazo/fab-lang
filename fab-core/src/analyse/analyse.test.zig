@@ -251,6 +251,40 @@ test "two names for one side keep both cells, and mark the later" {
     );
 }
 
+test "a cell between cells that are not parallel is drawn, and marked" {
+    try expectGraph("Sq :: +(f h, g k)+ | f/α/h",
+        \\zone Sq
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  node n2 canon h+
+        \\  node n3 canon g+
+        \\  edge f n0 -> n1
+        \\  edge h n1 -> n2
+        \\  edge g n0 -> n3
+        \\  edge k n3 -> n2
+        \\  cell α f => h
+        \\issue e0 cell α
+        \\
+    );
+}
+
+test "parallel is judged on the final graph: a later diagram can make it so" {
+    try expectTags("A :: f, g | f/α/g", &.{.cells_not_parallel});
+    try expectTags("A :: f, g | f/α/g\nB :: +(A.+f/x/A.f+, A.+g/y/A.g+)+", &.{});
+}
+
+test "a hole says nothing more about parallel" {
+    try expectTags("H :: f, g/+k | f/α/g", &.{.reference_not_declared});
+}
+
+test "a cell above level 2 is checked on its own sides" {
+    try expectTags("G :: +(f, g, h)+ | f/(α, β)/g, f/γ/h | α/m/β, α/n/γ", &.{.cells_not_parallel});
+}
+
+test "a cell on an undirected edge is reserved" {
+    try expectTags("U :: +(f/, g/)+ | f/α/g", &.{.cell_on_undirected_edge});
+}
+
 test "a cell declared twice keeps the first, and points back to it" {
     var a = try analyse("G :: +(f, g)+ | f/α/g, g/α/f");
     defer a.deinit();

@@ -379,6 +379,16 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A space puts the end before it and the end after it in one place. Here both are sides, and different ones; a place has one side.",
             .hint = "Use the same side on both: `f/α/g g/β/h`, or separate the items with a comma.",
         },
+        .cells_not_parallel => .{
+            .message = "{} is between cells that are not parallel",
+            .explanation = "A cell goes between two cells that leave the same place and reach the same place: α : f ⇒ g needs f and g to share their start and their end.",
+            .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
+        },
+        .cell_on_undirected_edge => .{
+            .message = "{} is on an undirected edge",
+            .explanation = "An undirected edge has no source and no target, so what a cell between undirected edges relates is not decided yet. Undirected edges are fine everywhere else.",
+            .hint = "Give the edges a direction: `+(f, g)+ | f/α/g`.",
+        },
         .side_from_wrong_level => .{
             .message = "{} is not a cell of the level below",
             .explanation = "At level k, the sides of a cell are cells of level k−1: level 3 relates 2-cells, so a 1-cell can't be a side there.",

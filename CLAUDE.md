@@ -63,8 +63,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 3    | Lexer                                     | done    |
 | 4    | Parser and CST                            | done    |
 | 5    | Analyser: level 1                         | done    |
-| 6    | IR, JSON, renderer for level 1; examples  |         |
-| 7    | Levels (before 6)                         | next    |
+| 6    | IR, JSON, renderer for level 1; examples  | next    |
+| 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    |         |
 | 9    | Style layer                               |         |
 | 10   | Renderer: style, arrows, themes           |         |
@@ -208,7 +208,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents                                          | step 8             |
-| The header's attributes (`:kind`, strictness, boundary)         | after fab-core     |
+| The header's attributes (`:kind`, strictness, boundary), and errors by kind (undirected edges in a commutative diagram) | after fab-core |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |
 | The place vocabulary                                            | later              |

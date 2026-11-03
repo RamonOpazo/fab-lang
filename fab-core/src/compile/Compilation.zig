@@ -35,8 +35,9 @@ lexed: ?std.MultiArrayList(Token) = null,
 parsed: ?Cst = null,
 analysed: ?Analyser.Result = null,
 formatted: ?Sheet = null,
-/// Syntax diagnostics first, then analysis diagnostics, in source order
-/// within each. Complete once analysis has run.
+/// Syntax diagnostics first, then analysis diagnostics, each in the order
+/// found: by statement, then what only the final graph shows (cells that are
+/// not parallel). Complete once analysis has run.
 diags: std.ArrayList(Diagnostic) = .empty,
 
 /// How much the caller accepts. Both fields must be given.

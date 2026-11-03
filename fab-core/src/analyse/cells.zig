@@ -85,6 +85,7 @@ pub fn level(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             .target = cell.right.side,
             .zone = a.zone(),
         });
+        try a.cell_tokens.append(l.arena(), cell.token);
         i.* = @backingInt(c);
         entry.* = .{ .level = k, .is = .{ .generator = .{ .index = i.*.?, .left = cell.left.side, .right = cell.right.side, .token = cell.token } } };
     }
