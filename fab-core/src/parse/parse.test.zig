@@ -544,6 +544,22 @@ test "recovery: inside braces, a failed item becomes invalid and the others surv
     );
 }
 
+test "recovery: a stray token after the first item of a group in braces keeps the list" {
+    // Found by fab-render's random programs: the list had no main token.
+    const sources = [_][:0]const u8{
+        "A :: {(B :: ",
+        "A :: A.?{B :: #Ag)+f g)",
+        "A :: {!α /h(#A",
+        "A :: #A{f/({(g+/}g ",
+        "A :: h{B :: ?f",
+    };
+    for (sources) |source| {
+        var cst = try parse(testing.allocator, source);
+        defer cst.deinit(testing.allocator);
+        try testing.expect(cst.errors.len > 0);
+    }
+}
+
 test "recovery: a missing comma is assumed, a trailing comma ends the list" {
     try expectRecovery("G :style := #Done :terminal f :label \"x\"", &.{.{ .missing_comma, "f" }},
         \\root

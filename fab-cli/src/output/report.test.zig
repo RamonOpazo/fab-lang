@@ -19,7 +19,7 @@ test "brief: message, location, excerpt and mark" {
     const text = try render("G :: f g/+k h", .brief, false);
     defer testing.allocator.free(text);
     try testing.expectEqualStrings(
-        \\error: Edge `k` is not declared before this point
+        \\error: The edge `k` is not declared
         \\ --> x.fab:1:11
         \\  |
         \\1 | G :: f g/+k h
@@ -59,9 +59,10 @@ test "wide line numbers widen the gutter" {
 }
 
 test "a mark at the end of a line" {
-    const text = try render("G :format {\n  f\n}", .brief, false);
+    // The line ends inside the parentheses: the mark is just past the comma.
+    const text = try render("G :: (f,\n  g)", .brief, false);
     defer testing.allocator.free(text);
-    try testing.expect(std.mem.indexOf(u8, text, " --> x.fab:2:4\n  |\n2 |   f\n  |    ^\n") != null);
+    try testing.expect(std.mem.indexOf(u8, text, " --> x.fab:1:9\n  |\n1 | G :: (f,\n  |         ^\n") != null);
 }
 
 test "quiet and clean programs write nothing" {

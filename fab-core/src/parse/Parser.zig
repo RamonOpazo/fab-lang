@@ -195,6 +195,7 @@ fn parseItems(p: *Parser) Error!Node.Index {
             } else if (p.braces > 0) {
                 // A stray token after an item, inside braces: skip to the next item.
                 const stray = p.tok_i;
+                main = main orelse stray;
                 try p.warn(.expected_token, .comma);
                 p.recoverItem();
                 try p.scratch.append(p.gpa, try p.addLeaf(.invalid, stray));

@@ -43,7 +43,7 @@ test "check: exit code 0 without errors, 1 with" {
     const bad = try runArgs(&.{ "check", "x.fab", "--no-color" }, "G :: f g f");
     defer bad.deinit();
     try testing.expectEqual(@as(u8, 1), bad.code);
-    try testing.expect(std.mem.startsWith(u8, bad.err, "error: Edge `f` is declared twice\n --> x.fab:1:10\n"));
+    try testing.expect(std.mem.startsWith(u8, bad.err, "error: `f` is already declared\n --> x.fab:1:10\n"));
     try testing.expect(std.mem.endsWith(u8, bad.err, "1 error\n"));
 }
 
@@ -88,7 +88,7 @@ test "the native engine points to graphviz" {
 }
 
 test "render to DOT: written here, nothing left for Graphviz to do" {
-    const r = try runArgs(&.{ "render", "x.fab", "-f", "dot" }, "G :: #A f");
+    const r = try runArgs(&.{ "render", "x.fab", "-f", "dot" }, "G :: #A/f");
     defer r.deinit();
     try testing.expectEqual(@as(u8, 0), r.code);
     try testing.expect(r.produced);
@@ -119,15 +119,12 @@ test "render with graphviz: errors keep the drawing, unless strict" {
 }
 
 test "notes follow the diagnostics, and never change the exit code" {
-    // Cells are written with `|` from step 7 (CLAUDE.md); until then no
-    // source makes one. The test comes back then, with `Iso :: +(f, g)+ | f/α/g/β`.
-    if (true) return error.SkipZigTest;
-    const brief = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--no-color" }, "Iso :: f, +f/g/f+, [f α/β g]");
+    const brief = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--no-color" }, "Iso :: +(f, g)+ | f/α/g/β");
     defer brief.deinit();
     try testing.expectEqual(@as(u8, 0), brief.code);
     try testing.expectEqualStrings("note: cells are not drawn by the graphviz engine (×2)\n", brief.err);
 
-    const full = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--no-color", "--verbosity", "full" }, "Iso :: f, +f/g/f+, [f α/β g]");
+    const full = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--no-color", "--verbosity", "full" }, "Iso :: +(f, g)+ | f/α/g/β");
     defer full.deinit();
     try testing.expectEqualStrings(
         \\note: cells are not drawn by the graphviz engine (cell 0)
@@ -135,7 +132,7 @@ test "notes follow the diagnostics, and never change the exit code" {
         \\
     , full.err);
 
-    const quiet = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--verbosity", "quiet" }, "Iso :: f, +f/g/f+, [f α/β g]");
+    const quiet = try runArgs(&.{ "render", "x.fab", "-f", "dot", "--verbosity", "quiet" }, "Iso :: +(f, g)+ | f/α/g/β");
     defer quiet.deinit();
     try testing.expectEqualStrings("", quiet.err);
 }

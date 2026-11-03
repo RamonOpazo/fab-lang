@@ -80,8 +80,8 @@ test "a chain: canonical labels, in the canonical class" {
     );
 }
 
-test "names label circles without their #; a named choice stays unlabelled" {
-    try expectDot("G :: #A f #B? g",
+test "names label circles without their #; a choice is unlabelled" {
+    try expectDot("G :: #A/f/? g",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="A", shape=circle, width=0.37, height=0.37, fixedsize=true]
@@ -96,7 +96,7 @@ test "names label circles without their #; a named choice stays unlabelled" {
 }
 
 test "marks: a start is a dot, a bar is as wide as its branches, a choice a diamond" {
-    try expectDot("G :: *f! (g, h)? k",
+    try expectDot("G :: */f/! +(g, h)? k",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="", shape=circle, width=0.14, height=0.14, fixedsize=true, fillcolor="#333333", style="filled"]
@@ -149,22 +149,25 @@ test "undirected edges have no arrowhead" {
 }
 
 test "holes are dashed circles" {
+    // `+k` is not declared: g's end is a hole, and the path goes on to h.
     try expectDot("G :: f g/+k h",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
-        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", style="dashed"]
-        \\    n2 [label="h+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", style="dashed"]
+        \\    n3 [label="h+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  n0 -> n1 [label="f"]
-        \\  n1 -> n2 [label="h"]
+        \\  n1 -> n2 [label="g"]
+        \\  n2 -> n3 [label="h"]
         \\}
         \\
     );
 }
 
 test "an end is a bullseye" {
-    try expectDot("G :: f*",
+    try expectDot("G :: f/*",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
@@ -177,7 +180,7 @@ test "an end is a bullseye" {
 }
 
 test "every circle has the size of the longest label" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: #A f #Approved g", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: #A/f/#Approved g", preview);
     defer c.deinit();
     var o = try render((try c.sheet()).?);
     defer o.deinit();
@@ -186,10 +189,7 @@ test "every circle has the size of the longest label" {
 }
 
 test "cells are left out, with one note each" {
-    // Cells are written with `|` from step 7 (CLAUDE.md); until then no
-    // source makes one. The test comes back then, with `Iso :: +(f, g)+ | f/α/g/β`.
-    if (true) return error.SkipZigTest;
-    var c = try fab.Compilation.init(testing.allocator, "Iso :: f, +f/g/f+, [f α/β g]", preview);
+    var c = try fab.Compilation.init(testing.allocator, "Iso :: +(f, g)+ | f/α/g/β", preview);
     defer c.deinit();
     const sheet = (try c.sheet()).?;
     var o = try render(sheet);
@@ -408,53 +408,52 @@ fn expectLaw(source: []const u8) !void {
     try testing.expectEqual(ir.cells.len, cell_notes);
 }
 
-/// Every program of the spec, one per entry.
+/// Every program of the spec, one per entry, valid in the current syntax.
 pub const spec_programs = [_][]const u8{
     "G :: f",
     "G :: f g h",
     "G :: f, g",
-    "G :: f (g, h)",
-    "G :: (f, g) h",
+    "G :: f +(g, h)",
+    "G :: (f, g)+ h",
     "G :: f (g h)",
     "G :: f/e",
-    "G :: f/f g h/h",
-    "G :: (f g)/h",
     "G :: f/",
     "G :: f/ g",
-    "G :: #A f/ #B, #B g/ #C",
-    "G :: f? (fg g, fh h)",
-    "G :: f?(g, h)",
-    "G :: f? (g, h)? k",
-    "G :: f! (g, h)! k",
-    "G :: *f g h*",
-    "G :: *(f, g) h",
-    "G :: (f*, g) h",
-    "Sq :: f h, +f/g k/h+",
-    "Tri :: f g, +f/h/g+",
+    "G :: #A/f/#B/, #B/g/#C/",
+    "G :: f/? +(fg g, fh h)",
+    "G :: f/? +(g, h)? k",
+    "G :: f/! +(g, h)! k",
+    "G :: */f g h/*",
+    "G :: #A/f/#B",
+    "G :: #A",
+    "Sq :: +(f h, g k)+",
+    "Tri :: +(f g, h)+",
     "Iso :: f/g",
     "Endo :: f/f",
-    "Pair :: f, +f/g/f+",
-    "Nat :: f, +f/g/f+, [f α g]",
-    "Iso2 :: f, +f/g/f+, [f α/β g]",
-    "If :: f? (fg g, fh h)? k",
-    "While :: f? (b/f+, e)",
-    "Exit :: f? (fg g*, fh h) k",
-    "Loop :: f? (fg g/g, fh h/h' k/+f)",
-    "Par :: *s! (a, b)! t*",
+    "Cyc :: f/g/h",
+    "Pair :: +(f, g)+",
+    "Nat :: +(f, g)+ | f/α/g",
+    "Eq :: +(f, g)+ | f/α/g/β",
+    "Mod :: +(f, g)+ | f/(α, β)/g | α/m/β",
+    "Id :: #A/f/#A | f/α/#A",
+    "Ud :: #A/f/#B/, #B/g/#A | f/α/g",
+    "Pr :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)",
+    "If :: f/? +(fg g, fh h)? k",
+    "While :: f/? +(b/b, e k)",
+    "Exit :: f/? +(fg g/*, fh h k)",
+    "Loop :: f/? +(fg g, fh h k/+f)",
+    "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
-    "A :: f g\nB :: h/(A.+f)",
-    "G :: #A f #B",
-    "G :: #A",
-    "T :: #UUID7, #DTZ, #String, #JSONB",
-    "T :: #UUID7, #DTZ, #String\nUser :: @ (id T.#UUID7, created_at T.#DTZ, name T.#String)",
-    "Db :: Document owner User",
-    \\Order :: *receive #Received validate #Valid? (
-    \\    yes #Accepted! (
-    \\        charge #Charged? (paid, declined #Waiting retry/charge+)
-    \\      , reserve #InStock? (reserved, short #Backorder restock/reserve+)
-    \\    )! #Ready ship #Shipped close*
-    \\  , no #Rejected notify*
-    \\)
+    "T :: #UUID7, #String\nUser :: @/(id/T.#UUID7, name/T.#String)",
+    \\Order :: {
+    \\  */receive/#Received validate/? +(
+    \\      yes/#Accepted fork/! +(
+    \\          charge/? +(paid, declined/#Waiting/retry)
+    \\        , reserve/? +(reserved, short/#Backorder/restock)
+    \\      )! ready/#Ready ship/#Shipped close/*
+    \\    , no/#Rejected notify/*
+    \\  )
+    \\}
     ,
 };
 
@@ -468,7 +467,7 @@ test "the law holds on every spec program" {
 test "the law holds on random programs, broken ones included" {
     // Fragments glued at random: most programs are invalid, and the preview
     // IR, holes and all, must still read back exactly.
-    const pieces = [_][]const u8{ "f", "g", "h", "f/", "+f", "g+", " ", ", ", "(", ")", "?", "!", "*", "#A ", "#B ", "/", "[f α g]", "A.", "\n", "B :: " };
+    const pieces = [_][]const u8{ "f", "g", "h", "f/", "+f", "g+", " ", ", ", "(", ")", "?", "!", "*", "#A", "#B", "/", " | ", "α", "A.", "\n", "B :: ", "{", "}" };
     var prng: std.Random.DefaultPrng = .init(0xfab);
     const random = prng.random();
     var buf: [256]u8 = undefined;
@@ -504,7 +503,7 @@ test "out of memory is reported, never a crash or a leak" {
             };
         }
     };
-    var c = try fab.Compilation.init(testing.allocator, "Iso :: f, +f/g/f+, [f α/β g]", preview);
+    var c = try fab.Compilation.init(testing.allocator, "Iso :: +(f, g)+ | f/α/g/β", preview);
     defer c.deinit();
     const sheet = (try c.sheet()).?;
     try testing.checkAllAllocationFailures(testing.allocator, Case.run, .{sheet});
