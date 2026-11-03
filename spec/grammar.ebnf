@@ -16,20 +16,10 @@ program
 # subjects and an attribute (a signature: (&node, &zone) :fill :: :Color).
 # DEFN heads: a value ([red]), a typed value (:Color [red]), a type (an
 # alias, :Length := :Number), an attribute (a bundle) or subject :attr.
+# The head is read as an item: :Color [red] is a chain of a type and a
+# value, (&node) :fill an entry.
 statement
-    = ( primitive | subject ) ( DECL | DEFN ) ( levels | block )
-    ;
-
-primitive
-    = ZONE_ID
-    | NODE_ID
-    | EDGE_ID
-    ;
-
-subject
-    = atom [ ATTR_ID ]
-    | ATTR_ID
-    | TYPE_ID [ VAL ]
+    = item ( DECL | DEFN ) ( levels | block )
     ;
 
 block

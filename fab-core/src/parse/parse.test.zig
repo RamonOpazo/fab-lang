@@ -467,6 +467,133 @@ test "first and last tokens" {
 }
 
 // ---------------------------------------------------------------------------
+// Types, labels and signatures (statements.md §21). The parser reads every
+// head as an item; which head means what is the analyser's call.
+
+test "a type declares its labels" {
+    try expectDump(":Shape :: [circle], [box]",
+        \\root
+        \\  statement ::
+        \\    leaf type_id :Shape
+        \\    items
+        \\      leaf val [circle]
+        \\      leaf val [box]
+        \\
+    );
+}
+
+test "a signature: classes, a function, a type" {
+    try expectDump("(&node, &zone) :fill :: :Color",
+        \\root
+        \\  statement ::
+        \\    entry
+        \\      group
+        \\        items
+        \\          leaf class_id &node
+        \\          leaf class_id &zone
+        \\      attr :fill
+        \\    leaf type_id :Color
+        \\
+    );
+}
+
+test "a typed name is a type and a value side by side" {
+    try expectDump(":Color [red] := [#d1242f]",
+        \\root
+        \\  statement :=
+        \\    o_chain
+        \\      leaf type_id :Color
+        \\      leaf val [red]
+        \\    leaf val [#d1242f]
+        \\
+    );
+}
+
+test "a type's parameters are a juxtafix" {
+    try expectDump(":Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)",
+        \\root
+        \\  statement :=
+        \\    leaf type_id :Arrow
+        \\    juxtafix
+        \\      leaf type_id :Tuple
+        \\      group
+        \\        items
+        \\          leaf type_id :Head
+        \\          juxtafix
+        \\            leaf type_id :Union
+        \\            group
+        \\              items
+        \\                leaf type_id :Line
+        \\                leaf type_id :None
+        \\          leaf type_id :Head
+        \\
+    );
+}
+
+test "a record binds a token: two values side by side" {
+    try expectDump(":Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }",
+        \\root
+        \\  statement :=
+        \\    o_chain
+        \\      leaf type_id :Record
+        \\      leaf val [dark]
+        \\    block
+        \\      items
+        \\        o_chain
+        \\          leaf val [ink]
+        \\          leaf val [#dddddd]
+        \\        entry
+        \\          leaf class_id &zone
+        \\          attr :fill
+        \\            leaf val [#1e1e1e]
+        \\
+    );
+}
+
+test "the empty list" {
+    try expectDump("&zone :theme := []",
+        \\root
+        \\  statement :=
+        \\    entry
+        \\      leaf class_id &zone
+        \\      attr :theme
+        \\    leaf val []
+        \\
+    );
+}
+
+test "a ! touching a flag turns it off" {
+    try expectDump("G :style := { f :hide!, g :hide! [x] }",
+        \\root
+        \\  statement :=
+        \\    entry
+        \\      leaf zone_id G
+        \\      attr :style
+        \\    block
+        \\      items
+        \\        entry
+        \\          leaf edge_id f
+        \\          attr :hide!
+        \\        entry
+        \\          leaf edge_id g
+        \\          attr :hide!
+        \\            leaf val [x]
+        \\
+    );
+
+    var cst = try parse(testing.allocator, "G :style := f :hide!");
+    defer cst.deinit(testing.allocator);
+    const statement = cst.children(.root)[0];
+    const attr = cst.children(cst.children(statement)[1])[1];
+    try testing.expect(cst.inverted(attr));
+    try testing.expectEqualStrings("!", cst.tokenText(cst.lastToken(statement)));
+}
+
+test "a ! apart from a flag is a node" {
+    try expectErrors("G :style := { g :hide ! }", &.{.{ .missing_comma, "!" }});
+}
+
+// ---------------------------------------------------------------------------
 // Errors
 
 test "statement errors" {

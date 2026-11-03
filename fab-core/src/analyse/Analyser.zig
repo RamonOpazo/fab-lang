@@ -274,17 +274,31 @@ fn namedDiagram(a: *Analyser, head: Node.Index) ?Ir.ZoneIndex {
     return zone_entry.index;
 }
 
-/// `G :: body`. Only diagrams are declared today; nodes and edges are
-/// reserved. Returns the diagram, if it is one.
+/// `G :: body`, a diagram; `:Shape :: [circle]`, a type's labels;
+/// `(&node) :fill :: :Color`, a function. Nodes and edges are reserved.
+/// Returns the diagram, if it is one.
 fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!?Ir.ZoneIndex {
     const cst = a.cst;
+    if (definitions.isVocabulary(cst, head)) {
+        try a.fail(.unsupported_vocabulary, cst.firstToken(head));
+        return null;
+    }
     const name = cst.mainToken(head);
     var zone_index: ?Ir.ZoneIndex = null;
+    // A head that is no diagram, node, edge, type or signature says nothing
+    // of what its body holds, so the body is not checked: its errors would
+    // be guesses.
     if (cst.tag(head) == .leaf) switch (cst.tokenTag(name)) {
         .zone_id => zone_index = try a.declareZone(name),
         .node_id, .edge_id => try a.fail(.reserved_node_or_edge_declaration, name),
-        else => try a.fail(.bad_declaration_head, cst.firstToken(head)),
-    } else try a.fail(.bad_declaration_head, cst.firstToken(head));
+        else => {
+            try a.fail(.bad_declaration_head, cst.firstToken(head));
+            return null;
+        },
+    } else {
+        try a.fail(.bad_declaration_head, cst.firstToken(head));
+        return null;
+    }
 
     // `f | g`, or the same in braces: levels of the body.
     var levels: []const Node.Index = (&body)[0..1];

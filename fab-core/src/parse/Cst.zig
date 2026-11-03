@@ -251,7 +251,7 @@ pub fn lastToken(cst: Cst, node: Node.Index) TokenIndex {
         .root => @intCast(cst.tokens.len - 1),
         .postfix, .leaf, .invalid => cst.mainToken(node),
         .block, .group => d.node_token[1],
-        .attr => if (d.node == .root) cst.mainToken(node) else cst.lastToken(d.node),
+        .attr => if (d.node != .root) cst.lastToken(d.node) else if (cst.inverted(node)) cst.mainToken(node) + 1 else cst.mainToken(node),
         .statement,
         .levels,
         .items,
@@ -266,6 +266,15 @@ pub fn lastToken(cst: Cst, node: Node.Index) TokenIndex {
             break :blk cst.lastToken(kids[kids.len - 1]);
         },
     };
+}
+
+/// An attribute turned off by a `!` touching it: `:hide!`. The `!` is the
+/// token right after the attribute's name, so the node stores nothing.
+pub fn inverted(cst: Cst, attr: Node.Index) bool {
+    const name = cst.mainToken(attr);
+    if (cst.tokenTag(name + 1) != .bang) return false;
+    const tokens = cst.tokens;
+    return tokens.items(.end)[name] == tokens.items(.start)[name + 1];
 }
 
 /// The operators of an `operation`, in order: the tokens between its operands.
@@ -286,7 +295,8 @@ fn dumpNode(cst: Cst, w: *std.Io.Writer, node: Node.Index, depth: usize) std.Io.
     const main = cst.mainToken(node);
     try w.writeAll(@tagName(t));
     switch (t) {
-        .statement, .attr, .prefix, .postfix => try w.print(" {s}", .{cst.tokenText(main)}),
+        .statement, .prefix, .postfix => try w.print(" {s}", .{cst.tokenText(main)}),
+        .attr => try w.print(" {s}{s}", .{ cst.tokenText(main), if (cst.inverted(node)) "!" else "" }),
         .operation => for (0..cst.children(node).len - 1) |i| {
             try w.print(" {s}", .{cst.tokenText(cst.operator(node, i))});
         },

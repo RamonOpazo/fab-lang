@@ -814,7 +814,7 @@ computed  <  [base]  <  themes, left to right  <  the program
 
 ### 21.3 Errors
 
-New: **contract broken** (`:Color [warn] := [circle]`), **label in two types** (`[outer]` declared again), **not a type** (`:Colour [x] := …`), **value given to a flag** (`:hide [on]`), **only a flag inverts** (`:fill!`), **key of the wrong type** (`[ink] [circle]` in a record), **subject in a bundle** (`:t := { &node :fill [red] }`: a bundle's keys are functions), **number malformed** (`[.5]`, `[1.]`, too many digits). Gone: **built-in redefined**, and **theme and bundle mixed up**, which becomes an ordinary type error ("a function where a record is expected").
+New: **contract broken** (`:Color [warn] := [circle]`), **label in two types** (`[outer]` declared again), **not a type** (`:Colour [x] := …`), **type in a diagram's declaration** (`G :: f :Color`; with the renamed **entry**, **class** and **value in a diagram's declaration**: a declaration is a diagram's, a type's or a function's, each with its own body), **value given to a flag** (`:hide [on]`), **only a flag inverts** (`:fill!`), **key of the wrong type** (`[ink] [circle]` in a record), **subject in a bundle** (`:t := { &node :fill [red] }`: a bundle's keys are functions), **number malformed** (`[.5]`, `[1.]`, too many digits). Gone: **built-in redefined**, and **theme and bundle mixed up**, which becomes an ordinary type error ("a function where a record is expected").
 
 ### 21.4 Rejected
 

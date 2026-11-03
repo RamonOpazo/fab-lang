@@ -61,6 +61,11 @@ pub fn next(self: *Lexer) Token {
                 self.index += 1;
                 break :blk self.name(.attr_id, true);
             },
+            // Types are UpperCamel, so no hyphen.
+            'A'...'Z' => blk: {
+                self.index += 1;
+                break :blk self.name(.type_id, false);
+            },
             else => self.one(.invalid),
         },
 
@@ -148,14 +153,13 @@ fn delimited(self: *Lexer, close: u8, tag: Tag) Tag {
     }
 }
 
-/// At `[`: a value, `[red]`, `[0..*/1]`, `[/dashed/>]`, is one token up to
-/// the first `]`. Its contents are read later, by the attribute that takes it.
-/// Whitespace, a `[`, an empty bracket or a missing `]` make the `[` invalid.
+/// At `[`: a value, `[red]`, `[0..*/1]`, `[/dashed/>]`, `[]`, is one token
+/// up to the first `]`. Its contents are read later, by the attribute that
+/// takes it. Whitespace, a `[` or a missing `]` make the `[` invalid.
 fn value(self: *Lexer) Tag {
     var i = self.index + 1;
     while (true) : (i += 1) switch (self.at(i)) {
         ']' => {
-            if (i == self.index + 1) break;
             self.index = i + 1;
             return .val;
         },

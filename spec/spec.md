@@ -852,8 +852,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Trailing comma                     | `(f, g,)`, `{ a :x, }`                       | A comma stands between items only                                |
 | Empty braces                       | `G :: {}`, `G :style := {}`                  | There are no empty declarations or definitions                   |
 | Bare term in a definition          | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`               |
-| Entry or equation in a declaration | `G :: f (g :label "x")`                      | A declaration's items are terms                                  |
-| Class in a declaration             | `G :: &node f`                               | Classes are subjects of definitions only                         |
+| Entry or equation in a diagram's declaration | `G :: f (g :label "x")`            | A diagram's declaration holds terms                              |
+| Class in a diagram's declaration   | `G :: &node f`                               | Classes are subjects of definitions and signatures only          |
 | Levels in a definition             | `:x := a \| b`                               | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
@@ -929,7 +929,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Space inside brackets               | `[0..* / 1]`                             | A bracket is one token                                                               |
 | Negative number                     | `[-30]`                                  | Numbers are never negative; for the inner side write `[30!]`                         |
 | Number malformed                    | `[.5]`, `[1.]`, 19 significant digits    | A number is digits, with digits on both sides of a point                             |
-| Value in a term                     | `+(g1, [f], g2)`                         | Brackets are values, never structure                                                 |
+| Value in a diagram's declaration    | `G :: +(g1, [f], g2)`                    | Brackets are values, never structure                                                 |
+| Type in a diagram's declaration     | `G :: f :Color`                          | Types are declared on their own and used in definitions and signatures               |
 | Wrong type                          | `:shape [red]`, `:theme [terminal]`      | A `:Color` where a `:Shape` is expected                                              |
 | Does not apply                      | `f :shape [box]`                         | An attribute applies to the classes its signature names                              |
 | Value given to a flag, value missing | `:hide [on]`, `:shape`                  | Flags take no value; other attributes need one                                       |

@@ -21,11 +21,13 @@ pub const Tag = enum(u8) {
     // -- statements (rule 0) -------------------------------------------------
 
     /// `G :: f (g :label "x")`, `G :: f == g`.
-    entry_in_declaration,
+    entry_in_zone_declaration,
     /// `G :: &node f`.
-    class_in_declaration,
+    class_in_zone_declaration,
     /// `G :: +(g1, [f], g2)`.
-    value_in_declaration,
+    value_in_zone_declaration,
+    /// `G :: f :Color`.
+    type_in_zone_declaration,
     /// `yes, paid :label "yes"`: the bare `yes`.
     bare_term_in_definition,
     /// `:x := a | b`.
@@ -162,11 +164,14 @@ pub const Tag = enum(u8) {
 
     /// The contents of a definition, until plan steps 8–11.
     unsupported_definition,
+    /// `:Shape :: [circle]`, `(&node) :fill :: :Color`: declarations of
+    /// labels and functions, until plan step 8c.
+    unsupported_vocabulary,
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
             .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
-            .unsupported_definition => .unsupported,
+            .unsupported_definition, .unsupported_vocabulary => .unsupported,
             else => .@"error",
         };
     }

@@ -16,6 +16,21 @@ fn message(c: *Compilation, d: Diagnostic) ![]u8 {
     return out.toOwnedSlice();
 }
 
+test "the prelude checks with nothing to report but what is unsupported" {
+    // Until step 8e, when it is read before every program and stops being
+    // unsupported (statements.md §21).
+    var c = try Compilation.init(testing.allocator, @embedFile("../prelude.fab"), strict);
+    defer c.deinit();
+    for (try c.diagnostics()) |d| {
+        if (d.severity != .unsupported) {
+            const text = try message(&c, d);
+            defer testing.allocator.free(text);
+            std.debug.print("prelude.fab: {s}\n", .{text});
+            return error.TestUnexpectedResult;
+        }
+    }
+}
+
 test "a valid program: an IR under any tolerance, and status ok" {
     for ([_]Compilation.Tolerance{ strict, preview }) |tolerance| {
         var c = try Compilation.init(testing.allocator, "G :: f g", tolerance);

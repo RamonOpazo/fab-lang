@@ -85,11 +85,12 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const main = cst.mainToken(node);
     switch (cst.tag(node)) {
-        .entry, .operation => try a.failTerm(.entry_in_declaration, node, cst.firstToken(node)),
+        .entry, .operation => try a.failTerm(.entry_in_zone_declaration, node, cst.firstToken(node)),
         // Chains judge the leaves in them; a leaf reaching here stands alone.
         .leaf => switch (cst.tokenTag(main)) {
-            .class_id => try a.failTerm(.class_in_declaration, node, main),
-            .str, .math, .val => try a.failTerm(.value_in_declaration, node, main),
+            .class_id => try a.failTerm(.class_in_zone_declaration, node, main),
+            .str, .math, .val => try a.failTerm(.value_in_zone_declaration, node, main),
+            .type_id => try a.failTerm(.type_in_zone_declaration, node, main),
             .star => try a.failTerm(.null_not_on_one_end, node, main),
             .quid, .bang => try a.failTerm(.lone_kind, node, main),
             else => {},

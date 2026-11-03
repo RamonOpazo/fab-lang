@@ -100,10 +100,29 @@ test "classes" {
 }
 
 test "colons" {
-    try expectTags(":label :label-start :: := : :A", &.{
-        .attr_id, .attr_id, .decl, .defn, .invalid, .invalid, .zone_id,
+    try expectTags(":label :label-start :: := : :1", &.{
+        .attr_id, .attr_id, .decl, .defn, .invalid, .invalid, .invalid,
     });
     try expectTexts(":label :label-start", &.{ ":label", ":label-start" });
+}
+
+test "types: a colon, then an uppercase letter" {
+    try expectTags(":Color :A :UpperCamel :Tuple.(:Head)", &.{
+        .type_id, .type_id, .type_id, .type_id, .dot, .l_par, .type_id, .r_par,
+    });
+    try expectTexts(":Color :Tuple.", &.{ ":Color", ":Tuple", "." });
+}
+
+test "a type name ends at a hyphen" {
+    try expectTags(":Color-x", &.{ .type_id, .invalid, .edge_id });
+}
+
+test "a flag's ! touches it" {
+    var buf: [4]Token = undefined;
+    const t = lexAll(":hide!", &buf);
+    try testing.expectEqual(Tag.attr_id, t[0].tag);
+    try testing.expectEqual(Tag.bang, t[1].tag);
+    try testing.expect(t[0].touches(t[1]));
 }
 
 test "a value is one token" {
@@ -111,8 +130,12 @@ test "a value is one token" {
     try expectTexts("[0..*/0..1] [(->]", &.{ "[0..*/0..1]", "[(->]" });
 }
 
-test "not a value: an empty bracket, whitespace, a [ inside, no ]" {
-    try expectTags("[]", &.{ .invalid, .invalid });
+test "the empty list is a value" {
+    try expectTags("[] [][]", &.{ .val, .val, .val });
+    try expectTexts("[]", &.{"[]"});
+}
+
+test "not a value: whitespace, a [ inside, no ]" {
     try expectTags("[- >]", &.{ .invalid, .invalid, .invalid, .invalid });
     try expectTags("[f α g]", &.{ .invalid, .edge_id, .edge_id, .edge_id, .invalid });
     try expectTags("[a[b]", &.{ .invalid, .edge_id, .val });

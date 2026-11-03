@@ -76,7 +76,7 @@ test "a reserved or bad head declares no diagram: it draws a placeholder" {
 // A statement with a syntax error is not read (spec/statements.md §15.4).
 
 test "a statement with a syntax error is skipped, and the rest analysed" {
-    try expectTags("G :: f(g :label \"x\")\nH :: (h :label \"y\")", &.{.entry_in_declaration});
+    try expectTags("G :: f(g :label \"x\")\nH :: (h :label \"y\")", &.{.entry_in_zone_declaration});
 }
 
 test "a syntax error in the tail the parser skipped belongs to the statement it cut short" {
@@ -189,7 +189,7 @@ test "a space lands on a named side" {
 }
 
 test "levels are checked like the first" {
-    try expectTags("G :: +(f, g)+ | f/α/g | &node", &.{.class_in_declaration});
+    try expectTags("G :: +(f, g)+ | f/α/g | &node", &.{.class_in_zone_declaration});
     try expectTags("G :: f, { g | α }", &.{.level_inside_branch});
 }
 

@@ -119,20 +119,25 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
 
 pub fn analysis(tag: Analyser.Error.Tag) Text {
     return switch (tag) {
-        .entry_in_declaration => .{
-            .message = "An entry or equation in a declaration",
-            .explanation = "A declaration's items are terms: edges, nodes and groups of them. Attributes and equations are bound in definitions.",
+        .entry_in_zone_declaration => .{
+            .message = "An entry or equation in a diagram's declaration",
+            .explanation = "A diagram's declaration builds structure: its items are terms, edges, nodes and groups of them. Attributes and equations are bound in definitions.",
             .hint = "Move it to a definition: `G :style := { … }` or `G :prove := { … }`.",
         },
-        .class_in_declaration => .{
-            .message = "The class {} in a declaration",
-            .explanation = "Classes name sets of subjects for definitions. A declaration builds structure from edges and nodes only.",
+        .class_in_zone_declaration => .{
+            .message = "The class {} in a diagram's declaration",
+            .explanation = "Classes name sets of subjects for definitions. A diagram's declaration builds structure from edges and nodes only.",
             .hint = "Bind it in a definition: `&node :shape := [circle]`.",
         },
-        .value_in_declaration => .{
-            .message = "The value {} in a declaration",
-            .explanation = "Strings, math and brackets are values, and values are bound in definitions. A declaration builds structure from edges and nodes only.",
+        .value_in_zone_declaration => .{
+            .message = "The value {} in a diagram's declaration",
+            .explanation = "Strings, math and brackets are values, and values are bound in definitions. A diagram's declaration builds structure from edges and nodes only.",
             .hint = "Remove it, or bind it in a definition: `G :style := { f :label \"x\" }`.",
+        },
+        .type_in_zone_declaration => .{
+            .message = "The type {} in a diagram's declaration",
+            .explanation = "Types say what values are: they are declared on their own (`:Shape :: [circle]`) and used in definitions and signatures. A diagram's declaration builds structure from edges and nodes only.",
+            .hint = "Remove it, or use it in a definition: `:Color [warn] := [red]`.",
         },
         .bare_term_in_definition => .{
             .message = "{} binds nothing",
@@ -394,6 +399,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "The program is valid, but this compiler only checks a definition's shape so far. Its value is not applied.",
             .hint = "Nothing to fix in the program.",
         },
+        .unsupported_vocabulary => .{
+            .message = "Type and function declarations are not supported yet",
+            .explanation = "The program is valid, but this compiler does not read the labels a type declares, or a function's signature, so far.",
+            .hint = "Nothing to fix in the program.",
+        },
     };
 }
 
@@ -407,6 +417,7 @@ pub fn describe(tag: Token.Tag) []const u8 {
         .node_id => "a node name",
         .edge_id => "an edge name",
         .attr_id => "an attribute",
+        .type_id => "a type",
         .class_id => "a class",
         .str => "a string",
         .math => "math",

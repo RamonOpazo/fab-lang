@@ -6,8 +6,8 @@
 //! named after the spec section the case comes from.
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
-//! a step its part: the analyser's rule in step 5, the increment in step 7
-//! (1 for 7a, 2 for 7b, 3 for 7c). `done` is the last one finished; later cases
+//! a step its part: the analyser's rule in step 5, the increment in steps 7
+//! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -19,8 +19,8 @@ const testing = std.testing;
 const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
-/// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 7, .rule = 4 };
+/// The last plan step, and its rule or increment, finished.
+const done: Progress = .{ .step = 8, .rule = 1 };
 
 const Progress = struct {
     step: u8,
@@ -40,7 +40,7 @@ const Case = struct {
     /// The plan step that makes the case pass.
     step: u8,
     /// Within the step, the part that makes the case pass: step 5's rule, or
-    /// step 7's increment.
+    /// the increment of steps 7 and 8.
     rule: u8 = 0,
 };
 
@@ -679,15 +679,15 @@ test "Statements: a bare term in a definition" {
 }
 
 test "Statements: an entry in a declaration" {
-    try check(.{ .step = 5, .source = "G :: f (g :label \"x\")", .codes = &.{.{ .analysis = .entry_in_declaration }} });
+    try check(.{ .step = 5, .source = "G :: f (g :label \"x\")", .codes = &.{.{ .analysis = .entry_in_zone_declaration }} });
 }
 
 test "Statements: an equation in a declaration" {
-    try check(.{ .step = 5, .source = "G :: f == g", .codes = &.{.{ .analysis = .entry_in_declaration }} });
+    try check(.{ .step = 5, .source = "G :: f == g", .codes = &.{.{ .analysis = .entry_in_zone_declaration }} });
 }
 
 test "Statements: a class in a declaration" {
-    try check(.{ .step = 5, .source = "G :: &node f", .codes = &.{.{ .analysis = .class_in_declaration }} });
+    try check(.{ .step = 5, .source = "G :: &node f", .codes = &.{.{ .analysis = .class_in_zone_declaration }} });
 }
 
 test "Statements: levels in a definition" {
@@ -746,7 +746,37 @@ test "Definitions and values: attributes side by side" {
 }
 
 test "Definitions and values: a value in a declaration" {
-    try check(.{ .step = 5, .source = "G :: +(g1, [f], g2)", .codes = &.{.{ .analysis = .value_in_declaration }} });
+    try check(.{ .step = 5, .source = "G :: +(g1, [f], g2)", .codes = &.{.{ .analysis = .value_in_zone_declaration }} });
+}
+
+test "Definitions and values: a type in a diagram's declaration" {
+    try check(.{ .step = 8, .rule = 1, .source = "G :: f :Color", .codes = &.{.{ .analysis = .type_in_zone_declaration }} });
+    try check(.{ .step = 8, .rule = 1, .source = "G :: +(g1, :Shape, g2)", .codes = &.{.{ .analysis = .type_in_zone_declaration }} });
+}
+
+test "Definitions and values: types, labels and signatures are accepted" {
+    // Their meaning comes with step 8c; until then they are unsupported,
+    // which the corpus leaves out.
+    try check(.{ .step = 8, .rule = 1, .source = ":Shape :: [circle], [box]" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Shape :: {\n  [circle],\n  [box]\n}" });
+    try check(.{ .step = 8, .rule = 1, .source = "(&node, &zone) :fill :: :Color" });
+    try check(.{ .step = 8, .rule = 1, .source = "&zone :theme :: :List.(:Record)" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Length := :Number" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Color [red] := [#d1242f]" });
+    try check(.{ .step = 8, .rule = 1, .source = ":theme := []" });
+}
+
+test "Definitions and values: a record binds tokens" {
+    try check(.{ .step = 8, .rule = 1, .source = ":Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }" });
+}
+
+test "Definitions and values: a flag turned off" {
+    try check(.{ .step = 8, .rule = 1, .source = "G :: f\nG :style := { f :hide! }" });
+}
+
+test "Statements: a signature's subjects are classes" {
+    try check(.{ .step = 8, .rule = 1, .source = "G :: f\nG.f :fill :: :Color", .codes = &.{.{ .analysis = .bad_declaration_head }} });
 }
 
 test "Proofs: different operators without a group" {

@@ -259,9 +259,12 @@ fn parseEntry(p: *Parser, subject: Node.Index, start: TokenIndex) Error!Node.Ind
     return p.addNode(.entry, start, .{ .range = try p.listFrom(top) });
 }
 
-/// attr = ATTR_ID [ literal ]
+/// attr = ATTR_ID [ ~ BANG ] [ literal ]
+/// A `!` touching the attribute is part of it: `:hide!` turns a flag off.
+/// Apart, `:hide !`, it is a node, as anywhere else.
 fn parseAttr(p: *Parser) Error!Node.Index {
     const name = p.next();
+    if (p.cur() == .bang and p.touchesPrev()) _ = p.next();
     const literal: Node.Index = switch (p.cur()) {
         .str, .math, .val => try p.addLeaf(.leaf, p.next()),
         else => .root,
@@ -386,13 +389,14 @@ fn parsePostfix(p: *Parser) Error!Node.Index {
     return p.addNode(.postfix, op, .{ .node = primary });
 }
 
-/// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | AT | STAR | QUID | BANG
-///         | literal | L_PAR items R_PAR
+/// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | TYPE_ID | AT | STAR
+///         | QUID | BANG | literal | L_PAR items R_PAR
 /// A `?` or `!` gets here only when it touches no atom on its right: a node
-/// of that kind, as in `f/?`.
+/// of that kind, as in `f/?`. A type is a primary so that its parameters are
+/// a juxtafix: `:Tuple.(:Head, :Line)`.
 fn parsePrimary(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
+        .edge_id, .node_id, .zone_id, .class_id, .type_id, .at, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
         .l_par => return p.parseGroup(),
         else => return p.fail(.expected_atom, .invalid),
     }
@@ -459,7 +463,7 @@ fn touchesNext(p: *Parser) bool {
 /// touching what follows it; `?` and `!` always do, as a prefix or a node.
 fn startsAtomAt(p: *Parser, i: TokenIndex) bool {
     return switch (p.tags[i]) {
-        .edge_id, .node_id, .zone_id, .class_id, .at, .star, .quid, .bang, .str, .math, .val, .l_par => true,
+        .edge_id, .node_id, .zone_id, .class_id, .type_id, .at, .star, .quid, .bang, .str, .math, .val, .l_par => true,
         .plus => switch (p.tags[i + 1]) {
             .eol, .eof => false,
             else => p.ends[i] == p.starts[i + 1],

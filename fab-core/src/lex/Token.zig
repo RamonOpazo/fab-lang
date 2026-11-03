@@ -22,6 +22,7 @@ pub const Tag = enum(u8) {
     node_id, // # then uppercase first: #A, #UUID7
     edge_id, // lowercase, _ or non-ASCII first: f, h', user_id, α
     attr_id, // : then lowercase first: :label, :label-start
+    type_id, // : then uppercase first: :Color, :Shape
     class_id, // & then lowercase first: &node, &edge
 
     // literals
