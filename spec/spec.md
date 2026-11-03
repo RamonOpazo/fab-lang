@@ -550,9 +550,9 @@ Lengths are numbers in **em**, relative to the theme's text size. Angles are in 
 
 - **Values:** `[red] := [#ff0000]`, or with its type, `:Color [red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]` has red's type.
 - **Records:** `{ … }`, entries keyed by subjects, attributes and labels. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`; a label binds a value of its own type, `[ink] [#dddddd]`.
-- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle's keys are attributes.
-- **Themes:** `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named record of subjects and tokens, chosen with `:theme`.
-- **Signatures:** `(&node, &zone) :fill :: :Color` declares an attribute: the classes it applies to, and the type it takes. Anywhere else it does not apply.
+- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle's keys are attributes. It applies where all its contents apply: `:terminal` applies to nodes.
+- **Themes:** `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named record of subjects and tokens, chosen with `:theme`. Its subjects are classes, since it applies to any diagram; an attribute with no subject binds the diagram it is applied to.
+- **Signatures:** `(&node, &zone) :fill :: :Color` declares an attribute: the classes it applies to, and the type it takes. Anywhere else it does not apply. A class includes the classes inside it: what applies to `&node` applies to `&choice`.
 - **Names** are defined once, and before their first use.
 
 ### The prelude
@@ -945,6 +945,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Only a flag inverts                 | `:fill!`, `:terminal!`                   | `!` after an attribute turns a flag off                                              |
 | Key of the wrong type               | `[ink] [circle]` in a record             | A label binds a value of its own type                                                |
 | Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; its keys are attributes                     |
+| Element in a theme                  | `:Record [x] := { G.f :pen [thin] }`     | A theme applies to any diagram; its subjects are classes                             |
 | Binding made twice in a layer       | `#Done :shape` twice                     | Each (subject, attribute) pair is bound once                                         |
 | Definition at an undeclared subject | `G :style := …` before `G ::`            | A definition comes after what it talks about                                         |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |

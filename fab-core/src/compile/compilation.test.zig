@@ -16,19 +16,17 @@ fn message(c: *Compilation, d: Diagnostic) ![]u8 {
     return out.toOwnedSlice();
 }
 
-test "the prelude checks with nothing to report but what is unsupported" {
-    // Its records stay unsupported until step 8e (statements.md §21).
+test "the prelude checks with nothing to report" {
     var c = try Compilation.init(testing.allocator, Compilation.prelude_source, strict);
     defer c.deinit();
     c.prelude = false; // it is the prelude
-    for (try c.diagnostics()) |d| {
-        if (d.severity != .unsupported) {
-            const text = try message(&c, d);
-            defer testing.allocator.free(text);
-            std.debug.print("prelude.fab: {s}\n", .{text});
-            return error.TestUnexpectedResult;
-        }
+    const all = try c.diagnostics();
+    for (all) |d| {
+        const text = try message(&c, d);
+        defer testing.allocator.free(text);
+        std.debug.print("prelude.fab: {s}\n", .{text});
     }
+    try testing.expectEqual(@as(usize, 0), all.len);
 }
 
 test "the prelude's labels are the ones Zig gives meaning to" {

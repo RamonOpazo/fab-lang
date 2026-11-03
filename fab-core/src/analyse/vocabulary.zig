@@ -6,8 +6,8 @@
 //!   :Side := :Union.(:Facing, :On)    an alias
 //!   :Color [warn] := [red]            a named value, its type a contract
 //!
-//! Names are defined once, before use, in source order. Names inside
-//! records (bundles, themes, layers) are read with plan steps 8d and 9.
+//! Names are defined once, before use, in source order. Bundles are
+//! functions too, defined by records (`records.zig`).
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
@@ -63,7 +63,7 @@ pub fn labels(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemor
 }
 
 /// A label is one name or one symbol, alone in its bracket, with no `!`.
-fn labelToken(cst: *const Cst, node: Node.Index) union(enum) { label: TokenIndex, malformed, not_a_label } {
+pub fn labelToken(cst: *const Cst, node: Node.Index) union(enum) { label: TokenIndex, malformed, not_a_label } {
     if (cst.tag(node) != .leaf) return .not_a_label;
     const token = cst.mainToken(node);
     if (cst.tokenTag(token) != .val) return .not_a_label;
@@ -92,11 +92,11 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMe
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
     }
-    gop.value_ptr.* = .{ .classes = classes, .type = t, .token = function_token };
+    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token };
 }
 
 /// The classes of `&node` or `(&node, &zone)`. Whether all are known.
-fn readClasses(a: *Analyser, node: Node.Index, classes: *Env.Classes) error{OutOfMemory}!bool {
+pub fn readClasses(a: *Analyser, node: Node.Index, classes: *Env.Classes) error{OutOfMemory}!bool {
     const cst = a.cst;
     if (cst.tag(node) == .leaf) {
         const token = cst.mainToken(node);
@@ -165,7 +165,7 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
 }
 
 /// Defines a bracket name, once.
-fn define(a: *Analyser, text: []const u8, entry: Env.Value) error{OutOfMemory}!void {
+pub fn define(a: *Analyser, text: []const u8, entry: Env.Value) error{OutOfMemory}!void {
     const gop = try a.env.values.getOrPut(a.gpa, text);
     if (gop.found_existing) {
         const first = gop.value_ptr.*;
@@ -283,7 +283,7 @@ pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
 
 /// A body's items: the children of `items`, a block's, or the one item,
 /// put in `one`.
-fn itemsOf(cst: *const Cst, node: Node.Index, one: *[1]Node.Index) []const Node.Index {
+pub fn itemsOf(cst: *const Cst, node: Node.Index, one: *[1]Node.Index) []const Node.Index {
     switch (cst.tag(node)) {
         .items => return cst.children(node),
         .block => return itemsOf(cst, cst.children(node)[0], one),

@@ -66,8 +66,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 5    | Analyser: level 1                         | done    |
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
-| 8    | Definitions and values                    | next    |
-| 9    | Style layer                               |         |
+| 8    | Definitions and values                    | done    |
+| 9    | Style layer                               | next    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |

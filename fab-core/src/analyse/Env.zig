@@ -88,16 +88,26 @@ pub const Value = struct {
 };
 
 pub const Function = struct {
-    /// The classes it applies to.
+    /// The classes it applies to, with the classes inside them (`within`).
     classes: Classes,
     type: TypeIndex,
     token: TokenIndex,
+    /// A bundle, `:terminal := { … }`: a flag that is never inverted.
+    bundle: bool = false,
     prelude: bool = false,
 };
 
 /// The built-in classes (spec, Subjects and classes).
 pub const Class = enum { node, plain, choice, parallel, start, end, hole, canonical, edge, cell, zone };
 pub const Classes = std.EnumSet(Class);
+
+/// The classes inside `&node`.
+const node_kinds: Classes = .initMany(&.{ .plain, .choice, .parallel, .start, .end, .hole, .canonical });
+
+/// `classes` with the classes inside them: `&node` brings the node kinds.
+pub fn within(classes: Classes) Classes {
+    return if (classes.contains(.node)) classes.unionWith(node_kinds) else classes;
+}
 
 pub fn init(gpa: std.mem.Allocator) error{OutOfMemory}!Env {
     var env: Env = .{ .arena = .init(gpa) };

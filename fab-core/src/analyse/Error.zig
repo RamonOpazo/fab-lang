@@ -83,6 +83,27 @@ pub const Tag = enum(u8) {
     /// `(&nodes) :fill :: :Color`.
     unknown_class,
 
+    // -- records (step 8e) ---------------------------------------------------
+
+    /// `:colour [red]`, a bundle used before its definition.
+    unknown_attribute,
+    /// `&edge :fill [red]`, `{ :fill [red], :arrow [mono] }` in a bundle.
+    does_not_apply,
+    /// `&node :shape [red]`, `:theme [circle]`, `:t := [red]`.
+    wrong_type,
+    /// `&node :hide [on]`.
+    value_given_to_flag,
+    /// `&node :shape`.
+    value_missing,
+    /// `&node :fill!`, `:terminal!`.
+    only_a_flag_inverts,
+    /// `[ink] [circle]`.
+    key_of_wrong_type,
+    /// `:t := { &node :fill [red] }`, `:t := { [ink] [#fff] }`.
+    subject_in_bundle,
+    /// `:Record [x] := { G.f :pen [thin] }`.
+    element_in_theme,
+
     // -- sorts (rule 1) ------------------------------------------------------
 
     /// `#A f`, `* f`, `@ (f)`, `? f`.
@@ -202,7 +223,7 @@ pub const Tag = enum(u8) {
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 
-    /// The contents of a definition, until plan steps 8–11.
+    /// A layer, `G :style := …`, until plan steps 9 and 11.
     unsupported_definition,
 
     pub fn severity(tag: Tag) Severity {

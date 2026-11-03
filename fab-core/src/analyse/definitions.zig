@@ -1,8 +1,8 @@
 //! `head := body`. The head has one of five forms; the body holds entries,
 //! operations and, alone, a literal or a type. Aliases and named values are
-//! read into the environment (`vocabulary.zig`); the rest, and the records
-//! named values hold, wait for plan steps 8d–11, so they are reported as
-//! unsupported once checked.
+//! read into the environment (`vocabulary.zig`), themes and bundles checked
+//! as records (`records.zig`); the layers wait for plan steps 9 and 11, so
+//! they are reported as unsupported once checked.
 //!
 //! Also the heads of the declarations that make vocabulary, not structure:
 //! a type's labels and a function's signature (statements.md §21).
@@ -12,6 +12,7 @@ const Cst = @import("../parse/Cst.zig");
 const Analyser = @import("Analyser.zig");
 const value = @import("value.zig");
 const vocabulary = @import("vocabulary.zig");
+const records = @import("records.zig");
 
 const Node = Cst.Node;
 
@@ -37,13 +38,26 @@ pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.I
     try brackets(a, head);
     try brackets(a, body);
 
-    // `[warn] := [red]`, `:Color [warn] := [red]`: a named value. A record's
-    // contents wait for step 8d.
+    // `[warn] := [red]`, `:Color [warn] := [red]`: a named value; with a
+    // record, `:Record [dark] := { … }`, a theme.
     if (isLeafOf(cst, head, .val) or (cst.tag(head) == .o_chain and isPair(cst, head, .type_id))) {
         try vocabulary.namedValue(a, head, body);
-        if (cst.tag(body) != .block) return;
+        if (cst.tag(body) == .block) try records.theme(a, body);
+        return;
     }
+    // `:terminal := { … }`: a bundle.
+    if (bundleName(cst, head)) |name| return records.bundle(a, name, body);
+    // A layer, `G :style := { … }`, waits for steps 9 and 11.
     try a.fail(.unsupported_definition, cst.mainToken(node));
+}
+
+/// The function a bundle defines: a head with no subject.
+fn bundleName(cst: *const Cst, head: Node.Index) ?Node.Index {
+    return switch (cst.tag(head)) {
+        .attr => head,
+        .entry => if (cst.subject(head) == null) cst.children(head)[0] else null,
+        else => null,
+    };
 }
 
 /// Reads every bracket under `node`, and reports each element whose shape is
@@ -98,7 +112,7 @@ pub fn isVocabulary(cst: *const Cst, head: Node.Index) bool {
 }
 
 /// `&node`, or a group of classes: `(&node, &zone)`.
-fn areClasses(cst: *const Cst, node: Node.Index) bool {
+pub fn areClasses(cst: *const Cst, node: Node.Index) bool {
     return switch (cst.tag(node)) {
         .leaf => cst.tokenTag(cst.mainToken(node)) == .class_id,
         .group => areClasses(cst, cst.children(node)[0]),
@@ -111,7 +125,7 @@ fn areClasses(cst: *const Cst, node: Node.Index) bool {
 
 /// Two leaves side by side: a typed name, `:Color [red]`, when `first` is a
 /// type; a record's key and its value, `[ink] [#dddddd]`, when a bracket.
-fn isPair(cst: *const Cst, node: Node.Index, first: Token.Tag) bool {
+pub fn isPair(cst: *const Cst, node: Node.Index, first: Token.Tag) bool {
     const parts = cst.children(node);
     if (parts.len != 2 or !isLeafOf(cst, parts[0], first)) return false;
     return if (first == .type_id) isLeafOf(cst, parts[1], .val) else isLiteral(cst, parts[1]);

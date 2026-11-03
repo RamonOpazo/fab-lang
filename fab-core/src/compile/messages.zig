@@ -244,6 +244,51 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "The classes are `&node`, `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole`, `&canonical`, `&edge`, `&cell` and `&zone`.",
             .hint = "Check the spelling: `&node`, not `&nodes`.",
         },
+        .unknown_attribute => .{
+            .message = "{} is not an attribute",
+            .explanation = "Attributes are declared with a signature, `&node :shape :: :Shape`, or defined as bundles, `:terminal := { … }`, before their use. The prelude declares the built-in ones.",
+            .hint = "Check the spelling, or define the bundle above this line.",
+        },
+        .does_not_apply => .{
+            .message = "{} does not apply here",
+            .explanation = "An attribute applies to the classes its signature names, and to the classes inside them: what applies to `&node` applies to `&choice`. A bundle applies where all its contents apply.",
+            .hint = "Move it to a subject it applies to, or split the bundle.",
+        },
+        .wrong_type => .{
+            .message = "{} is not of the type this attribute takes",
+            .explanation = "Every attribute takes values of one type, stated by its signature: `:shape` takes a `:Shape`, `:theme` a list of records. A bundle takes no value: it is defined by a record.",
+            .hint = "Give a value of the attribute's type.",
+        },
+        .value_given_to_flag => .{
+            .message = "{} is given to a flag",
+            .explanation = "A flag is true when written and false otherwise, so it takes no value. `!` after it turns it off.",
+            .hint = "Remove the value; write `:hide` to set it, `:hide!` to unset it.",
+        },
+        .value_missing => .{
+            .message = "{} has no value",
+            .explanation = "Only flags stand alone; every other attribute takes a value of its type.",
+            .hint = "Add a value: `:shape [box]`.",
+        },
+        .only_a_flag_inverts => .{
+            .message = "{} is not a flag, so `!` cannot turn it off",
+            .explanation = "`!` after an attribute turns a flag off in a later layer. Other attributes are overridden with a new value, and a bundle is applied, never inverted.",
+            .hint = "Give the attribute another value instead.",
+        },
+        .key_of_wrong_type => .{
+            .message = "{} is not of the label's type",
+            .explanation = "In a record, a label binds a value of its own type: `[ink] [#dddddd]` binds a colour token to a colour.",
+            .hint = "Give a value of the label's type.",
+        },
+        .subject_in_bundle => .{
+            .message = "{} is in a bundle, whose keys are attributes",
+            .explanation = "A bundle is applied where it is written, exactly as its contents would be, so it holds attributes only: no subjects, no tokens.",
+            .hint = "Write the subject where the bundle is used, or put it in a theme.",
+        },
+        .element_in_theme => .{
+            .message = "{} names an element, in a theme",
+            .explanation = "A theme applies to any diagram, so its subjects are classes: `&node`, `(&edge, &cell)`.",
+            .hint = "Use a class, or style the element in its diagram's `:style`.",
+        },
         .mixed_operators => .{
             .message = "{} follows a different operator",
             .explanation = "Operators between chains share one level, with no precedence: a run may repeat one operator, and different ones need a group.",
@@ -480,8 +525,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
         },
         .unsupported_definition => .{
-            .message = "Definitions are not supported yet",
-            .explanation = "The program is valid, but this compiler only checks a definition's shape so far. Its value is not applied.",
+            .message = "Layers are not supported yet",
+            .explanation = "The program is valid, but this compiler only checks the shape of a layer (`G :style := …`, `:prove`, `:place`) so far. Its contents are not applied.",
             .hint = "Nothing to fix in the program.",
         },
     };

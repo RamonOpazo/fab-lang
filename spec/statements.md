@@ -834,3 +834,14 @@ New: **contract broken** (`:Color [warn] := [circle]`), **label in two types** (
 - **The prelude's contents** beyond the draft: more colour names, more themes, whether `[base]`'s sizes are right.
 - **Records under `:prove`** hold propositions (`f h == g k`), which are not key–value entries; whether a proof block is a `:Record` waits for the equations.
 - **A renderer's fallback per type** (which shape stands in for an unknown one): with step 10.
+
+### 21.6 Records, 2026-11-03
+
+What each record checks, before the style pass reads it (step 9).
+
+- **A theme's subjects are classes:** `&node`, `(&edge, &cell)`. A theme applies to any diagram, so it names no element: `G.f` or `G.&edge` in a theme is **element in a theme**. A subject's block holds its functions; a class subject inside it is a narrower subject, its own classes.
+- **A function with no subject in a theme binds its owner,** the diagram the theme is applied to: `:Record [paper] := { :fill [white] }` fills the diagram. So it must apply to `&zone`.
+- **A bundle's signature is computed:** a flag that applies where all its contents apply, the intersection of their classes. `:terminal := { :shape [circle], :fill [red] }` applies to `&node`; `{ :fill [red], :arrow [mono] }` applies nowhere, and its second key **does not apply**. A bundle's keys are functions, so a subject or a token in a bundle is **subject in a bundle**. A bundle is used as a flag, never inverted: `:terminal!` is **only a flag inverts**.
+- **"Does not apply" reads the class hierarchy:** `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole` and `&canonical` lie inside `&node`. A function applies to the classes its signature names and to the classes inside them: `:line`, declared for `&node`, applies to `&hole`; one declared for `&choice` only does not apply to `&node`.
+- **A function entry** is checked against its signature: known (**unknown attribute**), applying to its subject's classes (**does not apply**), a flag with no value (**value given to a flag**) and any other with one (**value missing**), `!` only on a flag (**only a flag inverts**), and its value fitting the type (**wrong type**).
+- **A token** binds a label to a value of the label's type: the key is a declared label (**not a label**, **undefined name**), the value fits its type (**key of the wrong type**).

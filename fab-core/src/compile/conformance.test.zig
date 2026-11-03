@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 8, .rule = 3 };
+const done: Progress = .{ .step = 8, .rule = 5 };
 
 const Progress = struct {
     step: u8,
@@ -763,8 +763,6 @@ test "Definitions and values: a type in a diagram's declaration" {
 }
 
 test "Definitions and values: types, labels and signatures are accepted" {
-    // Their meaning comes with step 8c; until then they are unsupported,
-    // which the corpus leaves out.
     try check(.{ .step = 8, .rule = 1, .source = ":Mood :: [calm], [busy]" });
     try check(.{ .step = 8, .rule = 1, .source = ":Mood :: {\n  [calm],\n  [busy]\n}" });
     try check(.{ .step = 8, .rule = 1, .source = "(&node, &zone) :glow :: :Color" });
@@ -772,7 +770,6 @@ test "Definitions and values: types, labels and signatures are accepted" {
     try check(.{ .step = 8, .rule = 1, .source = ":Width := :Number" });
     try check(.{ .step = 8, .rule = 1, .source = ":Tip :: [=>]\n:Stroke :: [clean]\n:Gap :: [nil]\n:Pointer := :Tuple.(:Tip, :Union.(:Stroke, :Gap), :Tip)" });
     try check(.{ .step = 8, .rule = 1, .source = ":Color [brand] := [#d1242f]" });
-    try check(.{ .step = 8, .rule = 1, .source = ":spare := []" });
 }
 
 test "Definitions and values: a record binds tokens" {
@@ -914,6 +911,74 @@ test "Definitions and values: tokens are labels added to a colour" {
 
 test "Definitions and values: unknown class" {
     try check(.{ .step = 8, .rule = 3, .source = "(&nodes, &zone) :fill :: :Color", .codes = &.{.{ .analysis = .unknown_class }} });
+}
+
+test "Definitions and values: a bundle, applied where all its contents apply" {
+    try check(.{ .step = 8, .rule = 5, .source = ":terminal := { :shape [circle], :fill [red] }" });
+    try check(.{ .step = 8, .rule = 5, .source = ":ref := :shape [round], :fill [muted]" });
+    try check(.{ .step = 8, .rule = 5, .source = ":terminal := :shape [circle]\n:done := { :terminal, :hide! }" });
+    try check(.{ .step = 8, .rule = 5, .source = ":faded := { :ink [muted], :pen [thin] }" });
+}
+
+test "Definitions and values: a theme: tokens, classes, and functions binding its diagram" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [paper] := { [ink] [#000], :fill [white], &node { :fill [white], &choice :shape [box] }, &hole :line [dashed] }" });
+    try check(.{ .step = 8, .rule = 5, .source = "[plainer] := { [circle] [box] }" });
+}
+
+test "Definitions and values: unknown attribute" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :colour [red] }", .codes = &.{.{ .analysis = .unknown_attribute }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":t := { :terminal }\n:terminal := :shape [circle]", .codes = &.{.{ .analysis = .unknown_attribute }} });
+}
+
+test "Definitions and values: does not apply" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &edge :fill [red] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :arrow [mono] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { :shape [box] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":t := { :fill [red], :arrow [mono] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 8, .rule = 5, .source = "&choice :knob :: :Number\n:Record [x] := { &node :knob [1], &choice :knob [1] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":t := :shape [box]\n:Record [x] := { &edge :t }", .codes = &.{.{ .analysis = .does_not_apply }} });
+}
+
+test "Definitions and values: wrong type" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :shape [red] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { :theme [circle] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :label [1] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":spare := []", .codes = &.{.{ .analysis = .wrong_type }} });
+}
+
+test "Definitions and values: values a theme can take" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { :theme [dark/compact], &edge { :arrow [/dashed/>], :label-at [0.3] }, &node :label $x$ }" });
+}
+
+test "Definitions and values: value given to a flag, value missing" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :hide [on] }", .codes = &.{.{ .analysis = .value_given_to_flag }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :shape }", .codes = &.{.{ .analysis = .value_missing }} });
+}
+
+test "Definitions and values: only a flag inverts" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :fill! }", .codes = &.{.{ .analysis = .only_a_flag_inverts }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":terminal := :shape [circle]\n:Record [x] := { &node :terminal! }", .codes = &.{.{ .analysis = .only_a_flag_inverts }} });
+}
+
+test "Definitions and values: key of the wrong type" {
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [ink] [circle] }", .codes = &.{.{ .analysis = .key_of_wrong_type }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [red] [#fff] }", .codes = &.{.{ .analysis = .not_a_label }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [inc] [#fff] }", .codes = &.{.{ .analysis = .undefined_name }} });
+}
+
+test "Definitions and values: subject in a bundle" {
+    try check(.{ .step = 8, .rule = 5, .source = ":t := { &node :fill [red] }", .codes = &.{.{ .analysis = .subject_in_bundle }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":t := { [ink] [#fff] }", .codes = &.{.{ .analysis = .subject_in_bundle }} });
+}
+
+test "Definitions and values: element in a theme" {
+    try check(.{ .step = 8, .rule = 5, .source = "G :: f\n:Record [x] := { G.f :pen [thin] }", .codes = &.{.{ .analysis = .element_in_theme }} });
+    try check(.{ .step = 8, .rule = 5, .source = "G :: f\n:Record [x] := { G.&edge :pen [thin] }", .codes = &.{.{ .analysis = .element_in_theme }} });
+}
+
+test "Definitions and values: a bundle defined twice" {
+    try check(.{ .step = 8, .rule = 5, .source = ":t := :hide\n:t := :hide", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":fill := :hide", .codes = &.{.{ .analysis = .name_defined_twice }} });
 }
 
 test "Statements: a signature's subjects are classes" {
