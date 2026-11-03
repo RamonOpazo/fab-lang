@@ -73,8 +73,59 @@ test "a reserved or bad head declares no diagram: it draws a placeholder" {
 // ---------------------------------------------------------------------------
 // Statements with syntax errors
 
+// A statement with a syntax error is not read (spec/statements.md §15.4).
+
 test "a statement with a syntax error is skipped, and the rest analysed" {
     try expectTags("G :: f(g :label \"x\")\nH :: (h :label \"y\")", &.{.entry_in_declaration});
+}
+
+test "a syntax error in the tail the parser skipped belongs to the statement it cut short" {
+    // Read, `G :: f/` would draw f undirected.
+    try expectGraph("G :: f/ /g\nH :: h",
+        \\placeholder G
+        \\zone H
+        \\  node n0 canon +h
+        \\  node n1 canon h+
+        \\  edge h n0 -> n1
+        \\issue s0 zone G
+        \\
+    );
+}
+
+test "a statement broken inside braces draws its placeholder too, for now" {
+    try expectGraph("G :: { f /g, h }",
+        \\placeholder G
+        \\issue s0 zone G
+        \\
+    );
+}
+
+test "a broken diagram is declared: what refers into it is a hole, silently" {
+    var a = try analyse("G :: f(g)\nH :: G.+f/x, G/y, G.#A/z");
+    defer a.deinit();
+    try testing.expectEqual(@as(usize, 0), a.result.errors.len);
+    try testing.expectEqual(@as(usize, 1), a.result.ir.issues.len);
+}
+
+test "a broken statement about a declared diagram marks it" {
+    try expectGraph("G :: f\nG :: f(g)",
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\issue s0 zone G
+        \\
+    );
+}
+
+test "a broken statement naming no diagram draws a placeholder named by its first token" {
+    try expectGraph(":: f\n[red] :: f g ]",
+        \\placeholder ::
+        \\placeholder [red]
+        \\issue s0 zone ::
+        \\issue s1 zone [red]
+        \\
+    );
 }
 
 // ---------------------------------------------------------------------------

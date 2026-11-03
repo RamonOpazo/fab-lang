@@ -592,3 +592,21 @@ Decided while designing the analyser (plan step 5). Some programs have no meanin
 **Decided.** Every program draws something (the spec, Errors): diagnostics mark their elements, each diagram has a border in the colour of its most severe one, and a statement that names no diagram draws a placeholder, a small square crossed corner to corner. Unsupported is drawn the same way, in its own colour, below error and warning, with the label "unsupported" above the diagram whenever one is present, even when the border is red. A diagram with skipped parts still draws what is supported (`G :: +(f, g)+ | f/α/g` draws level 1), and a definition about a diagram (`G :style := …`) marks that diagram rather than drawing a square of its own: you see as much as the compiler can draw, and the label says it is incomplete. Since unsupported never ships, this is for testing only.
 
 **Rejected.** Replacing a diagram with skipped parts by the placeholder: one line of style would turn a whole diagram into a square.
+
+### 15.4 Statements with syntax errors, 2026-11-03
+
+The parser recovers by skipping to the next statement, and keeps what it read before the error. Analysing that remnant drew wrong diagrams with no mark: `H :: g /k` drew H without `k`, `G :: f/ /g` drew `f` undirected. A statement the parser dropped whole (`G :: f(g)`) declared nothing, so `H :: G.+f/x` reported a second error, a cascade.
+
+**Decided.**
+
+- **Ownership by range.** A syntax error belongs to the statement from whose first token up to the next statement's it lies, so the tail the parser skipped belongs to the statement it cut short.
+- **A broken statement is not read.** It draws the placeholder, bordered by its errors. When its head names a diagram, the diagram is declared, as broken: it is drawn as that placeholder, and references into it are holes with no error of their own, as any cascade.
+- **Issues reach syntax errors.** An issue names the list its error is in, syntax or analysis, so a placeholder can be marked by the syntax error that made it, and no diagnostic is copied.
+
+**Coming.** Recovery item by item inside braces (the spec, Open questions): the parser already recovers at each `,` there, so the good items could be drawn, with the broken one as a hole. It needs a meaning for a hole attached to nothing, and is the next large change to recovery.
+
+**Rejected.**
+
+- Analysing what the parser kept, with a red border: it draws what was not written (`f` undirected, `g` missing) with confidence, and a truncated tree has errors of its own.
+- Ownership by the statement's own tokens: the skipped tail lies outside them, which is how the wrong drawings went unmarked.
+- Copying syntax errors into the analyser's list: two copies of one diagnostic, free to drift.

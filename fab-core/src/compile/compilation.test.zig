@@ -46,7 +46,7 @@ test "a broken program: withheld, or kept with its issues" {
     try testing.expectEqualStrings("The edge `k` is not declared", text);
 }
 
-test "syntax diagnostics come first, and issues still find their own" {
+test "syntax diagnostics come first, and issues find their own in either list" {
     // A syntax error in H, then an analysis error in J.
     var c = try Compilation.init(testing.allocator, "G :: f\nH :: g /k\nJ :: m/+x", preview);
     defer c.deinit();
@@ -56,11 +56,15 @@ test "syntax diagnostics come first, and issues still find their own" {
     try testing.expectEqualStrings("slash_has_no_prefix_form", all[0].code.name());
     try testing.expectEqualStrings("reference_not_declared", all[1].code.name());
 
+    // H is too broken to read: its syntax error marks its placeholder.
     const ir = (try c.ir()).?;
-    try testing.expectEqual(@as(usize, 1), ir.issues.len);
-    const d = try c.diagnosticOf(ir.issues.get(0));
-    try testing.expectEqualStrings("reference_not_declared", d.code.name());
-    try testing.expectEqualStrings("x", d.span.text(c.source));
+    try testing.expectEqual(@as(usize, 2), ir.issues.len);
+    const h = try c.diagnosticOf(ir.issues.get(0));
+    try testing.expectEqualStrings("slash_has_no_prefix_form", h.code.name());
+    try testing.expect(ir.zones.items(.placeholder)[1]);
+    const j = try c.diagnosticOf(ir.issues.get(1));
+    try testing.expectEqualStrings("reference_not_declared", j.code.name());
+    try testing.expectEqualStrings("x", j.span.text(c.source));
 }
 
 test "a diagram's mark: the border of its worst issue, and the unsupported label" {

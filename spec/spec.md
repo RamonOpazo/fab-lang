@@ -794,7 +794,7 @@ The three group forms are the three ways columns combine: each on its own, toget
 
 A program that hits any of these is rejected, each with its precise cause. Warnings are marked as such. Rows marked *reserved* are errors because their meaning is still open (see Open questions); lifting one later breaks no program.
 
-**Every program draws something.** A diagnostic that belongs to an element of the graph marks that element: a hole, an edge, the node where two names met. Each diagram is drawn with a border in the colour of its most severe diagnostic: error, then warning. A diagnostic with no element of its own, such as one in a statement or in a definition about the diagram, shows only as that border. A statement that names no diagram (`review :: a b`, `[red] :: f`, `:x := a | b`) draws a placeholder in its place: a small square with that border, crossed corner to corner. So even a program with nothing valid in it renders, and an image embedded in a document always shows what went wrong.
+**Every program draws something.** A diagnostic that belongs to an element of the graph marks that element: a hole, an edge, the node where two names met. Each diagram is drawn with a border in the colour of its most severe diagnostic: error, then warning. A diagnostic with no element of its own, such as one in a statement or in a definition about the diagram, shows only as that border. A statement that names no diagram (`review :: a b`, `[red] :: f`, `:x := a | b`) draws a placeholder in its place: a small square with that border, crossed corner to corner. A statement with a syntax error, anywhere from its first token to the next statement, is not read at all: it draws the same placeholder, under its diagram's name when its head names one (`G :: f ]] g` draws G's placeholder, not a G holding only `f`). That diagram counts as declared but broken, so what refers into it (`G.+f`) is a hole with no error of its own. So even a program with nothing valid in it renders, and an image embedded in a document always shows what went wrong, and never a drawing that is wrong.
 
 ### Statements
 
@@ -1155,6 +1155,10 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 - **Proof equations** over partial edges: `parent document == document` holds only where `parent` is defined.
 - **Undirected edges in equations,** which have no composition order.
 - **Column names for emitters.** A foreign-key row's label is its column's name; whether an emitter reads it from `:label` or from a schema attribute of its own is open until fAB emits SQL.
+
+**Coming.** Decided, and due in a later revision:
+
+- **Recovery item by item inside braces.** Inside `{ }` the parser recovers at each `,`, so a statement with a syntax error there could still draw its good items, with the broken one as a hole (`G :: { f /g, h }` draws `f` and `h`). Until then the whole statement draws its placeholder. What a hole attached to nothing means is to be settled with it.
 
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 

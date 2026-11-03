@@ -60,7 +60,9 @@ test "issues point into the document's diagnostics, after the syntax ones" {
     const doc = try document("G :: f\nH :: g /k\nJ :: m/+x", preview);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"code\":\"slash_has_no_prefix_form\",\"stage\":\"syntax\"");
-    try expectContains(doc, "\"issues\":[{\"subject\":{\"node\":");
+    // H's placeholder is zone 1, marked by the syntax error; J's hole by the
+    // analysis error after it.
+    try expectContains(doc, "\"issues\":[{\"subject\":{\"zone\":1},\"diagnostic\":0},{\"subject\":{\"node\":");
     try expectContains(doc, "\"diagnostic\":1}]");
     // The second diagnostic is on line 2, at `x`.
     try expectContains(doc, "\"range\":{\"start\":{\"line\":2,\"character\":8}");

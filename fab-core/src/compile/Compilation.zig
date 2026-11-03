@@ -176,11 +176,14 @@ pub fn diagnosticOf(c: *Compilation, issue: Ir.Issue) error{OutOfMemory}!Diagnos
     return all[try c.diagnosticIndex(issue)];
 }
 
-/// The position in `diagnostics()` of the diagnostic an IR issue comes from.
-/// Issues count analysis errors only, so syntax diagnostics are skipped.
+/// The position in `diagnostics()` of the diagnostic an IR issue comes from:
+/// syntax diagnostics first, then analysis ones.
 pub fn diagnosticIndex(c: *Compilation, issue: Ir.Issue) error{OutOfMemory}!usize {
     _ = try c.analysis();
-    return c.parsed.?.errors.len + issue.err;
+    return switch (issue.err) {
+        .syntax => |i| i,
+        .analysis => |i| c.parsed.?.errors.len + i,
+    };
 }
 
 fn analysis(c: *Compilation) error{OutOfMemory}!*const Analyser.Result {

@@ -108,6 +108,9 @@ pub const Zone = struct {
     /// them (`A.+f`, `A.#X`, `A.@`, `A`).
     edges: std.StringHashMapUnmanaged(elaborate.Binding) = .empty,
     names: std.StringHashMapUnmanaged(u32) = .empty,
+    /// Declared by a statement too broken to read: drawn as a placeholder,
+    /// and what refers into it is a hole, silently.
+    broken: bool = false,
 };
 
 /// Analyses a program. A program with syntax errors is analysed too.
@@ -126,9 +129,14 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}!Resul
     errdefer a.builder.deinit();
     errdefer a.errors.deinit(gpa);
 
-    for (cst.children(.root)) |node| {
-        if (cst.tag(node) != .statement or a.hasSyntaxError(node)) continue;
-        try a.statement(node);
+    const statements = cst.children(.root);
+    for (statements, 0..) |node, i| {
+        // A syntax error belongs to the statement it lies in, or whose
+        // tail the parser skipped: up to the next statement.
+        const start = if (i == 0) 0 else cst.firstToken(node);
+        const end = if (i + 1 < statements.len) cst.firstToken(statements[i + 1]) else std.math.maxInt(TokenIndex);
+        if (try a.broken(node, start, end)) continue;
+        if (cst.tag(node) == .statement) try a.statement(node);
     }
     try elaborate.graph(&a);
 
@@ -186,14 +194,33 @@ pub fn settle(a: *Analyser, map: *Pending, node: Node.Index, elem: u32) void {
     for (entry.value.items) |i| a.errors.items[i].subject = .{ .elem = elem };
 }
 
-/// Whether the parser reported anything inside a statement.
-fn hasSyntaxError(a: *Analyser, node: Node.Index) bool {
-    const first = a.cst.firstToken(node);
-    const last = a.cst.lastToken(node);
-    for (a.cst.errors) |err| {
-        if (err.token >= first and err.token <= last) return true;
+/// A statement with syntax errors between `start` and `end` is not read
+/// (spec/statements.md §15.4): its errors mark the diagram its head names,
+/// declared as broken if it is new, or a placeholder. Whether it was broken.
+fn broken(a: *Analyser, node: Node.Index, start: TokenIndex, end: TokenIndex) error{OutOfMemory}!bool {
+    const cst = a.cst;
+    var zone_index: ?Ir.ZoneIndex = null;
+    for (cst.errors, 0..) |err, i| {
+        if (err.token < start or err.token >= end) continue;
+        const z = zone_index orelse blk: {
+            const z = try a.brokenZone(cst.firstToken(node));
+            zone_index = z;
+            break :blk z;
+        };
+        try a.builder.addIssue(.{ .err = .{ .syntax = @intCast(i) }, .subject = .{ .zone = z } });
     }
-    return false;
+    return zone_index != null;
+}
+
+fn brokenZone(a: *Analyser, head: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
+    const text = a.cst.tokenText(head);
+    if (a.cst.tokenTag(head) == .zone_id) {
+        if (a.zones.get(text)) |declared| return declared.index;
+    }
+    const index = try a.builder.addZone(.{ .name = try a.builder.addString(text), .own = null, .placeholder = true });
+    if (a.cst.tokenTag(head) == .zone_id)
+        try a.zones.put(a.gpa, text, .{ .index = index, .token = head, .broken = true });
+    return index;
 }
 
 // ---------------------------------------------------------------------------

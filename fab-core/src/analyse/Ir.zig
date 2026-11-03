@@ -104,8 +104,11 @@ pub const Subject = union(enum) {
 /// A problem attached to an element of the graph: what a renderer marks.
 pub const Issue = struct {
     subject: Subject,
-    /// The error it comes from: an index into the analyser's error list.
-    err: u32,
+    /// The error it comes from, in the list it is in: the parser's (a
+    /// statement too broken to read), or the analyser's.
+    err: Err,
+
+    pub const Err = union(enum) { syntax: u32, analysis: u32 };
 };
 
 pub fn deinit(ir: *Ir, gpa: std.mem.Allocator) void {
@@ -202,7 +205,8 @@ pub const Builder = struct {
 //     edge f n0 -> n1          directed
 //     edge g n1 -- n2          undirected
 //     cell α f => g
-//   issue e0 node n1           error 0 marks node n1
+//   issue e0 node n1           analysis error 0 marks node n1
+//   issue s0 zone G            syntax error 0 marks zone G
 
 pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     for (0..ir.zones.len) |z| {
@@ -242,7 +246,10 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     }
     for (0..ir.issues.len) |i| {
         const issue = ir.issues.get(i);
-        try w.print("issue e{d} ", .{issue.err});
+        switch (issue.err) {
+            .syntax => |e| try w.print("issue s{d} ", .{e}),
+            .analysis => |e| try w.print("issue e{d} ", .{e}),
+        }
         switch (issue.subject) {
             .node => |n| try w.print("node n{d}\n", .{@backingInt(n)}),
             .edge => |e| try w.print("edge {s}\n", .{ir.edgeName(e)}),

@@ -156,9 +156,10 @@ fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
     return if (zone.index == a.zone()) null else zone;
 }
 
-/// `A` as a node: A's own node.
+/// `A` as a node: A's own node. A broken diagram's error is said already.
 fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
+    if (zone.broken) return hole(a);
     return zone.names.get("@") orelse failHole(a, .diagram_without_own_node, token);
 }
 
@@ -171,6 +172,7 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     const zone_token = cst.mainToken(left);
     if (sort.isLeaf(cst, right, .at)) return own(a, zone_token);
     const zone = diagram(a, zone_token) orelse return failHole(a, .diagram_not_declared, zone_token);
+    if (zone.broken) return hole(a);
 
     if (sort.isLeaf(cst, right, .node_id)) {
         const token = cst.mainToken(right);
@@ -507,7 +509,7 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
     // included; renderers read the severity from the diagnostic.
     for (a.errors.items, 0..) |err, i| {
         const subject = err.subject orelse continue;
-        try a.builder.addIssue(.{ .err = @intCast(i), .subject = switch (subject) {
+        try a.builder.addIssue(.{ .err = .{ .analysis = @intCast(i) }, .subject = switch (subject) {
             .elem => |e| .{ .node = node_of[uf.find(e)] },
             .edge => |e| .{ .edge = @fromBackingInt(e) },
             .cell => |c| .{ .cell = @fromBackingInt(c) },
