@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -63,8 +63,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 3    | Lexer                                     | done    |
 | 4    | Parser and CST                            | done    |
 | 5    | Analyser: level 1                         | done    |
-| 6    | IR, JSON, renderer for level 1; examples  | next    |
-| 7    | Levels (before 6)                         | done    |
+| 6    | IR, JSON, renderer for level 1; examples  |         |
+| 7    | Levels (before 6)                         | 7d next |
 | 8    | Definitions and values                    |         |
 | 9    | Style layer                               |         |
 | 10   | Renderer: style, arrows, themes           |         |
@@ -170,6 +170,7 @@ Level k is level 1 one dimension up (`statements.md` §16). Each zone keeps one 
 - **7a.** The IR's `Cell` generalises to level k: `level`, and source and target in level k−1 (edges at level 2, cells above); the dump and JSON follow. The table of names. `sort.of` takes the level and the table. The driver checks every level; until 7b their new names only enter the table, and `unsupported_levels` stays, as "checked, not drawn". Rows: not a cell, pinch above level 1, side from the wrong level.
 - **7b.** Elaborating cells with rules 2–5: attachment, cycles, distribution, a space landing on a named side (`f/α g/β/h`). Rows: unnamed side, two names for one side, undirected cell, path as a side, a cell declared twice, a level inside a block. `unsupported_levels` goes.
 - **7c.** Parallel cells, checked in `graph()` once level 1 is final (a later diagram can merge nodes). A non-parallel cell is kept and marked; a cell whose sides failed is dropped, its error on the zone. The corpus: the level rows and the spec's examples (Nat, Eq, Vc, Vs, Mod).
+- **7d.** Identity and undirected sides (`statements.md` §16.3). A side may come from any lower level and stands for its identity, whose source and target are itself; side from the wrong level narrows to level k or above. Cells may lie on undirected edges, parallel when the endpoints agree as an unordered pair, and may be undirected (`f/α/g/`). The IR's `Side` gains `node`, and cells keep their direction. Rows: `#A/f/#A | f/α/#A`, `α/m/f`, a non-parallel identity side, an undirected square, an undirected cell; `undirected_cell` and `cell_on_undirected_edge` go. Nothing is flagged yet: restrictions come with the proof shells.
 
 A flow draws no cells but declares them as any diagram does: there is no "cells in flow mode" error. The header waits until fab-core is complete. fab-render's "cells are left out, with one note each" and fab-cli's "notes follow the diagnostics, and never change the exit code" come back with step 6.
 
@@ -196,7 +197,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 ### E. Shells and docs
 
-**11. Proof and place shells.** `:prove` and `:place` are parsed and checked for placement only: the zone exists, and each layer appears once. Their contents are kept in the tree, unchecked.
+**11. Proof and place shells.** `:prove` and `:place` are parsed and checked for placement only: the zone exists, and each layer appears once. Their contents are kept in the tree, unchecked, except the proof's `:kind` and `:pass` (`statements.md` §17): the kind decides what is drawn and which structures become findings, `&refutable` or `&undecidable`, and passes acknowledge them.
 
 **12. CLI, README, examples.**
 - `fab show` stages follow the new CST, along with help text and messages.
@@ -208,7 +209,8 @@ Done (8–10) when the styled examples in the spec draw as described.
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents                                          | step 8             |
-| The header's attributes (`:kind`, strictness, boundary), and errors by kind (undirected edges in a commutative diagram) | after fab-core |
+| The header's attributes (`:kind`, boundary); `:kind` is the same attribute as the proof's, which wins | after fab-core |
+| Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |
 | The place vocabulary                                            | later              |

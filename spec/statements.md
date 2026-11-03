@@ -617,7 +617,7 @@ Revises section 3 for the implementation of levels (plan step 7).
 
 ### 16.1 Decided
 
-- **Level k is level 1 one dimension up.** Each diagram keeps one table of names with their levels; named nodes are level 0. At level k a new name is a k-cell, a name of level k−1 is a side, standing as a named node does at level 1, and any other level is an error ("side from the wrong level", "declared twice").
+- **Level k is level 1 one dimension up.** Each diagram keeps one table of names with their levels; named nodes are level 0. At level k a new name is a k-cell, a name of level k−1 is a side, standing as a named node does at level 1, and any other level is an error ("side from the wrong level", "declared twice"). (Revised in 16.3: a lower level is an identity side.)
 - **No unnamed sides.** Level 1 nodes may be unnamed because nodes are derived; above it a node is a (k−1)-cell, an edge one level down, and fAB has no nameless edges. An unnamed node at level k would be an undeclared generator of the polygraph, with no boundary. The row is *unnamed side*, not *anonymous cell*: in `f/α β/g` the cells are named, and the missing thing is the side between them.
 - **No pinches above level 1.** A pinch merges unnamed ends; above level 1 there are none, so a pinch there is an error, never a synonym (`+α` for f).
 - **Not a cell.** Named nodes, `@`, `*`, `?`, `!` and other diagrams' nodes belong to level 1.
@@ -627,10 +627,59 @@ Revises section 3 for the implementation of levels (plan step 7).
 - **Two names for one side** keeps both cells as written: above level 1 there is nothing to merge, since each cell already has its sides.
 - **Declared twice** is one rule for edges and cells: the same rule, one dimension up.
 - **Parallel is judged on the final graph** (plan step 7c), once every diagram is elaborated: a later diagram can merge nodes, and merges only make more cells parallel, never fewer. The error is at the cell's name, and the cell stays drawn, marked.
-- **A cell on an undirected edge is reserved.** An undirected edge has no source and target to be parallel by. Undirected edges stay legal everywhere: they describe a relation, and whether a commutative diagram refuses to draw one is a contextual error, decided with the header.
+- **A cell on an undirected edge is reserved.** An undirected edge has no source and target to be parallel by. Undirected edges stay legal everywhere: they describe a relation, and whether a commutative diagram refuses to draw one is a contextual error, decided with the header. (Revised in 16.3: allowed, and a restriction may flag it, section 17.)
 
 ### 16.2 Rejected
 
 - Forbidding cells in flows: the relations exist whatever the diagram shows, and the program states them once.
 - Forbidding the space above level 1: it breaks "the same grammar one dimension up" for no gain in meaning.
 - The header in this step: the header's scope and syntax are tied to the CLI, so it waits until fab-core is complete.
+
+### 16.3 Identity and undirected sides, 2026-11-03
+
+Revises 16.1 (plan step 7d). The principle: the analyser describes the largest structure that still has a reading, and restrictions narrow it (section 17). Full freedom has no structure to draw; full strictness is a small set of shapes. fAB sits between them.
+
+- **A side may come from any lower level.** At level k, a name of level j < k−1 stands for its identity at level k−1: every cell x has an identity 1_x one level up, so this is plain category theory, not a relaxation. `#A/f/#A | f/α/#A` is α : f ⇒ 1_A; `+(f, g)+ | f/(α, β)/g | α/m/f` is m : α ⇛ 1_f. Named nodes and `@` are level 0, so they are sides at every level above 1. `*`, `?`, `!` and other diagrams' nodes are still not cells.
+- **Side from the wrong level** narrows to a side of level k or above: a cell cannot be bounded by a cell of its own level or higher.
+- **Parallel uses the identities' boundaries.** 1_x has source x and target x, so α : f ⇒ 1_A needs f : A → A, and m : α ⇛ 1_f needs α : f ⇒ f. A non-parallel cell stays an error: parallelism is what makes a cell a cell, while a direction is only a property of a side.
+- **Undirected sides are allowed.** An undirected edge relates two nodes in no order, so a cell on it is parallel when the endpoints agree as an unordered pair: undirected f between A and B is parallel to g : B → A. Lifts the reserved row *cell on an undirected edge*.
+- **Undirected cells are allowed,** spelled as at level 1: a trailing `/` ends a chain of one cell, `f/α/g/`. A cell is its own way back. `f/α/` alone still lacks a side (unnamed side).
+- **Neither is category theory,** and neither is an error in the analyser. A restriction that proves against a category flags them (section 17); the IR keeps each cell's direction, so it can.
+
+### 16.4 Rejected
+
+- Undirected cells and cells on undirected edges as errors: they describe relations a diagram may hold, and forbidding them in the analyser decides for every kind what only some kinds refuse.
+- Non-parallel cells as a restriction finding: a cell is a relation between parallel cells, and without that it is no structure at all.
+
+## 17. Restrictions and passes, 2026-11-03 (planned)
+
+Planned with the proof shells (plan step 11); nothing here is implemented. Revises the open question on the header's errors by kind.
+
+- **The analyser describes, restrictions narrow.** Declarations accept every structure with a reading (16.3). A restriction turns some of them into findings: the kind states what the graph is proved against, and the proof layer narrows further.
+- **The kind is stated in the proof:** `G :prove := { G :kind [cd], … }`. A proof is like a paper about the relations declared: it says what kind of thing they are, and that one statement decides three things, so no second attribute is needed: the kind of graph (what is drawn), the proofs that may be posited (which attributes the proof layer accepts), and which structures are promoted to findings. The same attribute may be given at the header, `G :kind := [cd]`, with the same name; the local one, in the proof, wins. The header comes late (it needs a stable CLI), so the proof's `:kind` is the one implemented first.
+- **No kind, no restrictions.** A diagram without a `:kind` is a plain graph: everything declared is drawn, and nothing becomes a finding.
+- **Findings are classed by reason, and the reason sets the severity.** A restriction never chooses a severity; it chooses the reason, so a pass written against a reason never breaks when severities move.
+
+| Class | Meaning | Severity |
+|---|---|---|
+| `&refutable` | the structure contradicts the kind's rules, so the proof must take it as false (an undirected cell in a category) | error |
+| `&undecidable` | the structure has no check in the kind, because it does not belong to it: neither provable nor refutable there | warning |
+
+- **Narrower classes name the structure,** one per finding, beneath its reason: `&undirected-cell`, `&undirected-side`, and so on. The general and the specific live together, by the style layer's specificity: reason, structure, then one element.
+- **`:pass` acknowledges a finding,** with an optional literal for the reason:
+
+  ```
+  G :prove := {
+    G :kind [cd],
+    &undirected-side :pass,
+    α :pass "a relation, not a morphism",
+    &undecidable :pass
+  }
+  ```
+
+- **A pass reaches only findings.** Language errors (an undeclared reference, an unnamed side, a non-parallel cell) belong to no finding class, and nothing can name them, so no pass quiets them, by construction.
+- **A pass leaves a trace.** It never changes the exit code; `fab check` keeps it as a note, with its reason, and the drawing loses its mark.
+- **A pass that matches nothing warns,** so acknowledgements cannot go stale silently.
+
+**Rejected.** `&unprovable` for the error class: in logic it includes the undecidable too, while *refutable* says exactly "provably false". `:env` beside `:kind`: two names for what the graph is. `&errors` and `&warnings` as classes: they name how loud a finding is, which depends on the restriction, and `&errors :pass` would reach language errors too.
+

@@ -230,7 +230,7 @@ G :: f/ g/             // two undirected edges in a path
 - The default arrow of an undirected edge has no heads, `[/solid/]`. Giving it a head is an error: it would draw a direction the relations don't have.
 - **A trailing `/` ends a chain of one edge,** so the edge may be attached first: `#A/f/` is undirected f with one end at A, and `#A/f/#B/` is undirected f between A and B. Continue with a space: `#A/f/ g/`.
 - In a diagram whose header kind is undirected, every edge is undirected, and writing `f/` there is an error.
-- Undirected edges exist only at level 1. A trailing `/` in a cell level is an error.
+- Cells may be undirected too, spelled the same way: `f/α/g/` is undirected α between f and g (see Levels).
 
 ## Node kinds and pinching
 
@@ -417,11 +417,12 @@ A diagram with cells is a presentation graded by dimension, which mathematicians
 
 - **Each level uses the same grammar as level 1, one dimension up.** At level k ≥ 2, a declared name refers to a cell of level k−1, and a new name creates a cell of level k. No sigil is needed.
 - **Cells are placed with `/`.** The slash rules hold unchanged: one cell between two sides is attached to them, and two or more cells in a chain form a cycle. `f/α/g` is α : f ⇒ g, and the pair there and back is `f/α/g/β`.
-- **Each diagram keeps one table of names, each with its level.** At level k, a name not in the table is a new k-cell; a name of level k−1 is a side, standing where a named node stands at level 1; any other level is an error. Named nodes are level 0, which is why level 1 reads them as nodes.
-- **No unnamed sides.** At level 1 a node may be unnamed, since nodes are derived. Above it, a node is a (k−1)-cell, and fAB has no nameless edges, so every side is a name: `f/α β/g` would need a 1-cell between α and β, and is an error at level 2. For the same reason there is nothing to pinch above level 1, and named nodes, `@`, `*`, `?`, `!` and other diagrams belong to level 1 only.
+- **Each diagram keeps one table of names, each with its level.** At level k, a name not in the table is a new k-cell; a name of a lower level is a side, standing where a named node stands at level 1; a name of level k or above is an error. Named nodes are level 0, which is why level 1 reads them as nodes.
+- **A lower side is an identity.** A side of level j < k−1 stands for its identity at level k−1, as every cell x has an identity 1_x one level up: `#A/f/#A | f/α/#A` is α : f ⇒ 1_A, and `α/m/f` at level 3 is m : α ⇛ 1_f. 1_x has source and target x, so parallelism still holds: α : f ⇒ 1_A needs f : A → A.
+- **No unnamed sides.** At level 1 a node may be unnamed, since nodes are derived. Above it, a node is a (k−1)-cell, and fAB has no nameless edges, so every side is a name: `f/α β/g` would need a 1-cell between α and β, and is an error at level 2. For the same reason there is nothing to pinch above level 1, and `*`, `?`, `!` and other diagrams' nodes belong to level 1 only.
 - **Vertical composition** is two attachments, `f/α/g, g/β/h`, or a space landing on the shared side, `f/α g/β/h`: α's target meets g, which is named.
 - **Sides are always single, named cells.** There are never paths as sides, and never parentheses around a side.
-- **No undirected cells** above level 1.
+- **Undirected sides and cells.** A cell may lie on undirected edges: their endpoints must agree as an unordered pair, so undirected f between A and B is parallel to g : B → A. A cell may itself be undirected, with the trailing `/` of a one-cell chain: `f/α/g/`. Neither is category theory; the declaration describes them, and a proof environment that proves against a category flags them (Open questions, Coming).
 - **`|` appears only at the top of a declaration's right side,** inline or in its braces. A group never holds `|`: `G :: f (g | α)` is an error, because a level cannot live inside a branch.
 
 | Level | Form      | Meaning                                              |
@@ -864,14 +865,12 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | -------------------------------- | ------------------------------ | --------------------------------------------------------------- |
 | Empty level                      | `G :: f \| \| m`               | Every level declares something                                  |
 | Level inside a branch            | `G :: f (g \| α)`              | `\|` appears only at the top of a declaration                   |
-| Side from the wrong level        | `α/m/f` at level 3             | Level 3 relates 2-cells; f is a 1-cell                          |
-| Cells between non-parallel cells | `f/α/h` in a square            | α : f ⇒ h needs f and h to share start and end                  |
+| Side from the wrong level        | `f/α/β` at level 2             | A cell's sides come from lower levels; β is a 2-cell            |
+| Cells between non-parallel cells | `f/α/h` in a square, `f/α/#B` with f : A → B | α : f ⇒ h needs f and h to share start and end; 1_B starts at B |
 | Path as a side                   | `(f h)/α/g`                    | Sides are single named cells; name the composite first          |
 | Unnamed side                     | `f/α β/g`, `α`, `(α, β)/g` at level 2 | Every end of a cell lands on a named cell; `f/α β/g` needs a 1-cell between α and β |
 | Two names for one side           | `f/α/g h/β/k` at level 2       | The space puts g and h in one place; each cell keeps its own sides |
-| Undirected cell                  | `f/α/` at level 2              | Cells always have a direction                                   |
-| Reserved: cell on an undirected edge | `+(f/, g/)+ \| f/α/g`      | An undirected edge has no source or target to be parallel by    |
-| Not a cell                       | `+(f, g)+ \| f/#A`, `f/*`, `A.α` | Named nodes, `@`, `*`, kinds and other diagrams are level 1 only |
+| Not a cell                       | `+(f, g)+ \| f/α/*`, `f/α/?`, `f/α/A.#X` | `*`, kinds and other diagrams' nodes are level 1 only |
 | Pinch above level 1              | `+(α, β)`, `+α/β/g` at level 2 | Sides are named, so there is nothing to pinch                    |
 
 ### Definitions and values
@@ -1135,7 +1134,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Structure**
 
 - **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
-- **The header.** Which attributes (`:kind`, strictness, boundary) and what each changes. Among them, errors that depend on the kind: an undirected edge declares a relation any diagram may hold, but a commutative diagram may refuse to draw one.
+- **The header.** Which attributes (`:kind`, boundary) and what each changes. `:kind` is one attribute, the same in the header and in the proof, where it wins (Coming, Restrictions and passes).
 - **Diagram composition.** How one diagram is used inside another, through its boundary.
 - **What a flow could draw of its cells,** if anything, and how many levels stay readable.
 - **How a category draws `?` and `!`.** They are declared the same way in every diagram; what a category shows of them is the renderer's to decide.
@@ -1158,7 +1157,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 - **What the checker checks,** whether statements imply others (two commuting squares imply the outer rectangle), and what is drawn for them (corner marks ⌟ ⌜, dashed unique arrows).
 - **Explicit cones.** How a universal property names its square when it can't be inferred from the node.
-- **Proof vocabulary per kind.** Whether the proof layer says `:mono` or `:pk`; the header's kind is the natural place to choose.
+- **Proof vocabulary per kind.** Whether the proof layer says `:mono` or `:pk`: the kind chooses, and which attributes each kind accepts is open.
 - **Equations.** They are written `==` and `~=`; what `~=` means (isomorphic objects, or commuting up to an invertible 2-cell) and the rest of their design is open.
 - **Proof equations** over partial edges: `parent document == document` holds only where `parent` is defined.
 - **Undirected edges in equations,** which have no composition order.
@@ -1167,11 +1166,11 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Coming.** Decided, and due in a later revision:
 
 - **Recovery item by item inside braces.** Inside `{ }` the parser recovers at each `,`, so a statement with a syntax error there could still draw its good items, with the broken one as a hole (`G :: { f /g, h }` draws `f` and `h`). Until then the whole statement draws its placeholder. What a hole attached to nothing means is to be settled with it.
+- **Restrictions and passes** (`statements.md` §17). Declarations describe every structure with a reading; a proof narrows it. `G :prove := { G :kind [cd], … }` states what kind of graph it is: what is drawn, which proofs may be posited, and which structures become findings, classed by reason: `&refutable` (contradicts the kind, an error) and `&undecidable` (has no check there, a warning), each with narrower classes per structure (`&undirected-cell`). `:pass` acknowledges a finding, by element or by class, with an optional reason: `α :pass "a relation, not a morphism"`. A pass reaches only findings, never a language error; it leaves a note and never changes the exit code, and a pass that matches nothing warns. The header may state `:kind` too, under the same name; the proof's wins. A diagram with no kind is a plain graph: it draws everything and raises no findings.
 
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 
 - Declaring a node or an edge on its own (Declaring nodes and edges, above).
-- A cell on an undirected edge: what parallel means without a direction.
 
 **Settled since the first revision:** name scope (local to a diagram); precedence of `/` chains (left to right); the clash between colours and named nodes on `#` (colours are values in brackets); the format vocabulary and arrow grammar (now the style layer); styling proof-derived marks (`:marks`, as a definition after the proof).
 
