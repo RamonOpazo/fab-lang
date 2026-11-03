@@ -29,7 +29,7 @@ const Style = @This();
 label: []const u8,
 /// A short line above the label: "unsupported", on a diagram the compiler
 /// can't draw in full (statements.md §15.3).
-caption: ?[]const u8,
+caption: ?Caption,
 italic: bool,
 /// `:ink`: the colour of text.
 ink: ?Color,
@@ -51,6 +51,12 @@ pub const Color = union(enum) {
     token: Token,
 
     pub const Token = enum { accent, muted, @"error", warning, unsupported };
+};
+
+/// A short line of its own colour above a label.
+pub const Caption = struct {
+    text: []const u8,
+    ink: Color,
 };
 
 /// How serious an issue is, as drawn: the colour of its mark. A promoted
@@ -117,7 +123,7 @@ pub const Shape = enum {
 /// Partial attributes: one layer of the cascade. Unset fields are null.
 pub const Attrs = struct {
     label: ?[]const u8 = null,
-    caption: ?[]const u8 = null,
+    caption: ?Caption = null,
     italic: ?bool = null,
     ink: ?Color = null,
     stroke: ?Color = null,

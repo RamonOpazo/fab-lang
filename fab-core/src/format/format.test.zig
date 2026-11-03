@@ -125,7 +125,7 @@ test "marks win: a hole keeps its dashes, in its error's colour, and frames its 
     try testing.expectEqual(red, s.zones[0].stroke);
     try testing.expect(s.isFramed(@fromBackingInt(@as(u32, 0))));
     try testing.expect(!s.isFramed(@fromBackingInt(@as(u32, 1))));
-    try testing.expectEqual(@as(?[]const u8, null), s.zones[0].caption);
+    try testing.expectEqual(@as(?Style.Caption, null), s.zones[0].caption);
 }
 
 test "a diagram's frame is its worst issue; unsupported adds the caption, even under red" {
@@ -139,11 +139,12 @@ test "a diagram's frame is its worst issue; unsupported adds the caption, even u
     defer c.deinit();
     const s = (try c.sheet()).?;
     try testing.expectEqual(amber, s.zones[0].stroke);
-    try testing.expectEqual(@as(?[]const u8, null), s.zones[0].caption);
+    try testing.expectEqual(@as(?Style.Caption, null), s.zones[0].caption);
     try testing.expectEqual(violet, s.zones[1].stroke);
-    try testing.expectEqualStrings("unsupported", s.zones[1].caption.?);
+    try testing.expectEqualStrings("unsupported", s.zones[1].caption.?.text);
+    try testing.expectEqual(violet.?, s.zones[1].caption.?.ink);
     try testing.expectEqual(red, s.zones[2].stroke);
-    try testing.expectEqualStrings("unsupported", s.zones[2].caption.?);
+    try testing.expectEqualStrings("unsupported", s.zones[2].caption.?.text);
 }
 
 test "a promoted warning is drawn as an error" {
@@ -187,7 +188,7 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     try testing.expectEqual(red, s.nodes[1].stroke);
     try testing.expectEqual(@as(?Style.Color, null), s.nodes[1].fill);
     try testing.expectEqual(red, s.zones[0].stroke);
-    try testing.expectEqualStrings("unsupported", s.zones[0].caption.?);
+    try testing.expectEqualStrings("unsupported", s.zones[0].caption.?.text);
 }
 
 // ---------------------------------------------------------------------------

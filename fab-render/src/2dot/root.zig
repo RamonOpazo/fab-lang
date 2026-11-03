@@ -18,6 +18,12 @@
 //!     still groups the nodes for layout, but draws nothing.
 //!   - An undirected edge is `dir=none`, since a digraph has only `->`.
 //!   - Cells are not drawn. Each one gets a note.
+//!   - A placeholder zone (a statement that drew nothing) is a cluster with
+//!     one node, `z{z}`, a square holding ✕: Graphviz has no square crossed
+//!     corner to corner (statements.md §18). Its identifier is not `n…`, so
+//!     no edge reaches it, and the law counts it apart.
+//!   - A caption ("unsupported") makes the cluster's label an HTML label: the
+//!     one place DOT needs two kinds of text in one label.
 //!
 //! The Sheet decides every look; this file only realizes it in DOT's terms.
 //! What DOT needs and the Sheet doesn't say, such as fonts, sizes and
@@ -50,11 +56,18 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
     // 1. Nodes, zone by zone, each inside its owner's cluster.
     for (0..ir.zones.len) |z| {
         const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
+        const as = sheet.drawnAs(zone);
+        if (as == .placeholder) {
+            try w.print("  subgraph cluster_{d} {{\n", .{z});
+            try writeClusterAttrs(sheet, zone, w, notes);
+            try writePlaceholder(sheet.zone(zone), z, w);
+            try w.writeAll("  }\n");
+            continue;
+        }
         var owns_nodes = false;
         for (node_zone) |owner| owns_nodes = owns_nodes or owner == zone;
         if (!owns_nodes) continue;
 
-        const as = sheet.drawnAs(zone);
         const grouped = as != .flat;
         if (as == .node or as == .table) try notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone } });
 
@@ -319,7 +332,18 @@ fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, no
         return;
     }
     try w.writeAll("    label=");
-    try quoted(w, style.label);
+    if (style.caption) |caption| {
+        // `<<font …>unsupported</font><br/>G>`: the caption above the name.
+        try w.writeAll("<<font point-size=\"9\" color=\"");
+        try writeColor(w, caption.ink);
+        try w.writeAll("\">");
+        try html(w, caption.text);
+        try w.writeAll("</font><br/>");
+        try html(w, style.label);
+        try w.writeByte('>');
+    } else {
+        try quoted(w, style.label);
+    }
     try w.writeByte('\n');
     if (style.stroke) |c| {
         try w.writeAll("    pencolor=\"");
@@ -360,6 +384,17 @@ fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, no
     }
 }
 
+/// The one node of a placeholder: a square holding ✕, in the frame's colour.
+fn writePlaceholder(style: Style, z: usize, w: *Writer) Writer.Error!void {
+    const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
+    try w.print("    z{d} [label=\"✕\", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16", .{z});
+    try w.writeAll(", color=\"");
+    try writeColor(w, c);
+    try w.writeAll("\", fontcolor=\"");
+    try writeColor(w, c);
+    try w.writeAll("\"]\n");
+}
+
 /// The `style` flags a line needs. `double` is handled by the caller, since
 /// nodes and edges draw it differently.
 fn lineFlags(a: *Attrs, line: Style.Line, subject: fab.Ir.Subject, notes: *Note.List) error{OutOfMemory}!void {
@@ -392,6 +427,17 @@ pub fn quoted(w: *Writer, s: []const u8) Writer.Error!void {
         else => try w.writeByte(c),
     };
     try w.writeByte('"');
+}
+
+/// Text inside an HTML label: `&`, `<`, `>` and `"` escaped.
+pub fn html(w: *Writer, s: []const u8) Writer.Error!void {
+    for (s) |c| switch (c) {
+        '&' => try w.writeAll("&amp;"),
+        '<' => try w.writeAll("&lt;"),
+        '>' => try w.writeAll("&gt;"),
+        '"' => try w.writeAll("&quot;"),
+        else => try w.writeByte(c),
+    };
 }
 
 test {

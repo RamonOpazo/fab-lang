@@ -99,7 +99,8 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{
         if (placeholder) attrs = attrs.over(.{ .as = .placeholder });
         const mark = zoneMark(ir, marks, @fromBackingInt(@as(u32, @intCast(z))));
         if (mark.border) |b| attrs = attrs.over(.{ .stroke = b.color() });
-        if (mark.unsupported) attrs = attrs.over(.{ .caption = "unsupported" });
+        // In its own colour, even under a red frame (statements.md §15.3).
+        if (mark.unsupported) attrs = attrs.over(.{ .caption = .{ .text = "unsupported", .ink = Mark.unsupported.color() } });
         style.* = attrs.resolve();
     }
 

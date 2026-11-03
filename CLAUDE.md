@@ -158,7 +158,7 @@ Done when every level-1 relations case passes.
 **6. IR, JSON and renderer for level 1; examples.**
 - The IR carries undirected edges, null nodes and holes; `emit/json.zig` follows it. `&start` and `&end` are derived by the style pass, not stored (`statements.md` §18).
 - fab-render draws undirected edges without heads, and starts, ends, choices and bars by kind default.
-- Issues are drawn (§15.3, §18): marks on their elements, applied last; each diagram's border in its worst severity; placeholders as a square with ╳; the "unsupported" label. `Compilation.sheet()` hands the style pass one severity per issue; error, warning and unsupported are theme tokens.
+- Issues are drawn (§15.3, §18): marks on their elements, applied last; each diagram's border in its worst severity; placeholders as a square with ✕; the "unsupported" label. `Compilation.sheet()` hands the style pass one severity per issue; error, warning and unsupported are theme tokens.
 - In increments: **6a** the fab-render and fab-cli tests in the new syntax, with the two cell tests back; **6b** drawing issues; **6c** the examples.
 - Graphviz is a convenience: correct structure, reasonable looks, no layout tuning. The real renderers are native and TikZ.
 - Every file in `examples/` compiles, and its relations draw; styling may still be reported as not applied.

@@ -214,6 +214,107 @@ test "strings: quotes, backslashes and newlines are escaped" {
 }
 
 // ---------------------------------------------------------------------------
+// Issues (statements.md §15.3, §18)
+
+test "a placeholder is a square holding ✕, framed by its error" {
+    try expectDot("G :: f\nH :: g /k",
+        \\  subgraph cluster_0 {
+        \\    peripheries=0
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\  }
+        \\  subgraph cluster_1 {
+        \\    label="H"
+        \\    pencolor="#d1242f"
+        \\    z1 [label="✕", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16, color="#d1242f", fontcolor="#d1242f"]
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\}
+        \\
+    );
+}
+
+test "a reserved head draws a placeholder too" {
+    try expectDot("review :: a b",
+        \\  subgraph cluster_0 {
+        \\    label="review"
+        \\    pencolor="#d1242f"
+        \\    z0 [label="✕", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16, color="#d1242f", fontcolor="#d1242f"]
+        \\  }
+        \\}
+        \\
+    );
+}
+
+test "unsupported: a violet frame, and the caption above the name" {
+    try expectDot("J :: f\nJ :style := f :label \"x\"",
+        \\  subgraph cluster_0 {
+        \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>J>
+        \\    pencolor="#8250df"
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\}
+        \\
+    );
+}
+
+test "under a red frame, the caption stays violet" {
+    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style := f :label \"x\"", preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    try testing.expect(std.mem.indexOf(u8, o.dot,
+        \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>G>
+        \\    pencolor="#d1242f"
+    ) != null);
+}
+
+test "a warning frames its diagram in amber, and marks its node" {
+    try expectDot("K :: (f/*, g) h",
+        \\  subgraph cluster_0 {
+        \\    label="K"
+        \\    pencolor="#bf8700"
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n1 [label="", shape=doublecircle, width=0.10, height=0.10, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\    n2 [label="+g", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n3 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888", color="#bf8700"]
+        \\    n4 [label="h+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\  n2 -> n3 [label="g"]
+        \\  n3 -> n4 [label="h"]
+        \\}
+        \\
+    );
+}
+
+test "a marked edge takes the colour, and a marked dot is filled with it" {
+    // No analysis error marks an edge yet: the marks are set by hand.
+    var c = try fab.Compilation.init(testing.allocator, "G :: */f", preview);
+    defer c.deinit();
+    var sheet = (try c.sheet()).?.*;
+    var nodes = [_]Style{ sheet.nodes[0], sheet.nodes[1] };
+    nodes[0].stroke = .{ .token = .@"error" };
+    var edges = [_]Style{sheet.edges[0]};
+    edges[0].stroke = .{ .token = .warning };
+    sheet.nodes = &nodes;
+    sheet.edges = &edges;
+    var o = try render(&sheet);
+    defer o.deinit();
+    try testing.expect(std.mem.indexOf(u8, o.dot, "n0 [label=\"\", shape=circle, width=0.14, height=0.14, fixedsize=true, color=\"#d1242f\", fillcolor=\"#d1242f\", style=\"filled\"]") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "n0 -> n1 [label=\"f\", color=\"#bf8700\"]") != null);
+}
+
+test "HTML text escapes what an HTML label would read" {
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try to_dot.html(&out.writer, "a<b & \"c\">");
+    try testing.expectEqualStrings("a&lt;b &amp; &quot;c&quot;&gt;", out.written());
+}
+
+// ---------------------------------------------------------------------------
 // Realization of looks the source can't ask for yet. The Sheet is the
 // contract, so a hand-made Sheet stands in for the format layer to come.
 
@@ -296,6 +397,8 @@ test "lines and shapes: double, invisible, wavy, approximations" {
 const Read = struct {
     /// Per node, in order: the cluster it was declared in, if any.
     nodes: std.ArrayList(?u32) = .empty,
+    /// Per placeholder `z{z}`: its zone, and the cluster it was declared in.
+    placeholders: std.ArrayList(struct { u32, u32 }) = .empty,
     edges: std.ArrayList(Edge) = .empty,
 
     const Edge = struct { source: u32, target: u32, directed: bool, label: []const u8 };
@@ -303,6 +406,7 @@ const Read = struct {
     fn deinit(r: *Read) void {
         r.nodes.deinit(testing.allocator);
         r.edges.deinit(testing.allocator);
+        r.placeholders.deinit(testing.allocator);
     }
 };
 
@@ -346,6 +450,10 @@ fn readDot(dot: []const u8) !Read {
                 if (first != r.nodes.items.len) return error.NodesOutOfOrder;
                 try r.nodes.append(gpa, cluster);
             }
+        } else if (std.mem.startsWith(u8, line, "z")) {
+            const c = cluster orelse return error.PlaceholderOutsideCluster;
+            const ident_end = std.mem.indexOfScalar(u8, line, ' ') orelse return error.BadPlaceholder;
+            try r.placeholders.append(gpa, .{ try std.fmt.parseInt(u32, line[1..ident_end], 10), c });
         } else if (cluster == null or line.len == 0) {
             return error.UnexpectedLine;
         }
@@ -403,6 +511,16 @@ fn expectLaw(source: []const u8) !void {
         const q = escaped.written();
         try testing.expectEqualStrings(q[1 .. q.len - 1], e.label);
     }
+    // One placeholder per placeholder zone, in its own cluster.
+    var expected_placeholders: usize = 0;
+    for (0..ir.zones.len) |z| {
+        if (sheet.drawnAs(@fromBackingInt(@as(u32, @intCast(z)))) != .placeholder) continue;
+        expected_placeholders += 1;
+        var found: usize = 0;
+        for (r.placeholders.items) |p| found += @intFromBool(p[0] == z and p[1] == z);
+        try testing.expectEqual(1, found);
+    }
+    try testing.expectEqual(expected_placeholders, r.placeholders.items.len);
     // What is left out is accounted for.
     var cell_notes: usize = 0;
     for (o.notes.items.items) |n| cell_notes += @intFromBool(n.tag == .cell_not_drawn);
@@ -445,6 +563,7 @@ pub const spec_programs = [_][]const u8{
     "Loop :: f/? +(fg g, fh h k/+f)",
     "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
+    "G :: f\nH :: g /k\nreview :: a b",
     "T :: #UUID7, #String\nUser :: @/(id/T.#UUID7, name/T.#String)",
     \\Order :: {
     \\  */receive/#Received validate/? +(
