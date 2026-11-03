@@ -344,9 +344,24 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Only diagrams are declared today. What declaring a node or an edge on its own means is still open in the spec, so it is an error until it is decided.",
             .hint = "Declare a diagram instead: `T :: …`.",
         },
+        .not_a_cell => .{
+            .message = "{} is not a cell",
+            .explanation = "Above level 1, a diagram declares cells between the cells of the level below. Named nodes, `@`, `*`, `?`, `!` and other diagrams' nodes belong to level 1.",
+            .hint = "Attach the cell to cells of the level below: `f/α/g`.",
+        },
+        .pinch_above_level_one => .{
+            .message = "Nothing to pinch above level 1",
+            .explanation = "A pinch merges unnamed ends into one node. Above level 1 every side is a named cell, so there are no unnamed ends to merge.",
+            .hint = "Attach the cells to their sides: `f/(α, β)/g`.",
+        },
+        .side_from_wrong_level => .{
+            .message = "{} is not a cell of the level below",
+            .explanation = "At level k, the sides of a cell are cells of level k−1: level 3 relates 2-cells, so a 1-cell can't be a side there.",
+            .hint = "Use a cell of the level just below as the side.",
+        },
         .unsupported_levels => .{
-            .message = "Levels above the first are not supported yet",
-            .explanation = "The program is valid, but this compiler does not analyse levels above the first yet. They are skipped; the first level is drawn.",
+            .message = "Levels above the first are checked, but not drawn yet",
+            .explanation = "This compiler checks the names in levels above the first, but does not elaborate them into cells yet. The first level is drawn.",
             .hint = "Nothing to fix in the program.",
         },
         .unsupported_definition => .{

@@ -131,13 +131,33 @@ test "a broken statement naming no diagram draws a placeholder named by its firs
 // ---------------------------------------------------------------------------
 // Unsupported
 
-test "levels above the first are reported once per body, and skipped" {
-    // `&node` in the second level would be an error if it were analysed.
-    try expectTags("G :: +(f, g)+ | f/α/g | &node", &.{.unsupported_levels});
+test "levels above the first are reported once per body, and checked" {
+    try expectTags("G :: +(f, g)+ | f/α/g | &node", &.{ .unsupported_levels, .class_in_declaration });
 }
 
 test "levels inside braces are levels of the body" {
     try expectTags("G :: { +(f, g)+ | f/α/g }", &.{.unsupported_levels});
+}
+
+test "above level 1 a name of the level below is a side, and a new one a cell" {
+    // At level 2, f and g are sides, so `f/g` is a slash between nodes; α is
+    // a cell, so `α/β` is a cycle of two cells, with nothing to report yet.
+    try expectTags("G :: +(f, g)+ | f/g, α/β", &.{ .unsupported_levels, .slash_between_nodes });
+    // At level 3, α is a side: `α/m/β` is one cell between two.
+    try expectTags("G :: +(f, g)+ | f/(α, β)/g | α/m/β, α/β", &.{ .unsupported_levels, .slash_between_nodes });
+}
+
+test "each term that is not a cell is reported, and the rest of its item is not looked into" {
+    try expectTags("G :: +(f, g)+ | f/#A/g, (*, ?)/α, @, +α", &.{
+        .unsupported_levels, .not_a_cell, .not_a_cell, .not_a_cell, .not_a_cell, .pinch_above_level_one,
+    });
+}
+
+test "a side two levels down is from the wrong level" {
+    var a = try analyse("G :: +(f, g)+ | f/(α, β)/g | α/m/f");
+    defer a.deinit();
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .unsupported_levels, .side_from_wrong_level }, a.tags());
+    try testing.expectEqualStrings("f", a.cst.tokenText(a.result.errors[1].token));
 }
 
 test "every definition is reported once as unsupported, after its errors" {

@@ -75,7 +75,7 @@ fn of(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     if (a.failed.isSet(@backingInt(node))) return hole;
     const cst = a.cst;
     return switch (cst.tag(node)) {
-        .leaf, .juxtafix => if (sort.of(cst, node) == .node) .node else edge,
+        .leaf, .juxtafix => if (sort.of(a, node) == .node) .node else edge,
         .group => group(a, cst.children(node)[0]),
         .o_chain => openChain(a, node),
         .c_chain => closedChain(a, node),
@@ -139,11 +139,11 @@ fn space(a: *Analyser, left: ?Side, right: ?Side, after: Node.Index) error{OutOf
 fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     const cst = a.cst;
     if (isTrailingSlash(cst, node)) {
-        if (sort.isSingleEdge(cst, cst.data(node).node)) return of(a, cst.data(node).node);
+        if (sort.isSingleEdge(a, cst.data(node).node)) return of(a, cst.data(node).node);
         try a.failTerm(.undirected_not_one_edge, node, cst.mainToken(node));
         return hole;
     }
-    if (sort.of(cst, node) == .node) return .node;
+    if (sort.of(a, node) == .node) return .node;
     const t = try of(a, cst.data(node).node);
     // A marker on a node failed in rule 1.
     if (t == .node) return hole;
@@ -187,9 +187,9 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     var single = false;
     for (all, 0..) |link, i| {
         const l = unwrap(cst, link, i == last and trailing);
-        if (sort.of(cst, l) == .edges) {
+        if (sort.of(a, l) == .edges) {
             edges += 1;
-            single = sort.isSingleEdge(cst, l);
+            single = sort.isSingleEdge(a, l);
         }
     }
     if (trailing and !(edges == 1 and single)) {
@@ -249,7 +249,7 @@ fn unwrap(cst: *const Cst, link: Node.Index, trailing: bool) Node.Index {
 /// written there, or the side of its edge.
 fn end(a: *Analyser, link: Node.Index, side: ?Side) ?Side {
     if (sort.isLeaf(a.cst, link, .star)) return nothing;
-    if (sort.of(a.cst, link) == .node) return one_node;
+    if (sort.of(a, link) == .node) return one_node;
     return side;
 }
 

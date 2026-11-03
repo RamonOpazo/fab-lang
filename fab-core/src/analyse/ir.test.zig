@@ -40,8 +40,8 @@ test "a decision with an undirected edge: G :: #Valid? (f, g/)" {
     );
 }
 
-test "two zones sharing a node, and a 2-cell" {
-    // A :: f, +f/g/f+, [f α g]   and   B :: h/A.f+
+test "two zones sharing a node, a 2-cell and a 3-cell" {
+    // A :: +(f, g)+ | f/(α, β)/g | α/m/β   and   B :: h/A.f+
     var b: Builder = .init(testing.allocator);
     errdefer b.deinit();
 
@@ -50,7 +50,9 @@ test "two zones sharing a node, and a 2-cell" {
     const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = n0, .target = n1, .directed = true, .zone = a });
     const g = try b.addEdge(.{ .name = try b.addString("g"), .source = n0, .target = n1, .directed = true, .zone = a });
-    _ = try b.addCell(.{ .name = try b.addString("α"), .source = f, .target = g, .zone = a });
+    const alpha = try b.addCell(.{ .name = try b.addString("α"), .level = 2, .source = @backingInt(f), .target = @backingInt(g), .zone = a });
+    const beta = try b.addCell(.{ .name = try b.addString("β"), .level = 2, .source = @backingInt(f), .target = @backingInt(g), .zone = a });
+    _ = try b.addCell(.{ .name = try b.addString("m"), .level = 3, .source = @backingInt(alpha), .target = @backingInt(beta), .zone = a });
 
     const zb = try b.addZone(.{ .name = try b.addString("B"), .own = null });
     const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = zb, .canonical = .{ .edge = @fromBackingInt(@intCast(2)), .side = .dom } });
@@ -67,6 +69,8 @@ test "two zones sharing a node, and a 2-cell" {
         \\  edge f n0 -> n1
         \\  edge g n0 -> n1
         \\  cell α f => g
+        \\  cell β f => g
+        \\  cell m α => β level 3
         \\zone B
         \\  node n2 canon +h
         \\  edge h n2 -> n1

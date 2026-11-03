@@ -85,12 +85,22 @@ pub const Edge = struct {
     zone: ZoneIndex,
 };
 
-/// An edge between edges: `[f α g]`. Source and target are parallel.
+/// A cell of level k ≥ 2 between two parallel cells of level k−1: `f/α/g`
+/// at level 2 is α : f ⇒ g. Its sides are edges at level 2, and cells of
+/// level k−1 above it (`sides`).
 pub const Cell = struct {
     name: String,
-    source: EdgeIndex,
-    target: EdgeIndex,
+    level: u32,
+    source: u32,
+    target: u32,
     zone: ZoneIndex,
+
+    pub const Side = union(enum) { edge: EdgeIndex, cell: CellIndex };
+
+    pub fn sides(cell: Cell) [2]Side {
+        if (cell.level == 2) return .{ .{ .edge = @fromBackingInt(cell.source) }, .{ .edge = @fromBackingInt(cell.target) } };
+        return .{ .{ .cell = @fromBackingInt(cell.source) }, .{ .cell = @fromBackingInt(cell.target) } };
+    }
 };
 
 /// Any element of the graph.
@@ -204,7 +214,8 @@ pub const Builder = struct {
 //     node n1 choice #Valid canon f+
 //     edge f n0 -> n1          directed
 //     edge g n1 -- n2          undirected
-//     cell α f => g
+//     cell α f => g            a 2-cell between edges
+//     cell m α => β level 3    above, between cells
 //   issue e0 node n1           analysis error 0 marks node n1
 //   issue s0 zone G            syntax error 0 marks zone G
 
@@ -237,11 +248,10 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
         for (0..ir.cells.len) |c| {
             const cell = ir.cells.get(c);
             if (@backingInt(cell.zone) != z) continue;
-            try w.print("  cell {s} {s} => {s}\n", .{
-                ir.string(cell.name),
-                ir.edgeName(cell.source),
-                ir.edgeName(cell.target),
-            });
+            const source, const target = cell.sides();
+            try w.print("  cell {s} {s} => {s}", .{ ir.string(cell.name), ir.sideName(source), ir.sideName(target) });
+            if (cell.level > 2) try w.print(" level {d}", .{cell.level});
+            try w.writeAll("\n");
         }
     }
     for (0..ir.issues.len) |i| {
@@ -261,6 +271,13 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
 
 fn edgeName(ir: Ir, e: EdgeIndex) []const u8 {
     return ir.string(ir.edges.items(.name)[@backingInt(e)]);
+}
+
+fn sideName(ir: Ir, side: Cell.Side) []const u8 {
+    return switch (side) {
+        .edge => |e| ir.edgeName(e),
+        .cell => |c| ir.string(ir.cells.items(.name)[@backingInt(c)]),
+    };
 }
 
 /// `+f` for a domain, `f+` for a codomain, as the format layer writes them.

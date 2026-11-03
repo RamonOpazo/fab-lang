@@ -29,11 +29,20 @@ const Ports = struct {
     }
 };
 
-/// What an edge name stands for in a declaration.
-pub const Binding = union(enum) {
-    edge: struct { index: Ir.EdgeIndex, dom: Elem, cod: Elem, token: TokenIndex },
-    /// The edge was declared in a failed term.
-    hole: Elem,
+/// What a name stands for in a declaration, at its level.
+pub const Name = struct {
+    level: u32,
+    is: union(enum) {
+        /// A named node or `@`, at level 0.
+        node: Elem,
+        /// An edge, at level 1.
+        edge: struct { index: Ir.EdgeIndex, dom: Elem, cod: Elem, token: TokenIndex },
+        /// A cell, at level 2 and up: declared, and elaborated from plan step
+        /// 7b.
+        cell: TokenIndex,
+        /// Declared in a failed term.
+        hole: Elem,
+    },
 };
 
 /// The items of a declaration's first level.
@@ -46,6 +55,19 @@ pub fn items(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             try items(a, if (cst.tag(inner) == .levels) cst.children(inner)[0] else inner);
         },
         else => _ = try term(a, node),
+    }
+}
+
+/// The cells of a level above the first. Until plan step 7b they are only
+/// declared: each new name enters the table at this level, so the level
+/// above can read it as a side.
+pub fn cells(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    for (cst.firstToken(node)..cst.lastToken(node) + 1) |t| {
+        const token: TokenIndex = @intCast(t);
+        if (cst.tokenTag(token) != .edge_id) continue;
+        const gop = try a.scope.table.getOrPut(a.arena.allocator(), cst.tokenText(token));
+        if (!gop.found_existing) gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .cell = token } };
     }
 }
 
@@ -105,10 +127,10 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
 /// edges. A name a failed term declared is quiet.
 fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const text = a.cst.tokenText(token);
-    const gop = try a.scope.edges.getOrPut(a.arena.allocator(), text);
+    const gop = try a.scope.table.getOrPut(a.arena.allocator(), text);
     if (gop.found_existing) {
         const h = try hole(a);
-        switch (gop.value_ptr.*) {
+        switch (gop.value_ptr.is) {
             .edge => |first| {
                 const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
                 try a.errors.append(a.gpa, .{
@@ -123,7 +145,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
                     .related = first.token,
                 });
             },
-            .hole => {},
+            .hole, .node, .cell => {},
         }
         return one(a, h);
     }
@@ -138,7 +160,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const dom = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .dom }, .{});
     const cod = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .cod }, .{});
     try a.edge_ends.append(a.arena.allocator(), .{ dom, cod });
-    gop.value_ptr.* = .{ .edge = .{ .index = index, .dom = dom, .cod = cod, .token = token } };
+    gop.value_ptr.* = .{ .level = 1, .is = .{ .edge = .{ .index = index, .dom = dom, .cod = cod, .token = token } } };
 
     const ends = try a.arena.allocator().alloc(Elem, 2);
     ends[0] = dom;
@@ -160,7 +182,8 @@ fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
 fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
     if (zone.broken) return hole(a);
-    return zone.names.get("@") orelse failHole(a, .diagram_without_own_node, token);
+    const at = zone.table.get("@") orelse return failHole(a, .diagram_without_own_node, token);
+    return at.is.node;
 }
 
 /// `A.+f`, `A.f+`, `A.#X`, `A.@`: a node of another diagram, shared. It
@@ -176,21 +199,22 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
 
     if (sort.isLeaf(cst, right, .node_id)) {
         const token = cst.mainToken(right);
-        return zone.names.get(cst.tokenText(token)) orelse failHole(a, .undeclared_name_in_diagram, token);
+        const name = zone.table.get(cst.tokenText(token)) orelse return failHole(a, .undeclared_name_in_diagram, token);
+        return name.is.node;
     }
     // Another shape was reported by rule 1, or by the kind after it.
-    if (!sort.isPinchedEdge(cst, right)) return hole(a);
+    if (!sort.isPinchedEdge(a, right)) return hole(a);
     const name = cst.mainToken(singleEdge(cst, cst.data(right).node));
-    const binding = zone.edges.get(cst.tokenText(name)) orelse return failHole(a, .undeclared_name_in_diagram, name);
-    return endOf(a, binding, if (cst.tag(right) == .prefix) .dom else .cod, name);
+    const edge = zone.table.get(cst.tokenText(name)) orelse return failHole(a, .undeclared_name_in_diagram, name);
+    return endOf(a, edge, if (cst.tag(right) == .prefix) .dom else .cod, name);
 }
 
 /// A named node, `@`, or a diagram name: one element per name in a
 /// declaration, made on first use.
 fn named(a: *Analyser, key: []const u8, class: @import("UnionFind.zig").Class) error{OutOfMemory}!Elem {
-    const gop = try a.scope.names.getOrPut(a.arena.allocator(), key);
-    if (!gop.found_existing) gop.value_ptr.* = try a.uf.add(@backingInt(a.zone()), null, class);
-    return gop.value_ptr.*;
+    const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
+    if (!gop.found_existing) gop.value_ptr.* = .{ .level = 0, .is = .{ .node = try a.uf.add(@backingInt(a.zone()), null, class) } };
+    return gop.value_ptr.is.node;
 }
 
 fn hole(a: *Analyser) error{OutOfMemory}!Elem {
@@ -212,8 +236,8 @@ fn failedTerm(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     var t = cst.firstToken(node);
     while (t <= cst.lastToken(node)) : (t += 1) {
         if (cst.tokenTag(t) != .edge_id) continue;
-        const gop = try a.scope.edges.getOrPut(a.arena.allocator(), cst.tokenText(t));
-        if (!gop.found_existing) gop.value_ptr.* = .{ .hole = h };
+        const gop = try a.scope.table.getOrPut(a.arena.allocator(), cst.tokenText(t));
+        if (!gop.found_existing) gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .hole = h } };
     }
     return one(a, h);
 }
@@ -293,7 +317,7 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         undirect(a, operand);
         return p;
     }
-    if (sort.isPinchedEdge(cst, node)) return one(a, try reference(a, node, if (cst.tag(node) == .prefix) .dom else .cod));
+    if (sort.isPinchedEdge(a, node)) return one(a, try reference(a, node, if (cst.tag(node) == .prefix) .dom else .cod));
 
     // A pinch with several branches declares them.
     a.scope.pinches += 1;
@@ -323,22 +347,25 @@ fn pinch(a: *Analyser, side: []const Elem, kind: ?Ir.Node.Kind, token: TokenInde
 fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemory}!Elem {
     const cst = a.cst;
     const name = cst.tokenText(cst.mainToken(singleEdge(cst, cst.data(node).node)));
-    const binding = a.scope.edges.get(name) orelse {
+    const edge = a.scope.table.get(name) orelse {
         const later = for (cst.lastToken(node) + 1..a.scope.end + 1) |t| {
             const i: TokenIndex = @intCast(t);
             if (cst.tokenTag(i) == .edge_id and std.mem.eql(u8, cst.tokenText(i), name)) break true;
         } else false;
         return failHole(a, if (later) .forward_reference else .reference_not_declared, cst.mainToken(singleEdge(cst, cst.data(node).node)));
     };
-    return endOf(a, binding, side, cst.mainToken(singleEdge(cst, cst.data(node).node)));
+    return endOf(a, edge, side, cst.mainToken(singleEdge(cst, cst.data(node).node)));
 }
 
-/// One end of a bound edge. A null node is private to the one end it holds
-/// (rule 5), so a reference to it is an error at the edge's name.
-fn endOf(a: *Analyser, binding: Binding, side: Ir.End.Side, name: TokenIndex) error{OutOfMemory}!Elem {
-    const elem = switch (binding) {
+/// One end of an edge. A null node is private to the one end it holds
+/// (rule 5), so a reference to it is an error at the edge's name. A cell has
+/// no ends at level 1.
+fn endOf(a: *Analyser, edge: Name, side: Ir.End.Side, name: TokenIndex) error{OutOfMemory}!Elem {
+    const elem = switch (edge.is) {
         .edge => |e| if (side == .dom) e.dom else e.cod,
         .hole => |h| return h,
+        .cell => return failHole(a, .undeclared_name_in_diagram, name),
+        .node => unreachable,
     };
     const class = a.uf.class(elem);
     if (class.sealed and !class.hole) {
@@ -354,11 +381,11 @@ fn singleEdge(cst: *const Cst, node: Node.Index) Node.Index {
 /// Marks a single edge undirected. Anything else waits for its error (5.3b).
 fn undirect(a: *Analyser, node: Node.Index) void {
     const cst = a.cst;
-    if (!sort.isSingleEdge(cst, node)) return;
+    if (!sort.isSingleEdge(a, node)) return;
     const name = cst.tokenText(cst.mainToken(singleEdge(cst, node)));
-    switch (a.scope.edges.get(name) orelse return) {
+    switch ((a.scope.table.get(name) orelse return).is) {
         .edge => |e| a.builder.edges.items(.directed)[@backingInt(e.index)] = false,
-        .hole => {},
+        .hole, .node, .cell => {},
     }
 }
 
@@ -391,7 +418,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     for (links, ports, 0..) |link, *p, i| {
         const l = if (i == last and trailing) cst.data(link).node else link;
         p.* = try term(a, l);
-        if (sort.of(cst, l) == .edges) {
+        if (sort.of(a, l) == .edges) {
             edges += 1;
             edge = l;
         }
@@ -399,7 +426,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     for (ports[0..last], ports[1..], links[0..last]) |left, right, link| try slash(a, left.right, right.left, cst.lastToken(link) + 1);
     if (edges > 1) {
         const end = if (trailing) cst.data(links[last]).node else links[last];
-        if (sort.of(cst, end) == .node and !closes(a, ports[last].right, ports[0].left)) {
+        if (sort.of(a, end) == .node and !closes(a, ports[last].right, ports[0].left)) {
             try a.failOn(.cycle_does_not_close, cst.firstToken(links[last]), .{ .elem = ports[last].right[0] });
         } else try slash(a, ports[last].right, ports[0].left, cst.lastToken(links[last - 1]) + 1);
     }
@@ -432,15 +459,15 @@ fn selfAttachment(a: *Analyser, chain: Node.Index) error{OutOfMemory}!bool {
     const cst = a.cst;
     const links = cst.children(chain);
     const at = for (links, 0..) |link, i| {
-        if (sort.of(cst, link) == .edges) break i;
+        if (sort.of(a, link) == .edges) break i;
     } else return false;
     const edge = links[at];
     if (!sort.isLeaf(cst, edge, .edge_id)) return false;
     const name = cst.tokenText(cst.mainToken(edge));
-    if (a.scope.edges.contains(name)) return false;
+    if (a.scope.table.contains(name)) return false;
     for (links[at + 1 ..]) |link| {
-        if (sort.of(cst, link) == .edges) return false;
-        if (!sort.isPinchedEdge(cst, link)) continue;
+        if (sort.of(a, link) == .edges) return false;
+        if (!sort.isPinchedEdge(a, link)) continue;
         if (!std.mem.eql(u8, cst.tokenText(cst.mainToken(singleEdge(cst, cst.data(link).node))), name)) continue;
         const to_start = cst.tag(link) == .prefix;
         try a.failAt(if (to_start) .redundant_self_attachment else .vacuous_self_attachment, cst.mainToken(singleEdge(cst, cst.data(link).node)), chain);

@@ -27,8 +27,56 @@ pub fn items(a: *Analyser, node: Node.Index, place: Place) error{OutOfMemory}!vo
             } else try items(a, inner, place);
         },
         else => {
+            if (a.scope.level > 1 and !try cellsOnly(a, node)) return;
             if (place == .item) try brokenChain(a, node);
             try term(a, node);
+        },
+    }
+}
+
+/// Above level 1 every name is a cell (spec, Levels). Named nodes, `@`, `*`,
+/// kinds and other diagrams are level 1 only; sides are named, so there is
+/// nothing to pinch; and a side is a cell of the level just below. Each one
+/// found fails its own term. Whether there were none.
+fn cellsOnly(a: *Analyser, node: Node.Index) error{OutOfMemory}!bool {
+    const cst = a.cst;
+    const main = cst.mainToken(node);
+    switch (cst.tag(node)) {
+        .leaf => switch (cst.tokenTag(main)) {
+            .node_id, .zone_id, .at, .star, .quid, .bang => {
+                try a.failTerm(.not_a_cell, node, main);
+                return false;
+            },
+            .edge_id => {
+                const name = a.scope.table.get(cst.tokenText(main)) orelse return true;
+                if (name.level + 1 >= a.scope.level) return true;
+                try a.failTerm(.side_from_wrong_level, node, main);
+                return false;
+            },
+            // Values and classes are rule 0's.
+            else => return true,
+        },
+        .juxtafix => {
+            try a.failTerm(.not_a_cell, node, cst.firstToken(node));
+            return false;
+        },
+        .prefix, .postfix => switch (cst.tokenTag(main)) {
+            .plus => {
+                try a.failTerm(.pinch_above_level_one, node, main);
+                return false;
+            },
+            .quid, .bang => {
+                try a.failTerm(.not_a_cell, node, main);
+                return false;
+            },
+            // A trailing `/`: its operand is judged, the slash in plan step 7b.
+            else => return cellsOnly(a, cst.data(node).node),
+        },
+        .invalid => return true,
+        else => {
+            var clean = true;
+            for (cst.children(node)) |child| clean = try cellsOnly(a, child) and clean;
+            return clean;
         },
     }
 }
@@ -48,9 +96,9 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
         },
         .group => try items(a, cst.children(node)[0], .group),
         .o_chain => for (cst.children(node)) |step| {
-            if (sort.of(cst, step) == .edges) {
+            if (sort.of(a, step) == .edges) {
                 try term(a, step);
-            } else if (sort.isPinchedEdge(cst, step)) {
+            } else if (sort.isPinchedEdge(a, step)) {
                 try a.failTerm(.pinched_edge_beside_space, step, cst.firstToken(step));
             } else {
                 try a.failTerm(.node_beside_space, step, cst.firstToken(step));
@@ -62,11 +110,11 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             else => try markerOperand(a, node),
         },
         .postfix => switch (cst.tokenTag(main)) {
-            .quid, .bang => if (sort.isSingleEdge(cst, cst.data(node).node)) {
+            .quid, .bang => if (sort.isSingleEdge(a, cst.data(node).node)) {
                 try a.failTerm(.kind_on_reference, node, main);
             } else try markerOperand(a, node),
             // A trailing `/` is judged with its chain (rule 2).
-            .slash => if (sort.of(cst, cst.data(node).node) == .edges) try term(a, cst.data(node).node),
+            .slash => if (sort.of(a, cst.data(node).node) == .edges) try term(a, cst.data(node).node),
             else => try markerOperand(a, node),
         },
         .juxtafix => try crossReference(a, node),
@@ -85,7 +133,7 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const marker = if (cst.tag(right) == .postfix) cst.tokenTag(cst.mainToken(right)) else null;
     if (marker == .quid or marker == .bang)
         return a.failTerm(.kind_on_reference, node, cst.mainToken(right));
-    const reaches = sort.isPinchedEdge(cst, right) or sort.isLeaf(cst, right, .node_id) or sort.isLeaf(cst, right, .at);
+    const reaches = sort.isPinchedEdge(a, right) or sort.isLeaf(cst, right, .node_id) or sort.isLeaf(cst, right, .at);
     if (!sort.isLeaf(cst, left, .zone_id) or !reaches)
         try a.failTerm(.cross_reference_not_a_node, node, cst.firstToken(node));
 }
@@ -97,8 +145,8 @@ fn markerOperand(a: *Analyser, marker: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const main = cst.mainToken(marker);
     const operand = sort.ofOne(cst, cst.data(marker).node);
-    if (sort.isPinchedEdge(cst, operand)) return a.failTerm(.single_edge_pinched_twice, marker, main);
-    if (sort.of(cst, operand) == .node) return a.failTerm(.pinch_of_a_node, marker, main);
+    if (sort.isPinchedEdge(a, operand)) return a.failTerm(.single_edge_pinched_twice, marker, main);
+    if (sort.of(a, operand) == .node) return a.failTerm(.pinch_of_a_node, marker, main);
     try term(a, operand);
 }
 
@@ -113,12 +161,12 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     // Checked first: with two nodes side by side, nothing else in the chain
     // can be judged.
     for (links[0..last], links[1..]) |left, right| {
-        if (sort.of(cst, left) == .node and sort.of(cst, right) == .node)
+        if (sort.of(a, left) == .node and sort.of(a, right) == .node)
             return a.failTerm(.slash_between_nodes, node, cst.lastToken(left) + 1);
     }
 
     var edges: usize = 0;
-    for (links) |link| edges += @intFromBool(sort.of(cst, link) == .edges);
+    for (links) |link| edges += @intFromBool(sort.of(a, link) == .edges);
 
     if (links.len == 3 and edges == 1 and sort.isLeaf(cst, links[0], .star) and sort.isLeaf(cst, links[last], .star))
         return a.failTerm(.both_ends_null, node, cst.mainToken(links[last]));
@@ -153,15 +201,15 @@ fn kindAfter(a: *Analyser, before: Node.Index, kind: Node.Index) error{OutOfMemo
     const token = cst.mainToken(kind);
     switch (cst.tag(before)) {
         .leaf => {},
-        .group => if (sort.isSingleEdge(cst, before)) {
+        .group => if (sort.isSingleEdge(a, before)) {
             try a.failAt(.kind_after_group_of_one, token, kind);
         } else try a.failTerm(.kind_after_group, kind, token),
-        .prefix, .postfix => if (sort.isPinchedEdge(cst, before)) {
+        .prefix, .postfix => if (sort.isPinchedEdge(a, before)) {
             try a.failTerm(.kind_on_reference, kind, token);
         } else if (cst.tokenTag(cst.mainToken(before)) != .slash) {
             try a.failTerm(.kind_after_group, kind, token);
         },
-        .juxtafix => if (sort.of(cst, before) == .edges) try a.failTerm(.kind_on_reference, kind, token),
+        .juxtafix => if (sort.of(a, before) == .edges) try a.failTerm(.kind_on_reference, kind, token),
         else => {},
     }
 }

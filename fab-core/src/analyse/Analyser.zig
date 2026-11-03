@@ -86,12 +86,17 @@ pending_joins: Pending = .empty,
 
 pub const Pending = std.AutoHashMapUnmanaged(Node.Index, std.ArrayList(u32));
 
+/// A diagram's names, each with its level (spec, Levels): named nodes and
+/// `@` at 0, edges at 1, cells at k. At level k, a name of level k−1 is a
+/// side, and a new one a k-cell.
+pub const Table = std.StringHashMapUnmanaged(elaborate.Name);
+
 /// What names mean inside one declaration.
 const Scope = struct {
     zone: Ir.ZoneIndex = undefined,
-    edges: std.StringHashMapUnmanaged(elaborate.Binding) = .empty,
-    /// Named nodes, `@` and diagram names, by name.
-    names: std.StringHashMapUnmanaged(u32) = .empty,
+    /// The level being read: 1, or a level above it.
+    level: u32 = 1,
+    table: Table = .empty,
     /// The declaration's last token: references look ahead to it.
     end: TokenIndex = 0,
     /// The outermost closed chain being elaborated, first and last token.
@@ -106,8 +111,7 @@ pub const Zone = struct {
     token: TokenIndex,
     /// What its names mean, once elaborated: other diagrams reach in through
     /// them (`A.+f`, `A.#X`, `A.@`, `A`).
-    edges: std.StringHashMapUnmanaged(elaborate.Binding) = .empty,
-    names: std.StringHashMapUnmanaged(u32) = .empty,
+    table: Table = .empty,
     /// Declared by a statement too broken to read: drawn as a placeholder,
     /// and what refers into it is a hole, silently.
     broken: bool = false,
@@ -279,25 +283,35 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
         else => try a.fail(.bad_declaration_head, cst.firstToken(head)),
     } else try a.fail(.bad_declaration_head, cst.firstToken(head));
 
-    // Only the first level is analysed; the others wait for plan step 7.
-    var first = body;
-    if (cst.tag(body) == .levels) {
-        first = cst.children(body)[0];
-        try a.fail(.unsupported_levels, cst.mainToken(body));
+    // `f | g`, or the same in braces: levels of the body.
+    var levels: []const Node.Index = (&body)[0..1];
+    const inner = if (cst.tag(body) == .block) cst.children(body)[0] else body;
+    if (cst.tag(inner) == .levels) {
+        levels = cst.children(inner);
+        // Checked, not drawn, until plan step 7b.
+        try a.fail(.unsupported_levels, cst.mainToken(inner));
     }
-    try terms.items(a, first, .item);
-    try interface.items(a, first);
 
-    // Only a diagram has a graph; a reserved head is checked, not drawn.
+    a.scope = .{ .zone = zone_index orelse undefined, .end = cst.lastToken(body) };
+    try terms.items(a, levels[0], .item);
+    try interface.items(a, levels[0]);
+
+    // Only a diagram has a graph; a reserved head is checked, not drawn, and
+    // has no names for the levels above to read.
     const z = zone_index orelse return null;
-    a.scope = .{ .zone = z, .end = cst.lastToken(body) };
-    try elaborate.items(a, first);
+    try elaborate.items(a, levels[0]);
+
+    // Level k is level 1 one dimension up: its sorts read the names of k−1.
+    for (levels[1..], 2..) |level, k| {
+        a.scope.level = @intCast(k);
+        try terms.items(a, level, .item);
+        try elaborate.cells(a, level);
+    }
 
     // The first declaration is the one other diagrams refer to.
     const entry = a.zones.getPtr(cst.tokenText(name)).?;
     if (entry.index == z) {
-        entry.edges = a.scope.edges;
-        entry.names = a.scope.names;
+        entry.table = a.scope.table;
     }
     return z;
 }

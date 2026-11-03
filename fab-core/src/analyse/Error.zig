@@ -129,6 +129,15 @@ pub const Tag = enum(u8) {
     /// `A.f g`, `A.(f, g)`, `f.#X`.
     cross_reference_not_a_node,
 
+    // -- levels (rule 1, one dimension up) ------------------------------------
+
+    /// `+(f, g)+ | f/#A`, `f/*`, `A.α`: above level 1, every name is a cell.
+    not_a_cell,
+    /// `+(α, β)`, `+α/β/g` at level 2: sides are named, nothing to pinch.
+    pinch_above_level_one,
+    /// `α/m/f` at level 3: f is a 1-cell, and level 3 relates 2-cells.
+    side_from_wrong_level,
+
     // -- reserved: the spec has not decided (statements.md §15) --------------
 
     /// `#User :: @/(id, name)`, `review :: a b`.
@@ -136,7 +145,7 @@ pub const Tag = enum(u8) {
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 
-    /// Levels above the first, until plan step 7.
+    /// Levels above the first: checked, not drawn, until plan step 7b.
     unsupported_levels,
     /// The contents of a definition, until plan steps 8–11.
     unsupported_definition,

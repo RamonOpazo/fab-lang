@@ -6,7 +6,8 @@
 //! named after the spec section the case comes from.
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
-//! step 5 the analyser's rule. `done` is the last one finished; later cases
+//! a step its part: the analyser's rule in step 5, the increment in step 7
+//! (1 for 7a). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -19,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and rule of step 5, finished.
-const done: Progress = .{ .step = 5, .rule = 7 };
+const done: Progress = .{ .step = 7, .rule = 1 };
 
 const Progress = struct {
     step: u8,
@@ -38,7 +39,8 @@ const Case = struct {
     ir: ?[]const u8 = null,
     /// The plan step that makes the case pass.
     step: u8,
-    /// Within step 5, the analyser's rule that makes the case pass.
+    /// Within the step, the part that makes the case pass: step 5's rule, or
+    /// step 7's increment.
     rule: u8 = 0,
 };
 
@@ -931,6 +933,35 @@ test "Levels: an empty level" {
 
 test "Levels: a level inside a branch" {
     try check(.{ .step = 4, .source = "G :: f (g | α)", .codes = &.{.{ .syntax = .bar_in_group }} });
+}
+
+test "Levels: side from the wrong level" {
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/(α, β)/g | α/m/f", .codes = &.{.{ .analysis = .side_from_wrong_level }} });
+}
+
+test "Levels: not a cell" {
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/#A", .codes = &.{.{ .analysis = .not_a_cell }} });
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/*", .codes = &.{.{ .analysis = .not_a_cell }} });
+    try check(.{ .step = 7, .rule = 1, .source = "A :: f\nG :: +(f, g)+ | A.α", .codes = &.{.{ .analysis = .not_a_cell }} });
+}
+
+test "Levels: pinch above level 1" {
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | +(α, β)", .codes = &.{.{ .analysis = .pinch_above_level_one }} });
+    try check(.{ .step = 7, .rule = 1, .source = "G :: +(f, g)+ | f/α/g, +α/β/g", .codes = &.{.{ .analysis = .pinch_above_level_one }} });
+}
+
+test "Levels: the spec's examples" {
+    try check(.{ .step = 7, .rule = 1, .source =
+        \\Nat :: +(f, g)+ | f/α/g
+        \\Eq  :: +(f, g)+ | f/α/g/β
+        \\Vc  :: +(f, g, h)+ | f/α/g, g/β/h
+        \\Vs  :: +(f, g, h)+ | f/α g/β/h
+        \\Mod :: +(f, g)+ | f/(α, β)/g | α/m/β
+        \\Iso :: {
+        \\  +(f, g)+
+        \\  | f/α/g/β
+        \\}
+    });
 }
 
 // ---------------------------------------------------------------------------

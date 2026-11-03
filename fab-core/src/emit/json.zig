@@ -33,7 +33,8 @@
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
 //!       "edges": [{"name": "f", "source": node, "target": node,
 //!                  "directed": true, "zone": zone}],
-//!       "cells": [{"name": "α", "source": edge, "target": edge, "zone": zone}],
+//!       "cells": [{"name": "α", "level": 2, "source": edge or cell,
+//!                  "target": edge or cell, "zone": zone}],
 //!       "issues": [{"subject": {"node" | "edge" | "cell" | "zone": index},
 //!                   "diagnostic": index into "diagnostics"}] }
 //!
@@ -167,8 +168,9 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"name\":");
         try string(w, ir.string(cell.name));
-        try w.print(",\"source\":{d},\"target\":{d},\"zone\":{d}}}", .{
-            @backingInt(cell.source), @backingInt(cell.target), @backingInt(cell.zone),
+        // At level 2 the sides are edges; above, cells of the level below.
+        try w.print(",\"level\":{d},\"source\":{d},\"target\":{d},\"zone\":{d}}}", .{
+            cell.level, cell.source, cell.target, @backingInt(cell.zone),
         });
     }
 
