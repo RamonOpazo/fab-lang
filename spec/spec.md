@@ -585,7 +585,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** diagrams.
 
 | Attribute | Applies to | Values                                           | Default                                                                                                                                                  |
 | --------- | ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:label`  | N E C Z    | text, math                                       | node: its name without `#`, else its canonical end; edge, cell, diagram: its name. Choices, parallels, starts and ends have no label unless one is given |
+| `:label`  | N E C Z    | text, math                                       | node: its name without `#`, the own node `@` its diagram's name, else its canonical end; edge, cell, diagram: its name. Choices, parallels, starts and ends have no label unless one is given |
 | `:font`   | N E C Z    | text (a font name)                               | theme                                                                                                                                                    |
 | `:face`   | N E C Z    | `[regular]` `[italic]` `[bold]` `[bold-italic]`  | `[regular]`; `[italic]` for `&canonical`                                                                                                                 |
 | `:size`   | N E C Z    | length: the size of the lettering, and only that | theme; edge and cell labels smaller                                                                                                                      |

@@ -62,6 +62,13 @@ test "a null node is a start if nothing arrives at it, else an end" {
     });
 }
 
+test "the own node is labelled with its diagram's name" {
+    try expectNodes("T :: #UUID7\nUser :: @/id/T.#UUID7", &.{
+        .{ "UUID7", false, null, .circle },
+        .{ "User", false, null, .circle },
+    });
+}
+
 test "holes are dashed circles, labelled by their canonical end" {
     var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nDb :: Doc/owner/User", preview);
     defer c.deinit();

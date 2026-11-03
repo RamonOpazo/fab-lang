@@ -307,6 +307,32 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
     try testing.expect(std.mem.indexOf(u8, o.dot, "n0 -> n1 [label=\"f\", color=\"#bf8700\"]") != null);
 }
 
+test "a marked diagram that owns no node still shows its frame" {
+    // Db's edge joins A's and B's own nodes; its unsupported proof marks Db.
+    try expectDot("A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove := { :kind [schema] }",
+        \\  subgraph cluster_0 {
+        \\    peripheries=0
+        \\    n0 [label="A", shape=circle, width=0.37, height=0.37, fixedsize=true]
+        \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\  }
+        \\  subgraph cluster_1 {
+        \\    peripheries=0
+        \\    n2 [label="B", shape=circle, width=0.37, height=0.37, fixedsize=true]
+        \\    n3 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\  }
+        \\  subgraph cluster_2 {
+        \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>Db>
+        \\    pencolor="#8250df"
+        \\    a2 [label="", shape=point, width=0.01, height=0.01, style="invis"]
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\  n2 -> n3 [label="g"]
+        \\  n0 -> n2 [label="h"]
+        \\}
+        \\
+    );
+}
+
 test "HTML text escapes what an HTML label would read" {
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
@@ -399,6 +425,8 @@ const Read = struct {
     nodes: std.ArrayList(?u32) = .empty,
     /// Per placeholder `z{z}`: its zone, and the cluster it was declared in.
     placeholders: std.ArrayList(struct { u32, u32 }) = .empty,
+    /// Per anchor `a{z}` of a framed zone with no nodes: the same.
+    anchors: std.ArrayList(struct { u32, u32 }) = .empty,
     edges: std.ArrayList(Edge) = .empty,
 
     const Edge = struct { source: u32, target: u32, directed: bool, label: []const u8 };
@@ -407,6 +435,7 @@ const Read = struct {
         r.nodes.deinit(testing.allocator);
         r.edges.deinit(testing.allocator);
         r.placeholders.deinit(testing.allocator);
+        r.anchors.deinit(testing.allocator);
     }
 };
 
@@ -450,10 +479,11 @@ fn readDot(dot: []const u8) !Read {
                 if (first != r.nodes.items.len) return error.NodesOutOfOrder;
                 try r.nodes.append(gpa, cluster);
             }
-        } else if (std.mem.startsWith(u8, line, "z")) {
-            const c = cluster orelse return error.PlaceholderOutsideCluster;
-            const ident_end = std.mem.indexOfScalar(u8, line, ' ') orelse return error.BadPlaceholder;
-            try r.placeholders.append(gpa, .{ try std.fmt.parseInt(u32, line[1..ident_end], 10), c });
+        } else if (std.mem.startsWith(u8, line, "z") or std.mem.startsWith(u8, line, "a")) {
+            const c = cluster orelse return error.MarkOutsideCluster;
+            const ident_end = std.mem.indexOfScalar(u8, line, ' ') orelse return error.BadMark;
+            const list = if (line[0] == 'z') &r.placeholders else &r.anchors;
+            try list.append(gpa, .{ try std.fmt.parseInt(u32, line[1..ident_end], 10), c });
         } else if (cluster == null or line.len == 0) {
             return error.UnexpectedLine;
         }
@@ -521,6 +551,20 @@ fn expectLaw(source: []const u8) !void {
         try testing.expectEqual(1, found);
     }
     try testing.expectEqual(expected_placeholders, r.placeholders.items.len);
+    // One anchor per framed zone that owns no node, so its mark shows.
+    var expected_anchors: usize = 0;
+    for (0..ir.zones.len) |z| {
+        const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
+        if (sheet.drawnAs(zone) == .placeholder or sheet.drawnAs(zone) == .flat or !sheet.isFramed(zone)) continue;
+        var owns = false;
+        for (ir.nodes.items(.zone)) |owner| owns = owns or owner == zone;
+        if (owns) continue;
+        expected_anchors += 1;
+        var found: usize = 0;
+        for (r.anchors.items) |p| found += @intFromBool(p[0] == z and p[1] == z);
+        try testing.expectEqual(1, found);
+    }
+    try testing.expectEqual(expected_anchors, r.anchors.items.len);
     // What is left out is accounted for.
     var cell_notes: usize = 0;
     for (o.notes.items.items) |n| cell_notes += @intFromBool(n.tag == .cell_not_drawn);
@@ -564,6 +608,7 @@ pub const spec_programs = [_][]const u8{
     "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
     "G :: f\nH :: g /k\nreview :: a b",
+    "A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove := { :kind [schema] }",
     "T :: #UUID7, #String\nUser :: @/(id/T.#UUID7, name/T.#String)",
     \\Order :: {
     \\  */receive/#Received validate/? +(

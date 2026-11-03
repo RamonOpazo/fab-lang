@@ -722,3 +722,12 @@ Revises 1.3 and 12.
 - **Parentheses for a group of attributes,** `retry (:arrow [/dashed/>], :bend [inner])`: parentheses already group subjects (`(yes, paid) :label "yes"`) and terms; braces already factor a subject.
 - **The rule only at the top level:** there the comma already means the same as side by side, so the problem is only inside blocks.
 
+## 20. The examples, drawn, 2026-11-03
+
+How step 6 ends (plan step 6c).
+
+- **The own node is labelled with its diagram's name,** unless `:label` gives one: `@` stands for the diagram itself (`User :: @/(id/T.#UUID7, …)` draws a node `User`). It is named, so it has no canonical end to fall back on.
+- **A diagram with no nodes of its own still shows its mark.** Db, whose edges all join other diagrams' nodes, owns no node, and a Graphviz cluster is a set of nodes, so the frame of an issue on Db had nothing to surround. The IR and the style pass were right; DOT now draws the frame, name and caption around one invisible point, and Db's edges stay where they are. The native renderer frames the edges themselves.
+- **A definition that names no diagram** (a bundle, a value, a theme) draws its placeholder while it is unsupported (15.3), labelled by its head (`:ref`). It is for development only, and goes with step 8.
+- **The examples are checked and drawn by one target,** `make examples`: every example must check with no error and no warning (unsupported is allowed until steps 8–11), and is then drawn to SVG beside it, with Graphviz. `make test examples` runs both.
+

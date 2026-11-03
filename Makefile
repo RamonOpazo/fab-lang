@@ -2,6 +2,7 @@
 #
 #   make              build everything (debug)
 #   make test         run every package's tests, in dependency order
+#   make examples     check every example, then draw it to SVG (Graphviz)
 #   make install      install `fab` (release) into $(PREFIX)/bin
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
@@ -23,14 +24,14 @@ OPTIMIZE ?= ReleaseSafe
 # In dependency order.
 PACKAGES := fab-core fab-render fab-cli
 
-.PHONY: all build test test-core test-render test-cli \
+.PHONY: all build test test-core test-render test-cli examples \
         release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
-	@echo "Targets: build test test-core test-render test-cli release install"
+	@echo "Targets: build test test-core test-render test-cli examples release install"
 	@echo "         uninstall fmt fmt-check check-graphviz clean help"
 
 ## Building
@@ -56,6 +57,27 @@ test-render:
 test-cli:
 	@echo "==> test fab-cli"
 	@cd fab-cli && $(ZIG) build test --summary all
+
+## Examples
+
+FAB      := fab-cli/zig-out/bin/fab
+EXAMPLES := $(wildcard examples/*.fab)
+
+# Each example must check with no error and no warning (`--strict`;
+# unsupported is allowed), and is then drawn to SVG beside it. Every example
+# is checked before any is drawn. `make test examples` runs both.
+examples: build
+	@command -v dot >/dev/null 2>&1 || { echo "error: \`make examples\` draws with Graphviz, which is not installed"; exit 1; }
+	@echo "==> check examples"
+	@for f in $(EXAMPLES); do \
+		$(FAB) check "$$f" --strict --no-color >/dev/null 2>&1 \
+			|| { echo "error: $$f does not check:"; $(FAB) check "$$f" --strict --no-color; exit 1; }; \
+	done
+	@echo "==> draw examples"
+	@for f in $(EXAMPLES); do \
+		$(FAB) render "$$f" -e graphviz -f svg --verbosity quiet || exit 1; \
+		echo "    $${f%.fab}.svg"; \
+	done
 
 ## Installing fab
 

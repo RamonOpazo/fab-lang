@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -41,6 +41,7 @@ Zig 0.17. Graphviz only for `-e graphviz` to svg, png or pdf.
 ```
 make                # debug build of every package, in dependency order
 make test           # all tests; or test-core, test-render, test-cli
+make examples       # check every example, then draw it to SVG (Graphviz); `make test examples` for both
 make fmt            # zig fmt; fmt-check to verify
 fab check x.fab     # diagnostics only
 fab show cst x.fab  # a stage of compilation: tokens, cst or ir
@@ -63,9 +64,9 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 3    | Lexer                                     | done    |
 | 4    | Parser and CST                            | done    |
 | 5    | Analyser: level 1                         | done    |
-| 6    | IR, JSON, renderer for level 1; examples  | next    |
+| 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
-| 8    | Definitions and values                    |         |
+| 8    | Definitions and values                    | next    |
 | 9    | Style layer                               |         |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |

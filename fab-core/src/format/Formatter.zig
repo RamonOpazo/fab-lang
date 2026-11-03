@@ -10,7 +10,8 @@
 //! will be folded in later without changing the fold.
 //!
 //! Labels follow one rule: `:label` if given, else the node's name without
-//! its `#`, else the node's canonical end (`f+`, `+f`). A canonical label
+//! its `#`, the own node `@` its diagram's name, else the node's canonical
+//! end (`f+`, `+f`). A canonical label
 //! puts the node in the built-in class `.canonical`: italic and muted, and
 //! like any class, overridable. Edges and zones are labelled with their name.
 //!
@@ -156,6 +157,9 @@ fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Attrs {
         // Unlabelled: the shape says what it is.
     } else if (n.name) |name| {
         attrs = attrs.over(.{ .label = withoutSigil(f.ir.string(name)) });
+    } else if (f.ir.zones.items(.own)[@backingInt(n.zone)] == @as(Ir.NodeIndex, @fromBackingInt(@as(u32, @intCast(i))))) {
+        // `@` stands for the diagram itself (statements.md §20).
+        attrs = attrs.over(.{ .label = f.ir.string(f.ir.zones.items(.name)[@backingInt(n.zone)]) });
     } else if (n.canonical) |end| {
         attrs = attrs.over(builtin.canonical);
         const start = f.labels.items.len;

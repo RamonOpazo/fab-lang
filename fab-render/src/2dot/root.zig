@@ -22,6 +22,10 @@
 //!     one node, `z{z}`, a square holding ✕: Graphviz has no square crossed
 //!     corner to corner (statements.md §18). Its identifier is not `n…`, so
 //!     no edge reaches it, and the law counts it apart.
+//!   - A framed zone that owns no node (Db, whose edges all join other
+//!     diagrams' nodes) is a cluster around one invisible point, `a{z}`, so
+//!     its frame, name and caption still show; its edges stay at the top
+//!     level (statements.md §20). Unframed, it writes nothing.
 //!   - A caption ("unsupported") makes the cluster's label an HTML label: the
 //!     one place DOT needs two kinds of text in one label.
 //!
@@ -66,7 +70,14 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
         }
         var owns_nodes = false;
         for (node_zone) |owner| owns_nodes = owns_nodes or owner == zone;
-        if (!owns_nodes) continue;
+        if (!owns_nodes) {
+            if (!sheet.isFramed(zone) or as == .flat) continue;
+            try w.print("  subgraph cluster_{d} {{\n", .{z});
+            try writeClusterAttrs(sheet, zone, w, notes);
+            try w.print("    a{d} [label=\"\", shape=point, width=0.01, height=0.01, style=\"invis\"]\n", .{z});
+            try w.writeAll("  }\n");
+            continue;
+        }
 
         const grouped = as != .flat;
         if (as == .node or as == .table) try notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone } });
