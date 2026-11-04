@@ -2,7 +2,7 @@
 
 Decisions taken in the design sessions of 22-23 October 2026, after `fab render` first worked end to end. They change the grammar in six places: statements and bindings, values, cells (levels), the `/` operator, pinching (with the split between flow and fusion), and subjects (classes). This note is the record of what was decided and why; the code does not implement it yet.
 
-> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read; section 15 (2 November), how programs with no meaning yet are reported; section 21 (3 November), the types and the prelude, which revise 1.7 and 2. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
+> **Superseded in part.** Sections 4 and 5, and the matching parts of 7, are replaced by the grammar of joining of 1 November ([`joining.md`](joining.md)); sections 9 and 11 by the plan in [`CLAUDE.md`](../CLAUDE.md). Section 12 (1 November) replaces how statements span lines (3) and how entries are delimited (1.3). Section 13 (1 November) settles the schema statements left open in 8.3; section 14 (2 November), how operators between chains are read; section 15 (2 November), how programs with no meaning yet are reported; section 21 (3 November), the types and the prelude, which revise 1.7 and 2; section 22 (5 November), the three forms, typed records and the style pass, which revise 1.1–1.3, 12, 17, 19 and 21. They are kept for the record. Where this note and [`spec.md`](spec.md) differ, the spec wins.
 
 **The spec doc ([`spec.md`](spec.md)) was rewritten from this note and [`style.md`](style.md) on the evening of 23 October. Where this note and the spec differ, the spec wins.** Three corrections were made while writing it, and are applied below: repeated node names glue in flows (5.1); `*` is not a pinch (5.3); `?` and `!` stay postfix only (5.3). Two decisions followed the same evening, both in 5.3: **`*` is a nameless node term, written alone, private to one edge end**, which replaced the seal; and **a pinched single edge resolves as a reference node, so it is pinched on one side only**, with redundant pinches allowed. The bracket reading and arrow literals of section 2 were refined in the style document (lowercase names, `[tail/line/head]` arrows).
 
@@ -845,3 +845,146 @@ What each record checks, before the style pass reads it (step 9).
 - **"Does not apply" reads the class hierarchy:** `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole` and `&canonical` lie inside `&node`. A function applies to the classes its signature names and to the classes inside them: `:line`, declared for `&node`, applies to `&hole`; one declared for `&choice` only does not apply to `&node`.
 - **A function entry** is checked against its signature: known (**unknown attribute**), applying to its subject's classes (**does not apply**), a flag with no value (**value given to a flag**) and any other with one (**value missing**), `!` only on a flag (**only a flag inverts**), and its value fitting the type (**wrong type**).
 - **A token** binds a label to a value of the label's type: the key is a declared label (**not a label**, **undefined name**), the value fits its type (**key of the wrong type**).
+
+## 22. Three forms, typed records, and the style pass, 2026-11-05
+
+Revises 1.1–1.3, 12 (the comma after `:=`), 17 (the proof's shape), 19, and 21 (`[]`, `:None`, `:Record`, tables, records). Settles the design of plan step 9, and plans the proof's shape for step 11.
+
+### 22.1 Three forms
+
+**`:` is the one sign of assignment, and a statement has one of three forms,** named by what it does:
+
+| Form | Operator | Does | Examples |
+| --- | --- | --- | --- |
+| Declaration | `::` | introduces something new, binding nothing | `G :: f g`, `:Shape :: [circle], [box]`, `(&node, &zone) :fill :: :Color` |
+| Naming | `:=` | binds a name to a value | `[red] := [#d1242f]`, `:Length := :Number`, `:terminal := { … }`, `:Style [dark] := { … }` |
+| Description | none | `context :descriptor value`: says something of a context | `G :style { … }`, `G.f :arrow [mono]`, `Order :theme [dark]` |
+
+- **A descriptor is an attribute applied:** `:fill`, `:style`, `:lemma`. A description names nothing, so it needs no operator; the descriptor stands where `:=` stood. `G :style := { … }` and `G.f :arrow := [epi]` are errors (**description written with `:=`**).
+- **A reference is a description without its value:** `G.#Done :shape`, `Repo :lemma.[a]`.
+- **The three forms nest.** Inside braces, a description is the usual entry; a naming binds a name in that record only (`[ink] := [#dddddd]` in a theme, 22.3); a declaration declares inside the type being declared (`:Style :: { &node :fill :: :Color, … }`, 22.3).
+- **A context may be left out only inside a block,** where it is the block's owner, written on the line above: `Order :style { :caption "Orders", &node :fill [muted] }` binds `Order :caption`. At the top level the context is always written.
+- **The owner's descriptors come first in a block,** before any entry that names a context. Otherwise it is a style warning (**owner described after a part**): the block reads as its owner, then its parts.
+- **Descriptions lose the comma form** of 19.1: with no `:=`, `User :style :label "users", :fill [muted]` is two entries side by side. Braces group them: `User :style { :label "users", :fill [muted] }`, or `User { … }`. A naming keeps it: `:ref := :shape [round], :fill [muted]`.
+- **A descriptor may be written outside its layer:** `G :fill [white]` is `G :style { :fill [white] }`. Each descriptor belongs to one record type (22.3), so it is never ambiguous which layer it is in.
+
+**Rejected.**
+- **Typed layer statements,** `G :Style :: { … }`. A type would stand where a descriptor goes, meaning "G's style", which is a descriptor's job; and `::` binds nothing, while a style binds values. The typing goes on the value instead (22.3).
+- **Contexts left out at the top level:** the owner would be invisible.
+- **"Owner first" as an error:** it is good practice, not meaning.
+
+### 22.2 Nil, and the elements of a bracket
+
+**A bracket has one element more than it has slashes, and an element with nothing in it is nil.**
+
+- `[red]`, `[2.5]`, `[#f00]` are one element: the value itself. **There are no one-element lists.**
+- `[]` is one empty element: **nil**. There are no zero-element brackets, so the reader never yields none.
+- `[/]` is two nils; `[/solid/>]` is nil, `solid` and `>`; `[////1/2]` six elements, four of them nil.
+- **`:Nil` is the type of nil,** a built-in. Nil fits only where a type admits it: `:Union.(:Color, :Nil)`. **`:List.(T)` admits nil** as its "no elements": `:theme []` chooses no themes. An empty slot fits a slot of the tuple only where that slot admits nil, so arrows say where they may be empty: `:Tip := :Union.(:Head, :Nil)`, `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`.
+- **Nothing is marked by its spelling,** not by a name: `:None :: [none]` goes, and no label is reserved for it. Text keeps its own nothing, `""`.
+- **The style is total through nil** (style.md 7.2). Every descriptor that can be nothing admits `:Nil`, and `[base]` binds every descriptor for every class it applies to: `&node :fill []`, `:width [0]` (a minimum: fitted to the content), `:bend [0]`, `:note ""`, `:step []`. So a later layer can take a value away: `[dark]` fills zones, and a program writes `G :fill []`.
+
+**Rejected.** `:Nil :: [nil]`: simple, but nil becomes an ordinary label, a name that means nothing. `[]` as the empty list beside a separate none: two nothings, and `[]` would have two types.
+
+### 22.3 Typed records, and tables
+
+**A record type is declared by its descriptors,** as a label type is by its labels:
+
+```
+:Shape :: [circle], [box], …          // a label type: its labels
+
+:Style :: {                           // a record type: its descriptors
+  (&node, &zone) :fill :: :Union.(:Color, :Nil),
+  (&edge, &cell) :arrow :: :Arrow,
+  …
+}
+```
+
+- **One descriptor, one record type,** as one label has one type. A descriptor declared at the top level, outside any record type (`&zone :style :: :Style`), describes at the top level only.
+- **A record's type is read from its shape:** the type its descriptors belong to. `{ :fill [red] }` is a `:Style`; nothing is inferred from use. A descriptor of another record type in it **does not apply**. `{}` fits any record type.
+- **`:Record` goes.** Themes are styles, `:Style [dark] := { … }`, and `:theme` takes `:List.(:Style)`, so `:theme [some-proof]` is a wrong type. A bundle's record has the type of its contents, and the bundle joins that record type.
+- **The layers are descriptors of their record type:** `&zone :style :: :Style`, `&zone :prove :: :Proof`, `&zone :place :: :Place`. Zig gives `:style` its meaning: apply the record, with the diagram as its owner.
+- **Tokens are namings:** `[ink] := [#dddddd]` inside a record binds the label in that record, to a value of its type (**key of the wrong type** otherwise).
+
+**Tables are descriptors with keys.** `:Table.(T)` is a type for descriptors only, never written as a value: its descriptor takes a key and a value.
+
+```
+&zone :axiom :: :Table.(:Proposition)
+Repo :prove { :axiom.[merge] (fix merge == login session merge') }
+```
+
+- **A binding is (context, descriptor, key), once per layer.** Nothing accumulates, so "each binding once" holds with no exception.
+- **Keys are written with `.`,** the sign of "the part of": `:axiom.[a]`. `/` keeps its two meanings, attaching in chains and separating elements in brackets. **A key is optional:** an entry without one has a fresh key no one can refer to (22.5).
+- **Keys are local to their descriptor:** `[a]` as a key never collides with a value `[a]`. A key is declared by its binding, as an edge is by its first occurrence.
+- **Arity follows the type:** a flag takes nothing, a plain descriptor a value, a table descriptor a key and a value.
+- **Lists are choices, tables are facts.** `:theme` is a list, bound once: a composition whose order matters (`[dark/compact]` is dark, then compact over it), replaced by a later layer. A table holds facts that hold together, each under its own key.
+
+**Rejected.** Tables that accumulate by position: a positional reference (`:lemma.[0]`) shifts when a lemma is inserted, and accumulation is a second binding rule. A missing key is a fresh one instead, which nothing can refer to. `/` for keys (`G/[style]`): a chain's operator. Layers as keys (`[style]`): three fixed parts named like the user's own.
+
+### 22.4 The style pass (plan step 9)
+
+- **Contexts in a diagram's style** resolve in its own names: edges, cells, `#X`, `@`, canonical ends (`+f`, `f+`), and classes (`&node` there is the diagram's nodes). Groups distribute, blocks factor. Each diagram styles itself: a part of another diagram is an error (**context in another diagram**); so is a description before the diagram's declaration (**description at an undeclared context**). Canonical references (rule 7): `+g` where the node is `f+` (**non-canonical reference**), `+f` on `#Done` (**named node referenced by an end**). A top-level class, `&node :shape [box]`, describes every diagram.
+- **Specificity, within a layer,** narrowest winning: a single element; a class inside a diagram; a narrower class; a class. Classes of one rank apply in the order they are defined, the later winning, and errors come last, so nothing paints over them: `&node` < `&plain`, `&choice`, `&parallel`, `&start`, `&end` < `&canonical` < `&hole`. Marks stay the last layer of all. This settles style.md 12.1.
+- **Binding made twice** is checked per element, after groups distribute, at one rank: `(yes, paid) :label "yes", yes :label "x"`.
+- **Values are decoded once, by the analyser.** Records keep decoded bindings, so the style pass reads no CST. `Style` has one typed field per descriptor of `:Style` that Zig gives meaning to; a label Zig does not know (`:Shape :: [blob]`) is carried by name, and a descriptor it does not know (`&node :glow :: :Color`) is kept beside the style, for a renderer to report. A test ties the prelude's `:Style` to `Style`'s fields and their types.
+- **Tokens are resolved in core,** per diagram, through its layers: `[base]`, its themes, its own style. Colours reach a renderer as RGBA. A label bound to a label resolves one step: `[circle] := [box]` with `[box] := [round]` draws circles as boxes.
+- **`:theme` inside a theme includes,** before the theme's own bindings. Names are defined before use, so inclusion never cycles. `:theme` cascading into nested diagrams waits for the header.
+- **Computed defaults** stay below `[base]`: a node's label, a cell's arrow by its level. Sizes that need text metrics (one circle diameter per diagram, a bar's width) belong to the renderer.
+- **An arrow draws something:** `[//>]`, `[>//]` and `[>//>]` are arrows, `[//]` is an error (**empty arrow**). An edge that should not be drawn is hidden, `:hide`, not emptied.
+- **`!` with nothing to invert** is one error, **not invertible**: `[>!/solid/>]`, `:size [2!]`. Only hooks and harpoons have a side, and among numbers only angles.
+- **The stage is named after its layer:** `format/` becomes `style/`, `Formatter` the `Styler`.
+
+### 22.5 The proof's shape (plan step 11, planned)
+
+**A diagram presents a theory.** A diagram G of kind K presents
+
+```
+T(G) = the generators (the cells G declares) + the laws of K + the axioms
+```
+
+and a proof says what T(G) holds: **axioms** state, **lemmas** are checked. An axiom is what the user tells fAB about the system (this square commutes, this column is a key); a lemma is what the user asks fAB to confirm (is this a pushout?), a proved step that later lemmas may build on. Most programs, a git history or a schema, use only axioms: they are the standard way to give a structure its features. Lemmas are for questions about the structure built.
+
+| | Ill-formed (unknown names, paths whose ends differ) | Refuted | Undecidable |
+| --- | --- | --- | --- |
+| `:axiom` | error | error: inconsistent with K or the other axioms, where decidable | fine: stating what cannot be derived is what axioms are for |
+| `:lemma` | error | error, `&refutable` (17) | warning, `&undecidable`; a pass acknowledges it |
+
+- **Axioms have no order;** nothing derives them. **A lemma may use every axiom and the lemmas before it,** so lemmas never prove each other.
+- **Both are tables:** `&zone :axiom :: :Table.(:Proposition)`, `&zone :lemma :: :Table.(:Proposition)`. **A key is optional:** an entry without one has a fresh key no one can refer to, so each entry is still one binding. Name only what is referred to, as with nodes: `Repo :lemma.[clean]`, for a pass or a drawing.
+- **`( … )` is the fifth shape of a value, `:Proposition`,** a record type declared by its descriptors, the properties:
+
+  ```
+  :Proposition :: {
+    &node :pushout :: :Flag,
+    (&node, &edge) :pullback :: :Flag,
+    &edge :card :: :Cardinality,
+    …
+  }
+  ```
+
+  Properties are ordinary descriptors with ordinary types, so `(&edge :card [0..*/1])` takes a value and `(parent { :nullable, … })` factors a context. One descriptor, one record type: `#X :pk` in a style does not apply. A proposition differs from a record in two ways: operations (`==`, `~=`) stand among its descriptions, and its comma means *and*; it holds no namings or declarations. What `==` and `~=` mean stays open.
+- **`:Proof` holds `:kind`, `:axiom`, `:lemma` and `:pass`.** `:kind` comes first, as the owner's descriptors do (22.1).
+
+```
+Db :prove {
+  :kind [schema],
+  :axiom (&node.id :pk, &edge :card [0..*/1]),
+  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
+  :axiom (parent { :nullable, :card [0..*/0..1] }),
+  :axiom.[same-document] (parent document == document)
+}
+Repo :prove {
+  :kind [category],
+  :axiom (fix merge == login session merge'),     // we say it commutes
+  :lemma.[clean] (#Merged :pushout)               // fAB confirms it
+}
+```
+
+- **What a confirmed lemma constructs** (a pushout's unique arrows, drawn dashed; corner marks ⌟) may be drawn, under `:marks`: open, with step 11.
+
+**Rejected.**
+- **Lemmas only, everything checked.** Without axioms T(G) is the free category on G's edges, where two different paths are never equal: every commuting square would be refuted. A lemma that is assumed instead of checked is an axiom under another name, and then nothing is ever verified.
+- **Constraints as bare descriptions beside the lemmas** (`&node.id :pk` in the proof record): `:pk` and `:pushout` are the same sort of claim, and the syntax would not say which is stated and which is asked.
+- **Required keys:** names for every key and cardinality, which nothing refers to.
+- **Properties as bare descriptors of type `:Proposition`:** `:card` takes a value.
+- **Postfix operators for properties** (`#Merged |<`): a closed family in the lexer, and precedence again. The context after the property (`:pushout #Merged`): every description reads context first.

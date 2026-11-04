@@ -1,6 +1,6 @@
 # fAB `:style`: the complete vocabulary, 2026-10-23
 
-Decided in the design session of 23 October 2026. This document formalizes the `:style` layer: every attribute, which subjects it applies to, its values and its default, plus the arrow grammar and themes. It builds on the general decisions in [`statements.md`](statements.md) (statements, values, subjects and classes), which it assumes. Its example (section 11) predates the grammar of joining ([`joining.md`](joining.md)); the spec's own example is current. Sections 3, 4.6, 7, 9 and 10 were revised on 3 November by the types and the prelude ([`statements.md`](statements.md) §21); the vocabulary itself is now written in the prelude, [`prelude.fab`](../fab-core/src/prelude.fab), which this document explains.
+Decided in the design session of 23 October 2026. This document formalizes the `:style` layer: every attribute, which subjects it applies to, its values and its default, plus the arrow grammar and themes. It builds on the general decisions in [`statements.md`](statements.md) (statements, values, subjects and classes), which it assumes. Its example (section 11) predates the grammar of joining ([`joining.md`](joining.md)); the spec's own example is current. Sections 3, 4.6, 7, 9 and 10 were revised on 3 November by the types and the prelude ([`statements.md`](statements.md) §21), and on 5 November by the three forms and typed records (§22): a description has no `:=`, a theme is a `:Style`, nil is written `[]`; the vocabulary itself is now written in the prelude, [`prelude.fab`](../fab-core/src/prelude.fab), which this document explains.
 
 Status words: **Decided**, **Open**, **Rejected** (with the reason).
 
@@ -26,13 +26,13 @@ Status words: **Decided**, **Open**, **Rejected** (with the reason).
 
 | Subject                      | Written                         | Example                                              |
 | ---------------------------- | ------------------------------- | ---------------------------------------------------- |
-| a zone                       | its name                        | `G :style := { … }`                                  |
-| an edge or a cell            | its name, qualified by its zone | `G.f :stroke := [red]`                               |
-| a node, by its canonical end | `+f`, `f+`                      | `G.+f :label := $P$`                                 |
-| a named node                 | `#Name`                         | `G.#Done :shape := [box]`                            |
-| a class                      | `&name`                         | `&node :shape := [circle]`, `G.&edge :pen := [thin]` |
+| a zone                       | its name                        | `G :style { … }`                                  |
+| an edge or a cell            | its name, qualified by its zone | `G.f :stroke [red]`                               |
+| a node, by its canonical end | `+f`, `f+`                      | `G.+f :label $P$`                                 |
+| a named node                 | `#Name`                         | `G.#Done :shape [box]`                            |
+| a class                      | `&name`                         | `&node :shape [circle]`, `G.&edge :pen [thin]` |
 
-Inside a block, the owner's prefix is factored out: `G :style := { f :stroke [red] }` binds `G.f :stroke`.
+Inside a block, the owner's prefix is factored out: `G :style { f :stroke [red] }` binds `G.f :stroke`.
 
 ### 2.2 Built-in classes
 
@@ -83,8 +83,9 @@ From general to narrow; a narrower subject wins where subjects overlap:
 | labels                   | `[dashed]`, `[italic]`, `[outer]`, …                                  | declared by their type in the prelude: `:Line :: [solid], …` |
 | `:Arrow`                 | `[tail/line/head]`                                                    | a tuple (4.6)                                               |
 | `:Cardinality`           | `[0..*/1..1]`                                                         | a tuple of two ranges                                       |
-| `:List.(:Record)`        | `[dark]`, or several: `[dark/compact]`                                | themes (section 7)                                          |
-| `:Record`                | `{ … }`                                                               | a style, a theme, a bundle's contents                       |
+| `:List.(:Style)`         | `[dark]`, or several: `[dark/compact]`                                | themes (section 7)                                          |
+| `:Style`                 | `{ … }`                                                               | a style, a theme, a bundle's contents: a record type        |
+| `:Nil`                   | `[]`, an empty slot                                                   | nothing; admitted where a type says so                      |
 | `:Flag`                  | no value; `!` turns it off                                            | `:hide`, `:hide!`                                           |
 
 `:Tuple.(…)`, `:List.(T)` and `:Union.(…)` build the rest: `:bend` takes `:Union.(:Facing, :Angle)`, `[outer]` or `[30]`.
@@ -145,11 +146,11 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** zones.
 
 | Attribute           | Values                                                                                                                                                                                          | Default                           |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `:shape`            | `[none]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind (section 6)               |
+| `:shape`            | `[]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind (section 6)               |
 | `:fill`             | colour                                                                                                                                                                                          | none                              |
 | `:stroke`           | colour                                                                                                                                                                                          | `[ink]`                           |
 | `:pen`              | `[thin]` `[normal]` `[thick]`                                                                                                                                                                   | `[normal]`                        |
-| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[none]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
+| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
 | `:width`, `:height` | length, as minimums                                                                                                                                                                             | fitted to the label               |
 | `:padding`          | length                                                                                                                                                                                          | theme                             |
 | `:align`            | `[start]` `[center]` `[end]`                                                                                                                                                                    | `[center]`                        |
@@ -184,7 +185,7 @@ An edge has no `:line`: its line is part of `:arrow` (`[/dashed/>]`, `[/double/>
 | `:padding` | length                                         | theme                                        |
 | `:caption` | text, math                                     | none                                         |
 | `:theme`   | theme names, applied left to right (section 7) | none: the base theme alone                   |
-| `:marks`   | `[all]` `[none]`                               | `[all]`: draw marks from `:prove`, such as ⌟ |
+| `:marks`   | `[all]` `[]`                                   | `[all]`: draw marks from `:prove`, such as ⌟ |
 | `:cross`   | `[gap]` `[plain]`                              | `[gap]`                                      |
 
 A zone is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit.
@@ -203,7 +204,7 @@ These are neither looks nor positions, but they are presentation, so they live i
 
 ### 4.6 Arrows: `[tail/line/head]`
 
-**Decided.** An arrow is a tuple of three fields, `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`:
+**Decided.** An arrow is a tuple of three fields, `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`:
 
 ```
 [tail/line/head]
@@ -356,19 +357,19 @@ A start is a null node no edge arrives at; an end is one some edge arrives at (a
 **Decided** (revised 3 November). A theme is a record bound to a name, holding subjects with attributes, and tokens with their values:
 
 ```
-:Record [dark] := {
-  [ink] [#dddddd],
-  [soft] [#aaaaaa],
+:Style [dark] := {
+  [ink] := [#dddddd],
+  [soft] := [#aaaaaa],
   &zone :fill [#1e1e1e]
 }
 ```
 
 A theme and a bundle are both records, but used differently:
 
-- **a bundle** (`:terminal := { :shape [circle] }`) is a new attribute, applied where it is written; its keys are attributes;
-- **a theme** (`:Record [dark] := { … }`) is a value, chosen with `:theme`; its keys are subjects and tokens.
+- **a bundle** (`:terminal := { :shape [circle] }`) is a new attribute, applied where it is written; it holds descriptors only;
+- **a theme** (`:Style [dark] := { … }`) is a value, chosen with `:theme`; it holds classes and tokens.
 
-A token binds a value of its own type: `[ink] [#dddddd]`. Any label may be bound so: `[circle] [box]` draws this theme's circles as boxes.
+A token binds a value of its own type: `[ink] := [#dddddd]`. Any label may be bound so: `[circle] := [box]` draws this theme's circles as boxes.
 
 ### 7.2 The base theme always applies
 
@@ -391,8 +392,8 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 - **"Each binding once" holds within a layer.** Across layers, the later one wins, deliberately and in order. So a theme and a program may both bind `&node :shape` with no conflict, and a program turns off a theme's flag with `!`: `f :hide!`.
 - **Choosing themes:** `:theme` takes a list of records, composing left to right:
   ```
-  :Record [compact] := { &node :padding [0.2] }
-  Order :theme := [dark/compact]
+  :Style [compact] := { &node :padding [0.2] }
+  Order :theme [dark/compact]
   ```
 - `:theme` is a zone attribute, so it cascades to nested zones, which may choose their own.
 
@@ -481,8 +482,8 @@ Order :: {
 [warn] := [#c0392b]
 :terminal := { :stroke [warn], :pen [thick] }
 
-Order :theme := [print]
-Order :style := {
+Order :theme [print]
+Order :style {
   &node :shape [round],
   validate+ :label "Valid?",
   charge+ :label "Payment accepted?",

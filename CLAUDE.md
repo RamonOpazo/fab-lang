@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -190,12 +190,13 @@ Done when every level case passes.
 - **8d. The prelude.** `src/prelude.fab`, embedded, analysed before every program with the same analyser; the program's environment starts as the prelude's, whose entries are marked so no error points into it. Tests: it checks with nothing but its records unsupported, and its label types match what Zig gives meaning to (`Style.Shape`, `Style.As`; `:Line` waits for step 9, since `[triple]` has no `Style.Line` yet). Its definitions stop drawing placeholders (§20).
 - **8e. Records.** Bundles (keys are functions; the signature is a flag applying where all its contents apply) and themes (`:Record [x] := { … }`: class subjects, tokens, and function keys with no subject, which bind the diagram the theme is applied to); a token binds a value of its type. "Does not apply" reads the class hierarchy: `&plain`, `&choice`, `&parallel`, `&start`, `&end`, `&hole` and `&canonical` lie inside `&node`. Rows: subject in a bundle, element in a theme, key of the wrong type, value given to a flag, value missing, only a flag inverts, does not apply.
 
-**9. Style layer.** `fab-core/src/format/` becomes the style pass, with `style.md` as the reference.
-- `:style` replaces `:format`. Blocks are factored subjects. Groups of subjects take attributes distributed over them. Each (subject, attribute) is bound once per layer.
-- Classes with `&`, and specificity: class, narrower class, class in a diagram, single element.
-- Type checks at use, against the prelude's signatures, and "does not apply".
-- The cascade: computed defaults, then `[base]` (replacing `kindDefault`), then themes left to right, then the program; tokens bound by records; `:hide!`.
-- Arrows: the `:Arrow` tuple given its meaning, its `:Head` symbols and `:Line` words; `Style.Line` follows the prelude (`[triple]`), and the label test covers `:Line`.
+**9. Style layer** (`statements.md` §22). The three forms, typed records, then the style pass, with `style.md` as the vocabulary. In increments:
+
+- **9a. Three forms.** A description is a statement with no operator (`G :style { … }`, `G.f :arrow [epi]`); `G :style := …` is *description written with `:=`*. Inside braces, `:=` names in the record (tokens: `[ink] := [#dddddd]`) and `::` declares in the type being declared. A table's key, `:lemma.[a]`; a context left out only inside a block; the warning *owner described after a part*. The 8e checks move to the new forms; the prelude, examples, corpus and `parse.test.zig` follow.
+- **9b. Types.** `:Nil`: a bracket has one element more than its slashes, an empty element is nil, `[]` is nil, lists admit it, nil fits only where a type admits it (`:Tip`). Record types declared by their descriptors (`:Style :: { … }`), one descriptor one record type, a record's type read from its descriptors; `:Record` goes, themes are `:Style`. `:Table.(T)`: keys required, local to their descriptor. *Not invertible*. The prelude: `:style`, `:prove`, `:place`, nil unions, `[base]` total; `Style.Line` gains `[triple]`. Values decoded once: records keep decoded bindings.
+- **9c. Layers read.** Contexts resolved in their diagram: names, canonical ends, classes, groups, blocks. Errors: *description at an undeclared context*, *context in another diagram*, *non-canonical reference*, *named node referenced by an end*, *binding made twice* (per element), *does not apply* per element. `:prove` and `:place` contents stay unsupported.
+- **9d. The cascade.** `format/` becomes `style/`, `Formatter` the `Styler`. Computed defaults, `[base]`, themes left to right (a theme's `:theme` includes), the program, then marks. Specificity: element, class in a diagram, narrower class, class; at one rank, the order of definition, errors last (`&node` < kinds < `&canonical` < `&hole`). Tokens resolved in core to RGBA, one step. `kindDefault` and `builtin` go. `Style` typed from `:Style`: unknown labels carried by name, unknown descriptors beside the style; the prelude test covers every descriptor and `:Line`. fab-render adapted to draw what it draws today.
+- **9e. Examples.** Every example's style resolves to a Sheet; corpus rows from the spec's styled examples.
 
 **10. Renderer.** fab-render realises the new Style: arrows, ends, `:bend`, `:side`, theme tokens.
 
@@ -203,7 +204,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 ### E. Shells and docs
 
-**11. Proof and place shells.** `:prove` and `:place` are parsed and checked for placement only: the zone exists, and each layer appears once. Their contents are kept in the tree, unchecked, except the proof's `:kind` and `:pass` (`statements.md` §17): the kind decides what is drawn and which structures become findings, `&refutable` or `&undecidable`, and passes acknowledge them.
+**11. Proof and place shells.** `:prove` and `:place` are records of type `:Proof` and `:Place`, checked for placement: the zone exists, and each layer appears once. The proof's shape (`statements.md` §22.5): a diagram presents a theory; `:axiom` states, `:lemma` is checked against the axioms and the lemmas before it; both are tables of propositions with optional keys; `( … )` is `:Proposition`, a record type of properties (`:pushout`, `:card`, `:pk`), where equations stand and the comma means *and*. Contents are kept, their meaning unchecked, except the proof's `:kind` and `:pass` (`statements.md` §17): the kind decides what is drawn and which structures become findings, `&refutable` or `&undecidable`, and passes acknowledge them.
 
 **12. CLI, README, examples.**
 - `fab show` stages follow the new CST, along with help text and messages.

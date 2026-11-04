@@ -14,76 +14,80 @@ fAB describes a diagram by its edges only. Nodes are never written: they are der
 - **Collapses are written.** Anonymous ends become one node only where a pinch says so. A space joins one end to one end, a slash attaches to a written node or closes a cycle, and nothing merges silently.
 - **Declare once, refer backwards.** A bare name declares an edge. A name that already exists is a reference, and a reference always points left, to something declared before it. The same holds for every name in a program: nothing is used before it is created.
 - **Describe once, draw what fits.** A program states the whole system of relations once, at every level. What a diagram draws is the part of that system its kind can show: a flow has cells like any diagram, and draws none of them.
-- **Structure, then data about it.** Declarations (`::`) build the structure. Definitions (`:=`) give it data: how it looks, what holds in it, where it goes. Data never changes structure.
+- **Structure, then data about it.** Declarations (`::`) build the structure. Descriptions give it data: how it looks, what holds in it, where it goes. Data never changes structure.
 - **Topology, not geometry.** fAB says what connects to what. Nothing in the language names a direction on the page; layout decides that.
 - **One symbol, one meaning.** Every operator means the same thing wherever it appears, at every level of a diagram.
 
 ## Program structure
 
-A program is a sequence of statements, one per line; braces let a statement span lines (see Items and lines). There are exactly two kinds, told apart by their operator.
+A program is a sequence of statements, one per line; braces let a statement span lines (see Items and lines). `:` is the one sign of assignment, and a statement has one of three forms, named by what it does:
 
-| Kind        | Operator | Introduces                   | Example                                      |
-| ----------- | -------- | ---------------------------- | -------------------------------------------- |
-| Declaration | `::`     | new **structure**            | `Order :: */receive/#Received validate/? +(…)` |
-| Definition  | `:=`     | a new **binding** of a value | `[red] := [#ff0000]`, `G :style := { … }`    |
+| Form        | Operator | Does                                         | Example                                                    |
+| ----------- | -------- | -------------------------------------------- | ---------------------------------------------------------- |
+| Declaration | `::`     | introduces new **structure**, binding nothing | `Order :: */receive/#Received validate/? +(…)`             |
+| Naming      | `:=`     | binds a **name** to a value                  | `[red] := [#ff0000]`, `:terminal := { :shape [circle] }`   |
+| Description | none     | says something of a **context**              | `G :style { … }`, `G.f :arrow [epi]`, `Order :theme [dark]` |
 
-**Declarations** build structure: they make something new, bound to nothing. Diagrams (zones) are declared with a term: `G :: term`. The vocabulary is declared too, in the prelude or in a program (see Values and definitions): labels of a type, `:Shape :: [circle], [box]`, and functions with their signature, `(&node, &zone) :fill :: :Color`. Nodes and edges may become declarable on their own; what that means is open, so it is reserved: an error until decided.
+**Declarations** build structure: they make something new, bound to nothing. Diagrams (zones) are declared with a term: `G :: term`. The vocabulary is declared too, in the prelude or in a program (see Values and definitions): labels of a type, `:Shape :: [circle], [box]`; descriptors with their signature, `(&node, &zone) :fill :: :Color`; and record types by their descriptors, `:Style :: { … }`. Nodes and edges may become declarable on their own; what that means is open, so it is reserved: an error until decided.
 
-**Definitions** bind values. Every definition has one form, read left to right as context, then attribute, then value:
+**Namings** bind a name to a value, read left to right as name, then value:
 
-```
-subject :attr := value
-```
+| Left side      | Names                                     | Examples                                                         |
+| -------------- | ----------------------------------------- | ---------------------------------------------------------------- |
+| `[name]`       | a value, with an optional type before it  | `[red] := [#ff0000]`, `:Color [warn] := [red]`, `:Style [dark] := { … }` |
+| `:Type`        | a type: an alias                          | `:Length := :Number`                                             |
+| `:descriptor`  | a new descriptor (a bundle), everywhere   | `:terminal := { :shape [circle], :fill [red] }`                  |
 
-Its parts are optional, which gives exactly three kinds of definition:
-
-| Left side       | Defines                                | Examples                                                               |
-| --------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| `[name]`        | a value, with an optional type before it | `[red] := [#ff0000]`, `:Color [warn] := [red]`, `:Record [dark] := { … }` |
-| `:attr`         | a new attribute (a bundle), everywhere | `:terminal := { :shape [circle], :fill [red] }`                         |
-| `subject :attr` | an attribute's value at a subject      | `&node :shape := [circle]`, `G :style := { … }`, `G.f :arrow := [epi]` |
-
-A type's name may also stand alone on the left, as an alias: `:Length := :Number`.
-
-**Layers.** Three attributes of a diagram take a list of entries as their value, usually written in braces. Each is a five-letter verb, and each accepts its own vocabulary:
-
-| Layer               | Says                                           | Relational?                                               |
-| ------------------- | ---------------------------------------------- | --------------------------------------------------------- |
-| `G :style := { … }` | how things look                                | no: a style describes one element and never names another |
-| `G :prove := { … }` | what holds: equations and universal properties | yes                                                       |
-| `G :place := { … }` | where things go                                | yes                                                       |
-
-**Blocks are factored subjects.** A block is shorthand for a set of definitions with a common subject:
+**Descriptions** apply a descriptor, an attribute, to a context. A description has one form, read left to right as context, then descriptor, then value, with no operator:
 
 ```
-G :style := { #Done :terminal, f :label "x" }
+context :descriptor value
+```
+
+The value is left out for a flag or a bundle (`G.#Done :terminal`), and a table descriptor takes a key first (`Repo :lemma.[merge] ( … )`). A description written with `:=` is an error. **A reference is a description without its value:** `G.#Done :shape`, `Repo :lemma.[merge]`.
+
+**Layers.** Three descriptors of a diagram take a record of descriptions as their value. Each is a five-letter verb, and each record has its own type, whose descriptors it accepts:
+
+| Layer             | Type     | Says                                           | Relational?                                               |
+| ----------------- | -------- | ---------------------------------------------- | --------------------------------------------------------- |
+| `G :style { … }`  | `:Style` | how things look                                | no: a style describes one element and never names another |
+| `G :prove { … }`  | `:Proof` | what holds: equations and universal properties | yes                                                       |
+| `G :place { … }`  | `:Place` | where things go                                | yes                                                       |
+
+Every descriptor belongs to one record type, so a descriptor may also be written outside its layer: `G :fill [white]` is `G :style { :fill [white] }`.
+
+**Blocks are factored contexts.** A block is shorthand for descriptions with a common context:
+
+```
+G :style { #Done :terminal, f :label "x" }
 // means
-G.#Done :terminal := …
-G.f :label := "x"
+G.#Done :terminal
+G.f :label "x"
 ```
 
-- An entry with a subject, `s :attr v`, inside the block of owner `X`, binds `X.s :attr`.
-- An entry with no subject, `:attr v`, binds the owner itself.
-- Inside blocks, entries use the light form, without `:=`. `:=` appears once per statement, at the left margin, so every binding statement is visible there.
-- Several subjects are a group, and the attributes distribute over it, as `/` distributes over a group: `(yes, paid) :label "yes"`.
-- **An entry has one attribute.** Several attributes of one subject go in braces: `retry { :arrow [/dashed/>], :bend [inner] }`. Side by side (`retry :arrow [/dashed/>] :bend [inner]`) is an error: a comma there would end the entry, and `:bend` would bind the owner instead. Right after `:=` the owner is the subject, so the comma suffices: `User :style := :label "users", :fill [muted]`.
+- An entry with a context, `s :attr v`, inside the block of owner `X`, describes `X.s`.
+- An entry with no context, `:attr v`, describes the owner itself. A context is left out only inside a block, where the owner is written on the line above; at the top level it is always written.
+- **The owner's descriptors come first,** before any entry that names a context: `Order :style { :caption "Orders", &node :fill [muted] }`. Otherwise it is a style warning.
+- Several contexts are a group, and the descriptors distribute over it, as `/` distributes over a group: `(yes, paid) :label "yes"`.
+- **An entry has one descriptor.** Several descriptors of one context go in braces: `retry { :arrow [/dashed/>], :bend [inner] }`. Side by side (`retry :arrow [/dashed/>] :bend [inner]`) is an error: a comma there would end the entry, and `:bend` would describe the owner instead.
+- **The three forms nest.** Inside braces, a naming binds a name in that record only, as a theme binds its tokens (`[ink] := [#dddddd]`), and a declaration declares inside the type being declared (`:Style :: { &node :fill :: :Color }`).
 
-**Items and lines.** Both statements take the same right side: items separated by commas, written on one line or in braces.
+**Items and lines.** Every statement takes the same right side: items separated by commas, written on one line or in braces.
 
-- **An item** is a bare term (`f g`, `+(f, g)+`), an entry (`#Done :terminal`, `+f { :label $P$ }`) or an equation (`f h == g k`). Which items each statement allows is checked after parsing: a declaration's items are terms, a definition's are entries and equations.
-- **`,` separates items everywhere, with one meaning:** side by side, and independent. In a declaration the items are graphs side by side (a coproduct), in a style bindings side by side, in a proof propositions side by side (a conjunction).
-- **The comma is required between items, and only between them.** `#Done :terminal f :label "x"` is an error, and so is a trailing comma: `(f, g,)`, `{ a :x, }`. Without the group, `yes, paid :label "yes"` is two items, and the bare `yes` binds nothing.
-- **A statement is one line. Braces let it span lines:** inside `{ }`, at any depth, a newline is a space. Outside them a newline ends the statement, even inside parentheses. Braces are optional for both kinds: `G :style := #Done :terminal, f :label "x"` needs none.
-- **There are no empty statements:** `G :: {}` and `G :style := {}` are errors.
-- **A group isolates what it holds,** in a term, a subject or a list of propositions alike: `+(f, g)`, `(yes, paid) :label`, `(f h == g k, +f :pullback)`. Groups and braces without a subject may nest freely to organise a block.
+- **An item** is a bare term (`f g`, `+(f, g)+`), an entry (`#Done :terminal`, `+f { :label $P$ }`), a naming or declaration inside braces, or an equation (`f h == g k`). Which items each statement allows is checked after parsing: a declaration's items are terms, a record's are entries, namings and declarations.
+- **`,` separates items everywhere, with one meaning:** side by side, and independent. In a declaration the items are graphs side by side (a coproduct), in a style descriptions side by side, in a proof propositions side by side (a conjunction).
+- **The comma is required between items, and only between them.** `#Done :terminal f :label "x"` is an error, and so is a trailing comma: `(f, g,)`, `{ a :x, }`. Without the group, `yes, paid :label "yes"` is two items, and the bare `yes` describes nothing.
+- **A statement is one line. Braces let it span lines:** inside `{ }`, at any depth, a newline is a space. Outside them a newline ends the statement, even inside parentheses.
+- **There are no empty statements:** `G :: {}` is an error. `{}` as a value is an empty record.
+- **A group isolates what it holds,** in a term, a context or a proposition alike: `+(f, g)`, `(yes, paid) :label`, `(f h == g k)`. Groups and braces without a context may nest freely to organise a block.
 
 **Bindings.**
 
-- **Each (subject, attribute) pair is bound once** within a layer. Binding `G.#Done :shape` twice is an error.
-- **Different subjects may overlap**, such as `&node` and `#Done`. The more specific subject wins (see Subjects and classes). Nothing is ever silently overridden.
-- **Before use.** Definitions are top-level statements, and come before their first use. A definition at a subject comes after the subject's declaration.
+- **Each (context, descriptor) pair is bound once** within a layer, and each (context, descriptor, key) for a table. Binding `G.#Done :shape` twice is an error.
+- **Different contexts may overlap**, such as `&node` and `#Done`. The more specific context wins (see Subjects and classes). Nothing is ever silently overridden.
+- **Before use.** Names are defined before their first use, and a description at a context comes after the context's declaration.
 
-**The header.** A diagram's kind (flow, category, schema, plain graph), its strictness and its boundary are naturally definitions at the zone, such as `Sq :kind := [category]`. Which header attributes exist, and what each changes, is open.
+**The header.** A diagram's kind (flow, category, schema, plain graph), its strictness and its boundary are naturally descriptions of the zone, such as `Sq :kind [category]`. Which header descriptors exist, and what each changes, is open.
 
 - **Kind** decides what the relations mean. In category mode `f g` also implies that the composite exists; in flow mode it is two steps. The kind also decides what is drawn: a flow draws no cells.
 - **Strictness** decides which warnings are errors, for example an unmatched `!` fork.
@@ -401,7 +405,7 @@ A database schema is a category presented by a graph and path equations, as in c
 | Referenced key | `:refs` on a foreign key and a key of its target: the key it references, if not the `:pk` |
 | Constraint  | A path equation                                                                           |
 
-- **A schema is a kind:** `Db :prove := { :kind [schema], … }`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
+- **A schema is a kind:** `Db :prove { :kind [schema], … }`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
 - **A foreign key is one edge.** It is both the relationship, used in paths and equations, and the column that stores it. The column's type is the type of the target's `:pk`, so it is never written and cannot mismatch. Name foreign keys as relationships (`parent`, `author`); the column takes its name from the edge (see the foreign-key row under Style layer, Diagrams).
 - **No forward references between tables.** Tables never refer to each other, and hold only their own columns; every foreign key lives in the diagram that joins them, declared after them. Circular foreign keys are two edges there, and a self-reference is a loop on one cluster.
 - **One scope for foreign keys.** Edge names are local to their diagram, so the foreign keys of one schema share its scope: two tables cannot both have an edge `author`. Choose another name and give the column its name with `:label`.
@@ -449,7 +453,7 @@ Ud  :: #A/f/#B/, #B/g/#A | f/α/g           // a cell on an undirected edge
 
 ```
 W :: +(f h, k, g)+ | k/α/g
-W :prove := { k == f h }
+W :prove { :axiom (k == f h) }
 ```
 
 Structure stays a plain graph at every level, and composites are facts stated by proofs, not shapes the syntax must express.
@@ -499,9 +503,10 @@ Numbers go in brackets too: `:width [2]`. A record is written in braces, `{ … 
 
 A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one. Its glyphs are ASCII punctuation (less `/`, `!`, `#`, `[` and `]`, which a bracket uses itself) and the Unicode blocks of arrows, mathematical operators and geometric symbols: U+2190–23FF, U+25A0–27FF, U+2900–2BFF. Never a space, a control, a combining mark or a letter of any script; an allowlist, so nothing new in Unicode slips in. A **colour** is `#` and 3, 4, 6 or 8 hex digits, with alpha or without: without, it is opaque.
 
-**A bracket with slashes is a sequence.** What is written is a tuple of its elements' types: `[>/solid/>>]` is a tuple of a symbol, a label and a symbol, and `[1/1.5/2]` a tuple of three numbers. A tuple whose elements share a type is also a list of that type, and a single value is a list of one: `:theme [dark]`, `:theme [dark/compact]`. `[]` is the empty list.
+**A bracket has one element more than it has slashes, and an element with nothing in it is nil.** One element is the value itself: `[red]`, `[2.5]`, `[#f00]`; there are no one-element lists. Two or more are a tuple of their types: `[>/solid/>>]` is a tuple of a symbol, a label and a symbol, `[1/1.5/2]` a tuple of three numbers. A tuple whose elements share a type is also a list of that type, and a single value is a list of one: `:theme [dark]`, `:theme [dark/compact]`.
 
-- **An empty slot is nothing there,** in a tuple or a list: `[/solid/>]` has no tail, `[////1/2]` six elements, four of them empty. It is the only "none", and only inside a sequence; alone, each type has its own nothing (`:shape [none]`, `:label ""`).
+- **Nil is nothing written:** `[]` is one empty element, nil; `[/]` is two nils; `[/solid/>]` has a nil tail; `[////1/2]` is six elements, four of them nil. Nothing is marked by its spelling, never by a name. Text has its own nothing, `""`.
+- **Nil fits only where a type admits it** (`:Union.(:Color, :Nil)`), and every list admits it, as its "no elements": `:theme []` chooses no themes.
 - **Sequences do not nest:** a bracket is one token.
 
 The value's type must be the one the attribute expects: `:ink` takes a colour, `:arrow` an arrow. `:shape [red]` is a type error ("a `:Color` where a `:Shape` is expected").
@@ -533,12 +538,14 @@ Every value has a type, and so does every name. The kinds of type are fixed by t
 | `:Tuple.(T, U, …)` | `[a/b/c]`, one element of each type                          |
 | `:List.(T)`        | `[a/b/c]`, any number of elements, all of type T             |
 | `:Union.(T, U, …)` | a value of any of its types                                  |
-| `:Record`          | `{ … }`                                                      |
+| `:Nil`             | `[]`, and an empty slot: nil                                 |
+| a record type      | `{ … }`, holding its descriptors: `:Style`, `:Proof`, `:Place` |
+| `:Table.(T)`       | for descriptors only: a key, then a value of type T          |
 | a label type       | the labels it declares: `:Shape :: [circle], [box]`          |
 
-- **Types are `:UpperCamel`,** functions (attributes) `:lowercase-kebab`, named values and labels `[lowercase-kebab]`.
-- **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, `{ … }`) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
-- **Aliases** give a type a second name: `:Length := :Number`, `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`. Type parameters are written with `.` and a group, as qualification is.
+- **Types are `:UpperCamel`,** descriptors (attributes) `:lowercase-kebab`, named values and labels `[lowercase-kebab]`.
+- **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, and for `{ … }` the record type its descriptors belong to) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
+- **Aliases** give a type a second name: `:Length := :Number`, `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`. Type parameters are written with `.` and a group, as qualification is.
 - **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`.
 - **Numbers are exact decimals:** fAB never computes with them, so `0.1` stays `0.1` from the source to the renderer. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 digits from the first nonzero one. Numbers are normalised, and printed so: `[1.50]` is `1.5`, `[007]` is `7`.
 
@@ -549,10 +556,12 @@ Lengths are numbers in **em**, relative to the theme's text size. Angles are in 
 ### Definitions
 
 - **Values:** `[red] := [#ff0000]`, or with its type, `:Color [red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]` has red's type.
-- **Records:** `{ … }`, entries keyed by subjects, attributes and labels. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`; a label binds a value of its own type, `[ink] [#dddddd]`.
-- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle's keys are attributes. It applies where all its contents apply: `:terminal` applies to nodes.
-- **Themes:** `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named record of subjects and tokens, chosen with `:theme`. Its subjects are classes, since it applies to any diagram; an attribute with no subject binds the diagram it is applied to.
-- **Signatures:** `(&node, &zone) :fill :: :Color` declares an attribute: the classes it applies to, and the type it takes. Anywhere else it does not apply. A class includes the classes inside it: what applies to `&node` applies to `&choice`.
+- **Record types** are declared by their descriptors, as a label type is by its labels: `:Style :: { (&node, &zone) :fill :: :Union.(:Color, :Nil), … }`. **A descriptor belongs to one record type,** so a record's type is read from its descriptors: `{ :fill [red] }` is a `:Style`, and a descriptor of another type in it does not apply. `{}` fits any record type. A descriptor declared outside any record type (`&zone :style :: :Style`) describes at the top level only.
+- **Records:** `{ … }`, holding descriptions, namings and, in a type's declaration, signatures. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`. A naming inside a record binds a name in that record only: `[ink] := [#dddddd]` binds a label to a value of its own type.
+- **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle holds descriptors only, and joins the record type of its contents. It applies where all its contents apply: `:terminal` applies to nodes.
+- **Themes:** `:Style [dark] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named style, of contexts and tokens, chosen with `:theme`. Its contexts are classes, since it applies to any diagram; a descriptor with no context describes the diagram it is applied to.
+- **Tables:** a descriptor of type `:Table.(T)` takes a key, then a value: `Repo :prove { :lemma.[merge] (fix merge == login session merge') }`. A binding is (context, descriptor, key), once; keys are required, written with `.`, and local to their descriptor.
+- **Signatures:** `(&node, &zone) :fill :: :Color` declares a descriptor: the classes it applies to, and the type it takes. Anywhere else it does not apply. A class includes the classes inside it: what applies to `&node` applies to `&choice`.
 - **Names** are defined once, and before their first use.
 
 ### The prelude
@@ -563,15 +572,15 @@ It has no powers a program lacks. Its names come first, so defining one again is
 
 ## Subjects and classes
 
-The subjects of definitions are the things a style, a proof or a placement talks about.
+The contexts of descriptions are the things a style, a proof or a placement talks about.
 
 | Subject                      | Written                            | Example                                              |
 | ---------------------------- | ---------------------------------- | ---------------------------------------------------- |
-| a diagram                    | its name                           | `G :style := { … }`                                  |
-| an edge or a cell            | its name, qualified by its diagram | `G.f :stroke := [red]`                               |
-| a node, by its canonical end | `+f`, `f+`                         | `G.+f :label := $P$`                                 |
-| a named node                 | `#Name`                            | `G.#Done :shape := [box]`                            |
-| a class                      | `&name`                            | `&node :shape := [circle]`, `G.&edge :pen := [thin]` |
+| a diagram                    | its name                           | `G :style { … }`                                     |
+| an edge or a cell            | its name, qualified by its diagram | `G.f :stroke [red]`                                  |
+| a node, by its canonical end | `+f`, `f+`                         | `G.+f :label $P$`                                    |
+| a named node                 | `#Name`                            | `G.#Done :shape [box]`                               |
+| a class                      | `&name`                            | `&node :shape [circle]`, `G.&edge :pen [thin]`      |
 | several subjects             | a group                            | `(yes, paid) :label "yes"`                           |
 
 **Canonical references.** A node is addressed only through its canonical reference: its name if it has one (`#A`, `@`), and otherwise the first end that created it, in reading order. In `f g`, the middle node is `f+`, never `+g`. In `+(f h, g k)+`, the canonical references are `+f` (the pinched start), `f+`, `g+` and `f h`'s end `h+` (the pinched end); `+g`, `+h`, `+k` and `k+` are rejected.
@@ -594,18 +603,20 @@ The subjects of definitions are the things a style, a proof or a placement talks
 3. a class inside a diagram (`G.&node`);
 4. a single element (`G.+f`, `G.#Done`, `G.f`).
 
+Classes of one rank apply in the order they are defined, the later winning, and errors come last, so nothing paints over them: `&node`, then the kinds (`&plain`, `&choice`, `&parallel`, `&start`, `&end`), then `&canonical`, then `&hole`. Marks on issues are applied after everything.
+
 Specificity orders bindings within a layer of style; layers compose on top (see Style layer, Themes).
 
 **Each diagram styles itself.** When C references A, A is drawn inside C as a cluster, and keeps its own style. C styles only C's own subjects, including C's edges that reach into A.
 
 ## Style layer
 
-`G :style := { … }` gives everything drawn in G its appearance. It never changes the graph, never refers to one element from another, and never names a direction on the page: everything is relative to the element, its text, or the diagram's own shape. A diagram can flow towards any cardinal point and every style still means the same.
+`G :style { … }` gives everything drawn in G its appearance. It never changes the graph, never refers to one element from another, and never names a direction on the page: everything is relative to the element, its text, or the diagram's own shape. A diagram can flow towards any cardinal point and every style still means the same.
 
 ```
 G :: f g
 
-G :style := {
+G :style {
   f  { :arrow [epi], :stroke [#c0392b] },
   +f {
     :label $\mathbb{R}$,
@@ -634,11 +645,11 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** diagrams.
 
 | Attribute           | Values                                                                                                                                                                                          | Default                           |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `:shape`            | `[none]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind                           |
+| `:shape`            | `[]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind                           |
 | `:fill`             | colour                                                                                                                                                                                          | none                              |
 | `:stroke`           | colour                                                                                                                                                                                          | `[ink]`                           |
 | `:pen`              | `[thin]` `[normal]` `[thick]`                                                                                                                                                                   | `[normal]`                        |
-| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[none]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
+| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
 | `:width`, `:height` | length, as minimums                                                                                                                                                                             | fitted to the label               |
 | `:padding`          | length                                                                                                                                                                                          | theme                             |
 | `:align`            | `[start]` `[center]` `[end]`: the start of a line of text, whatever the script                                                                                                                  | `[center]`                        |
@@ -669,7 +680,7 @@ An edge has no `:line`: its line is part of `:arrow`.
 | `:pen`, `:line`, `:padding` | as for nodes                                         |                                                     |
 | `:caption`                  | text, math                                           | none                                                |
 | `:theme`                    | theme names, applied left to right: `[dark/compact]` | none: the base theme alone                          |
-| `:marks`                    | `[all]` `[none]`                                     | `[all]`: draw marks from the proof layer, such as ⌟ |
+| `:marks`                    | `[all]` `[]`                                     | `[all]`: draw marks from the proof layer, such as ⌟ |
 | `:cross`                    | `[gap]` `[plain]`                                    | `[gap]`                                             |
 
 A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit. `table` draws the edges leaving `@` as rows inside the frame, each showing the edge's label and its target.
@@ -688,9 +699,9 @@ A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are a
 
 ### Arrows
 
-An arrow is a tuple of three fields, `[tail/line/head]`: `:Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)`. The ends are symbols, the line is a word. Any field may be empty, meaning nothing there: `[/solid/>]` has no tail, `[>//>]` no line. The arrow only draws: the edge's direction always comes from the relations.
+An arrow is a tuple of three fields, `[tail/line/head]`: `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`. The ends are symbols, the line is a word. Any field may be empty, nil, meaning nothing there, but not all three: `[//]` is an error, since an edge that draws nothing is hidden with `:hide`, never emptied. `[/solid/>]` has no tail, `[>//>]` no line. The arrow only draws: the edge's direction always comes from the relations.
 
-**Lines** use the words of `:line`, plus `triple`: `solid`, `dashed`, `dotted`, `wavy`, `double` (2-cells, ⇒), `triple` (3-cells, ⇛), `none`. A `!` suffix strikes the line: `[/solid!/>]` is ↛, "does not".
+**Lines** use the words of `:line`, plus `triple`: `solid`, `dashed`, `dotted`, `wavy`, `double` (2-cells, ⇒), `triple` (3-cells, ⇛); no line is an empty field. A `!` suffix strikes the line: `[/solid!/>]` is ↛, "does not".
 
 **Ends are read as a picture, left to right.** Each end is written as it looks when reading from tail to head, and any glyph may go at either end: `[/solid/<]` puts a backward-pointing head at the target end, `[</solid/>]` points both ways, `[>/solid/>]` is a mono ↣.
 
@@ -759,20 +770,20 @@ The prelude names the common arrows: `[mono]`, `[epi]`, `[incl]`, `[mapsto]`, `[
 
 ### Themes
 
-A theme is a named record of subjects and tokens (see Values and definitions): `:Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }`. Styles compose in layers, the later winning wherever both set a value:
+A theme is a named style, of contexts and tokens (see Values and definitions): `:Style [dark] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }`. Styles compose in layers, the later winning wherever both set a value:
 
 ```
 computed  <  [base]  <  themes, left to right  <  the program's own bindings
 ```
 
-- **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it.
+- **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it. What can be nothing admits nil, so a later layer can take a value away: `G :fill []`.
 - **"Each binding once" holds within a layer;** across layers, the later one wins, deliberately and in order. A flag set by one layer is turned off by a later one with `!`: `f :hide!`.
-- **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme := [dark/compact]`.
-- **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some: `[ink] [#dddddd]`.
+- **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme [dark/compact]`. A theme may include others, applied before its own bindings: `:Style [night] := { :theme [dark], [accent] := [#58a6ff] }`.
+- **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some: `[ink] := [#dddddd]`. Any label may be rebound so, one step: `[circle] := [box]` draws circles as boxes.
 
 ## Place layer
 
-`G :place := { … }` says where things go. Unlike style, it is relational by nature: placement relates one element to another. Its vocabulary is open, and will be designed with fAB's own layout engine. What is settled:
+`G :place { … }` says where things go. Unlike style, it is relational by nature: placement relates one element to another. Its vocabulary is open, and will be designed with fAB's own layout engine. What is settled:
 
 - **Direction-agnostic.** The overall flow is given by a cardinal point. Placement within it uses relative ranks, along the flow and across it, without the words vertical and horizontal.
 - **Drawing order is source order.** Without anything in `:place`, branches are drawn in the order they are written, and what is written later is drawn on top. So in `#X/(g1, f, g2)`, f is drawn between g1 and g2.
@@ -781,31 +792,41 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 
 ## Proof layer
 
-`G :prove := { … }` states what holds in the diagram. Its items are propositions of two forms, equations and properties, side by side: the block is their conjunction.
+`G :prove { … }` states what holds in the diagram. A diagram presents a theory: the cells it declares, the laws of its kind, and its **axioms**. The proof gives that theory its axioms, which fAB takes as stated, and its **lemmas**, which fAB checks against it. Axioms are the standard way to give a structure its features (this square commutes, this column is a key); lemmas are questions about the structure built (is this a pushout?), and most programs need none.
 
 ```
 Sq :: +(f h, g k)+
 
-Sq :prove := {
-  f h == g k,        // path == path: the square commutes
-  +f :pullback       // subject :property
+Sq :prove {
+  :kind [category],
+  :axiom (f h == g k),                // path == path: we say the square commutes
+  :lemma.[corner] (+f :pullback)      // fAB confirms it: context :property
 }
 ```
 
-- **Chains of equations** state each step: `f h == g k == d` is `f h == g k` and `g k == d`.
+- **A proof is a record of type `:Proof`:** `:kind` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `:Table.(:Proposition)`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
+- **A proposition is the fifth shape of a value,** `( … )`, a record type whose descriptors are properties: `:pullback`, `:pushout`, `:card`, `:pk` and the rest are declared in `:Proposition :: { … }`, with ordinary types. Equations stand among them, and a comma means *and*: `:axiom (&node.id :pk, &edge :card [0..*/1])`.
+- **How each is checked:**
+
+| | Ill-formed | Refuted | Undecidable |
+| --- | --- | --- | --- |
+| `:axiom` | error | error: inconsistent with the kind or other axioms, where decidable | fine |
+| `:lemma` | error | error | warning; a pass acknowledges it |
+
+- **Axioms have no order; a lemma may use every axiom and the lemmas before it.**
+- **Chains of equations** state each step: `(f h == g k == d)` is `f h == g k` and `g k == d`.
 - **One level, no precedence.** The operators between chains, `==` and `~=` today and any the layer adds later, share one level and read left to right. A run may repeat one operator; different operators need a group: `(f == g) ~= h`, never `f == g ~= h`.
-- **Groups organise.** A proposition, or several, may be grouped: `(f h == g k, +f :pullback)`. The group changes nothing.
 
 - **Equations** relate two paths, written with juxtaposition in diagrammatic order. Both sides must be existing paths with the same start and end. Equations are not settled: they are written `==`, and `~=` is reserved for a weaker relation whose meaning is open (see Open questions).
 - **Identities are equations.** `+f` denotes the identity on dom(f), so `f == +f` says that the endomorphism `f/f` is an identity. No keyword is needed.
-- **Universal properties** attach to a node. `+f :pullback` takes the commuting square that starts at `+f` as its cone. If no such square, or more than one, starts there, the statement is rejected and the square must be given explicitly.
-- **Pushouts mirror pullbacks.** `#M :pushout` takes the commuting square that ends at `#M` as its cocone, with the same rule.
-- **States, not proofs.** The checker verifies that every statement is well formed. Whether an arbitrary equation is true cannot be decided in general (commutation is a word problem), so the layer states facts; consequences and what is drawn for them are open.
-- **Composites.** Naming a composite at level 1 and stating it here (`k == f h`) is how cells get composite sources (see Levels).
+- **Universal properties** attach to a node. `(+f :pullback)` takes the commuting square that starts at `+f` as its cone. If no such square, or more than one, starts there, the statement is rejected and the square must be given explicitly.
+- **Pushouts mirror pullbacks.** `(#M :pushout)` takes the commuting square that ends at `#M` as its cocone, with the same rule.
+- **Checking is partial.** Whether an arbitrary equation follows cannot be decided in general (commutation is a word problem), so an undecidable lemma is a warning, never silence; what a confirmed lemma constructs, and how it is drawn, is open.
+- **Composites.** Naming a composite at level 1 and stating it as an axiom (`:axiom (k == f h)`) is how cells get composite sources (see Levels).
 
 ### Schema statements
 
-In schemas, the proof layer states keys and constraints. Properties without a value are flags.
+In schemas, the proof layer states keys and constraints, as axioms: they are properties, written inside a proposition, `:axiom (&node.id :pk)`. Properties without a value are flags.
 
 | Statement        | Says                                                             |
 | ---------------- | ---------------------------------------------------------------- |
@@ -850,14 +871,16 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Statement spanning lines           | `Db :: (` with `)` on a later line           | A statement is one line; braces let it span lines                |
 | Missing comma                      | `#Done :terminal f :label "x"`               | Items are separated by commas                                    |
 | Trailing comma                     | `(f, g,)`, `{ a :x, }`                       | A comma stands between items only                                |
-| Empty braces                       | `G :: {}`, `G :style := {}`                  | There are no empty declarations or definitions                   |
-| Bare term in a definition          | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`               |
+| Empty braces                       | `G :: {}`                                    | There are no empty declarations; `{}` is only a value            |
+| Bare term in a record              | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`               |
 | Entry or equation in a diagram's declaration | `G :: f (g :label "x")`            | A diagram's declaration holds terms                              |
-| Class in a diagram's declaration   | `G :: &node f`                               | Classes are subjects of definitions and signatures only          |
-| Levels in a definition             | `:x := a \| b`                               | `\|` separates the levels of a declaration                       |
+| Class in a diagram's declaration   | `G :: &node f`                               | Classes are contexts of descriptions and signatures only         |
+| Levels in a naming                 | `:x := a \| b`                               | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
-| Definition head of no form         | `f g := [red]`, `G := [red]`                 | A definition's left side is `[name]`, `:attr` or `subject :attr` |
+| Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]`, `:Type` or `:descriptor` |
+| Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
+| Warning: owner described after a part | `G :style { &node :fill [red], :caption "x" }` | The owner's descriptors come first in a block                 |
 | Warning: chain broken across lines | `f g` then `h k` on the next line, in braces | Write `,` for two items, or group the chains                     |
 
 ### Relations
@@ -923,7 +946,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Name defined twice                  | `[red] := …` twice, `[epi] := …`         | Each name is defined once; the prelude's come first                                  |
 | Label in two types                  | `:Bow :: [outer]` after `:Facing`        | A label belongs to one type; shared words get a type of their own                    |
 | Not a type                          | `:Colour [x] := …`                       | Types are declared or aliased before their use                                       |
-| Contract broken                     | `:Color [warn] := [circle]`              | A type written in a definition is checked                                            |
+| Contract broken                     | `:Color [warn] := [circle]`              | A type written in a naming is checked                                                |
 | Wrong type parameters               | `:List`, `:Color.(:Text)`, `:List.(:A, :B)` | `:Tuple` and `:Union` take one type or more, `:List` one; other types none          |
 | Not a label                         | `:Shape :: [#f00]`, `[a/b]`, `[x!]`      | A label is one name or one symbol, alone in its bracket                              |
 | Labels on structure                 | `:Arrow :: [x]`                          | Labels are single values; tuples, lists, unions, records and flags take none          |
@@ -938,16 +961,17 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Symbol malformed                    | `[>a]`, `[OX]`, `[>2]`, a space          | Glyphs from the allowed blocks, with at most one capital letter                     |
 | `!` misplaced                       | `[!]`, `[solid!!]`, `[so!lid]`           | `!` comes last in an element, once, after something                                  |
 | Value in a diagram's declaration    | `G :: +(g1, [f], g2)`                    | Brackets are values, never structure                                                 |
-| Type in a diagram's declaration     | `G :: f :Color`                          | Types are declared on their own and used in definitions and signatures               |
+| Type in a diagram's declaration     | `G :: f :Color`                          | Types are declared on their own and used in namings and signatures                   |
 | Wrong type                          | `:shape [red]`, `:theme [terminal]`      | A `:Color` where a `:Shape` is expected                                              |
 | Does not apply                      | `f :shape [box]`                         | An attribute applies to the classes its signature names                              |
 | Value given to a flag, value missing | `:hide [on]`, `:shape`                  | Flags take no value; other attributes need one                                       |
 | Only a flag inverts                 | `:fill!`, `:terminal!`                   | `!` after an attribute turns a flag off                                              |
 | Key of the wrong type               | `[ink] [circle]` in a record             | A label binds a value of its own type                                                |
-| Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; its keys are attributes                     |
-| Element in a theme                  | `:Record [x] := { G.f :pen [thin] }`     | A theme applies to any diagram; its subjects are classes                             |
-| Binding made twice in a layer       | `#Done :shape` twice                     | Each (subject, attribute) pair is bound once                                         |
-| Definition at an undeclared subject | `G :style := …` before `G ::`            | A definition comes after what it talks about                                         |
+| Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; it holds descriptors only                   |
+| Element in a theme                  | `:Style [x] := { G.f :pen [thin] }`      | A theme applies to any diagram; its contexts are classes                             |
+| Binding made twice in a layer       | `#Done :shape` twice                     | Each (context, descriptor) pair is bound once, and each key of a table               |
+| Key missing, key not taken          | `:lemma (f == g)`, `:fill.[a] [red]`     | A table's descriptor takes a key, then a value; other descriptors take no key        |
+| Description at an undeclared context | `G :style { … }` before `G ::`         | A description comes after what it talks about                                        |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
 | Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |
 
@@ -962,10 +986,9 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Relational value                       | a style value that names `g`                               | Placement belongs in `:place`                                |
 | Non-canonical reference                | `+g :label …` in `f g`                                     | Label the node through `f+`, the end that created it         |
 | Another diagram's subject              | `A.+f` styled from C                                       | Each diagram styles itself                                   |
-| Arrow without a line                   | `[//>]`                                                    | An arrow needs a line, such as `solid`                       |
+| Empty arrow                            | `[//]`                                                     | An arrow draws something; to draw no edge, `:hide` it        |
 | Unknown line word or end               | `[/zigzag/>]`, `[/solid/%]`                                | Lines are words from a fixed list; ends from the glyph table |
-| `!` on an end without a side           | `[/solid/>!]`                                              | Only hooks `?` and harpoons `^` have a side                  |
-| `!` on a number without a side         | `:size [2!]`                                               | Only `:bend` angles have a side                              |
+| Not invertible                         | `[/solid/>!]`, `:size [2!]`                                | Only hooks `?`, harpoons `^` and `:bend` angles have a side  |
 | Head on an undirected edge             | `f/` with `:arrow [/solid/>]`                              | The drawing would show a direction the relations don't have  |
 
 ### Named nodes and schemas
@@ -1041,7 +1064,7 @@ Order :: {
   )
 }
 
-Order :style := {
+Order :style {
   #Received  :label "Order received",
   validate+  :label "Valid?",
   charge+    :label "Payment accepted?",
@@ -1085,23 +1108,17 @@ Db :: {
   Tagging/(doc/Document, tag/Tag)
 }
 
-Db :prove := {
+Db :prove {
   :kind [schema],
 
-  &node.id :pk,
-  &edge :card [0..*/1],
-
-  User.(email, nick)! :uk,
-  Tag.label :uk,
-  (user, org)! :uk,
-  (doc, tag)! :uk,
-
-  parent { :nullable, :card [0..*/0..1] },
-  parent document == document         // a reply is on the same document as its parent
+  :axiom (&node.id :pk, &edge :card [0..*/1]),
+  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
+  :axiom (parent { :nullable, :card [0..*/0..1] }),
+  :axiom (parent document == document)    // a reply is on the same document as its parent
 }
 
-Db :style := writer :label "author_id"
-User :style := :label "users", :fill [muted]
+Db :style { writer :label "author_id" }
+User :style { :label "users", :fill [muted] }
 ```
 
 - Every foreign key goes from the table holding it to the table it references, so foreign keys compose like functions, and `parent document == document` is a real path equation: both sides go from Comment to Document.
@@ -1123,7 +1140,7 @@ Repo :: {
 
 :ref := :shape [round], :fill [muted]
 
-Repo :style := {
+Repo :style {
   &node :shape [point],
   #Head    { :ref, :label "main" },
   #Feature { :ref, :label "feature/auth" },
@@ -1141,9 +1158,10 @@ Repo :style := {
   spike   :label "2c9f try cache"
 }
 
-Repo :prove := {
-  fix merge == login session merge',   // both paths from the fork reach the same state
-  #Merged :pushout                      // the merge is clean: the least common state
+Repo :prove {
+  :kind [category],
+  :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
+  :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
 }
 ```
 
@@ -1151,7 +1169,7 @@ Repo :prove := {
 - `readme/#Fork +(fix/#Main, login session/#Feature)` is a branch: the pinch fans out of Fork, main gets fix, and feature/auth gets two commits.
 - `(#Main/merge, #Feature/merge')/#Merged` is the merge. A merge commit has two parents, so it has two legs: `merge` from main and `merge'` from the feature, drawn dashed as the second parent link. The repeated names glue the legs onto the branch heads, and `/` distributes `#Merged` over both.
 - `:ref` is a bundle: states that branches and tags name are drawn round and filled, the rest as points.
-- The proof states that the merge square commutes and that `#Merged` is its pushout. A merge conflict is exactly the case where no such pushout exists, so a checker could refuse the second statement.
+- The proof states, as an axiom, that the merge square commutes, and asks, as a lemma, whether `#Merged` is its pushout. A merge conflict is exactly the case where no such pushout exists, so the checker would refute the lemma.
 
 ## Mathematical reading
 
@@ -1226,7 +1244,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Coming.** Decided, and due in a later revision:
 
 - **Recovery item by item inside braces.** Inside `{ }` the parser recovers at each `,`, so a statement with a syntax error there could still draw its good items, with the broken one as a hole (`G :: { f /g, h }` draws `f` and `h`). Until then the whole statement draws its placeholder. What a hole attached to nothing means is to be settled with it.
-- **Restrictions and passes** (`statements.md` §17). Declarations describe every structure with a reading; a proof narrows it. `G :prove := { :kind [cd], … }` states what kind of graph it is (an entry with no subject binds the owner, G): what is drawn, which proofs may be posited, and which structures become findings, classed by reason: `&refutable` (contradicts the kind, an error) and `&undecidable` (has no check there, a warning), each with narrower classes per structure (`&undirected_cell`). `:pass` acknowledges a finding, by element or by class, with an optional reason: `α :pass "a relation, not a morphism"`. A pass reaches only findings, never a language error; it leaves a note and never changes the exit code, and a pass that matches nothing warns. The header may state `:kind` too, under the same name; the proof's wins. A diagram with no kind is a plain graph: it draws everything and raises no findings.
+- **Restrictions and passes** (`statements.md` §17). Declarations describe every structure with a reading; a proof narrows it. `G :prove { :kind [cd], … }` states what kind of graph it is (an entry with no context describes the owner, G): what is drawn, which proofs may be posited, and which structures become findings, classed by reason: `&refutable` (contradicts the kind, an error) and `&undecidable` (has no check there, a warning), each with narrower classes per structure (`&undirected_cell`). `:pass` acknowledges a finding, by element or by class, with an optional reason: `α :pass "a relation, not a morphism"`. A pass reaches only findings, never a language error; it leaves a note and never changes the exit code, and a pass that matches nothing warns. The header may state `:kind` too, under the same name; the proof's wins. A diagram with no kind is a plain graph: it draws everything and raises no findings.
 
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 

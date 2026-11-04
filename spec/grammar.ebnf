@@ -12,14 +12,19 @@ program
     = [ statement ] { EOL [ statement ] } EOF
     ;
 
-# DECL heads: a zone (G :: f g), a type (:Shape :: [circle], [box]), or
-# subjects and an attribute (a signature: (&node, &zone) :fill :: :Color).
+# Three forms (statements.md §22): a declaration (::), a naming (:=) and a
+# description, which has no operator.
+# DECL heads: a zone (G :: f g), a type (:Shape :: [circle], [box];
+# :Style :: { … }), or contexts and a descriptor (a signature:
+# (&node, &zone) :fill :: :Color).
 # DEFN heads: a value ([red]), a typed value (:Color [red]), a type (an
-# alias, :Length := :Number), an attribute (a bundle) or subject :attr.
-# The head is read as an item: :Color [red] is a chain of a type and a
+# alias, :Length := :Number) or a descriptor (a bundle).
+# A description is an entry: G :style { … }, G.f :arrow [epi], G { … }.
+# The head is read as a part: :Color [red] is a chain of a type and a
 # value, (&node) :fill an entry.
 statement
-    = item ( DECL | DEFN ) ( levels | block )
+    = part ( DECL | DEFN ) ( levels | block )
+    | part
     ;
 
 block
@@ -34,7 +39,14 @@ items
     = item { COMMA item }
     ;
 
+# Inside braces the three forms nest: a naming binds a name in its record
+# ([ink] := [#dddddd]), a declaration declares in the type being declared
+# (&node :fill :: :Color, inside :Style :: { … }).
 item
+    = part [ ( DECL | DEFN ) part ]
+    ;
+
+part
     = [ chain ] ( attr | block )
     | chain { operator chain }
     ;
@@ -44,9 +56,11 @@ operator
     | CONG
     ;
 
-# ! touching an attribute turns a flag off: f :hide!.
+# A table's descriptor takes a key: :lemma.[merge] ( … ). ! touching a
+# descriptor turns a flag off: f :hide!. A group after a descriptor is a
+# proposition, the fifth shape of a value: :lemma.[a] (f h == g k).
 attr
-    = ATTR_ID [ ~ BANG ] [ literal ]
+    = ATTR_ID [ ~ DOT ~ VAL ] [ ~ BANG ] [ literal | L_PAR items R_PAR ]
     ;
 
 literal
@@ -96,8 +110,7 @@ marker
 # A ? or ! that touches no atom on its right is a node of that kind: the
 # f/? in f/? +(a, b). Touching an atom, it is a prefix marker.
 # A type is a primary so that its parameters are a juxtafix:
-# :Tuple.(:Head, :Line, :Head). A record entry keyed by a label is a chain
-# of two literals: [ink] [#dddddd].
+# :Tuple.(:Tip, :Line, :Tip).
 primary
     = EDGE_ID
     | NODE_ID
@@ -124,7 +137,8 @@ primary
 #   STR       "…"                  one line, \ escapes
 #   MATH      $…$                  one line, \ escapes
 #   VAL       [red], [/solid/>], []  one opaque token; no whitespace, [ or ];
-#                                  / separates its elements, read later
+#                                  / separates its elements, read later;
+#                                  an empty element is nil: [] is nil
 #
 #   SLASH /   PLUS +   QUID ?   BANG !   STAR *   AT @   DOT .   BAR |
 #   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )
