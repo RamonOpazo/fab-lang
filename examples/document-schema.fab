@@ -17,20 +17,14 @@ Db :: {
   Tagging/(doc/Document, tag/Tag)
 }
 
-Db :prove := {
+Db :prove {
   :kind [schema],
 
-  &node.id :pk,
-  &edge :card [0..*/1],
-
-  User.(email, nick)! :uk,
-  Tag.label :uk,
-  (user, org)! :uk,
-  (doc, tag)! :uk,
-
-  parent { :nullable, :card [0..*/0..1] },
-  parent document == document         // a reply is on the same document as its parent
+  :axiom (&node.id :pk, &edge :card [0..*/1]),
+  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
+  :axiom (parent { :nullable, :card [0..*/0..1] }),
+  :axiom (parent document == document)    // a reply is on the same document as its parent
 }
 
-Db :style := writer :label "author_id"
-User :style := :label "users", :fill [muted]
+Db :style { writer :label "author_id" }
+User :style { :label "users", :fill [muted] }

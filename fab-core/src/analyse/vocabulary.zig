@@ -154,11 +154,11 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
     // The name: one name, alone in its bracket.
     var reader = value.read(cst.tokenText(name_token));
     const element = (reader.next() catch return) orelse {
-        try a.fail(.bad_definition_head, name_token);
+        try a.fail(.bad_naming_head, name_token);
         return;
     };
     if (element.kind != .name or element.inverted or (reader.next() catch return) != null) {
-        try a.fail(.bad_definition_head, name_token);
+        try a.fail(.bad_naming_head, name_token);
         return;
     }
     try define(a, element.text, .{ .type = contract orelse actual, .token = name_token, .body = body });

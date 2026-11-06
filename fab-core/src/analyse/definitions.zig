@@ -1,8 +1,10 @@
-//! `head := body`. The head has one of five forms; the body holds entries,
-//! operations and, alone, a literal or a type. Aliases and named values are
-//! read into the environment (`vocabulary.zig`), themes and bundles checked
-//! as records (`records.zig`); the layers wait for plan steps 9 and 11, so
-//! they are reported as unsupported once checked.
+//! Namings, `head := body`, and descriptions, `context :descriptor value`
+//! (statements.md §22.1). A naming's head has one of four forms; its body
+//! holds descriptions, namings, equations and, alone, a literal or a type.
+//! Aliases and named values are read into the environment
+//! (`vocabulary.zig`), themes and bundles checked as records
+//! (`records.zig`). Descriptions are the layers, which wait for plan steps 9
+//! and 11, so they are reported as unsupported once checked.
 //!
 //! Also the heads of the declarations that make vocabulary, not structure:
 //! a type's labels and a function's signature (statements.md §21).
@@ -16,13 +18,13 @@ const records = @import("records.zig");
 
 const Node = Cst.Node;
 
-pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
+pub fn naming(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     // A head of no known form says nothing of what its body holds, so the
     // body's items are not checked: their errors would be guesses. Its
     // brackets are, since a bracket's shape doesn't depend on the head.
     if (!isHead(cst, head)) {
-        try a.fail(.bad_definition_head, cst.firstToken(head));
+        try a.fail(.bad_naming_head, cst.firstToken(head));
         try brackets(a, body);
         return;
     }
@@ -30,8 +32,17 @@ pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.I
     // `:Side := :Union.(…)`: an alias, whose body is a type expression.
     if (isLeafOf(cst, head, .type_id)) return vocabulary.alias(a, head, body);
 
+    // `G :style := { … }`: a description, which takes no operator. What it
+    // would have meant is plain, so its body is checked as one.
+    if (cst.tag(head) == .entry and cst.subject(head) != null) {
+        try a.fail(.description_with_operator, cst.mainToken(node));
+        try brackets(a, body);
+        if (!isLiteral(cst, body)) try entries(a, body);
+        return;
+    }
+
     if (cst.tag(body) == .levels) {
-        try a.fail(.levels_in_definition, cst.mainToken(body));
+        try a.fail(.levels_in_naming, cst.mainToken(body));
     } else if (!isLiteral(cst, body)) {
         try entries(a, body);
     }
@@ -45,19 +56,20 @@ pub fn definition(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.I
         if (cst.tag(body) == .block) try records.theme(a, body);
         return;
     }
-    // `:terminal := { … }`: a bundle.
-    if (bundleName(cst, head)) |name| return records.bundle(a, name, body);
-    // A layer, `G :style := { … }`, waits for steps 9 and 11.
-    try a.fail(.unsupported_definition, cst.mainToken(node));
+    // `:terminal := { … }`: a bundle, the only head left.
+    try records.bundle(a, if (cst.tag(head) == .attr) head else cst.children(head)[0], body);
 }
 
-/// The function a bundle defines: a head with no subject.
-fn bundleName(cst: *const Cst, head: Node.Index) ?Node.Index {
-    return switch (cst.tag(head)) {
-        .attr => head,
-        .entry => if (cst.subject(head) == null) cst.children(head)[0] else null,
-        else => null,
-    };
+/// `G :style { … }`, `G.f :arrow [epi]`: a layer's description. Checked for
+/// shape; what it binds is applied from step 9 on. Returns whether it has a
+/// context, without which it describes nothing.
+pub fn description(a: *Analyser, entry: Node.Index) error{OutOfMemory}!bool {
+    const cst = a.cst;
+    const subject = cst.subject(entry);
+    if (subject == null) try a.fail(.context_missing, cst.firstToken(entry));
+    try brackets(a, entry);
+    try entries(a, entry);
+    return subject != null;
 }
 
 /// Reads every bracket under `node`, and reports each element whose shape is
@@ -89,13 +101,18 @@ fn isHead(cst: *const Cst, head: Node.Index) bool {
             else => false,
         },
         .o_chain => isPair(cst, head, .type_id),
-        .attr => cst.data(head).node == .root,
+        .attr => bare(cst, head),
         .entry => blk: {
             const attrs = cst.list(cst.data(head).range)[1..];
-            break :blk attrs.len == 1 and cst.tag(attrs[0]) == .attr and cst.data(attrs[0]).node == .root;
+            break :blk attrs.len == 1 and cst.tag(attrs[0]) == .attr and bare(cst, attrs[0]);
         },
         else => false,
     };
+}
+
+/// A descriptor with no value and no key.
+fn bare(cst: *const Cst, attr: Node.Index) bool {
+    return cst.data(attr).node == .root and cst.key(attr) == null;
 }
 
 /// `:Shape` in `:Shape :: …`, or `classes :attr` in `(&node) :fill :: …`.
@@ -124,7 +141,7 @@ pub fn areClasses(cst: *const Cst, node: Node.Index) bool {
 }
 
 /// Two leaves side by side: a typed name, `:Color [red]`, when `first` is a
-/// type; a record's key and its value, `[ink] [#dddddd]`, when a bracket.
+/// type; a bracket and a literal, when a bracket.
 pub fn isPair(cst: *const Cst, node: Node.Index, first: Token.Tag) bool {
     const parts = cst.children(node);
     if (parts.len != 2 or !isLeafOf(cst, parts[0], first)) return false;
@@ -142,30 +159,56 @@ fn isLiteral(cst: *const Cst, node: Node.Index) bool {
     };
 }
 
-/// The items of a definition: entries and operations, side by side.
+/// The items of a record: descriptions, namings and operations, side by
+/// side. A descriptor's record or proposition is one too.
 fn entries(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     switch (cst.tag(node)) {
-        .items => for (cst.children(node)) |item| try entries(a, item),
+        .items => {
+            // The owner's descriptors come first (statements.md §22.1).
+            var part = false;
+            for (cst.children(node)) |item| {
+                if (cst.tag(item) == .entry) {
+                    if (cst.subject(item) != null) {
+                        part = true;
+                    } else if (part) try a.fail(.owner_after_part, cst.firstToken(item));
+                }
+                try entries(a, item);
+            }
+        },
         .block => {
             const inner = cst.children(node)[0];
             if (cst.tag(inner) == .levels) {
-                try a.fail(.levels_in_definition, cst.mainToken(inner));
+                try a.fail(.levels_in_naming, cst.mainToken(inner));
             } else try entries(a, inner);
         },
         .entry => {
-            // `subject { … }`: the block holds the subject's entries.
             const parts = cst.children(node);
-            const last = parts[parts.len - 1];
-            if (cst.tag(last) == .block) try entries(a, last);
+            for (parts[@intFromBool(cst.subject(node) != null)..]) |part| switch (cst.tag(part)) {
+                // `subject { … }`: the block holds the subject's items.
+                .block => try entries(a, part),
+                // `:style { … }`, `:axiom (f == g)`: a record, a proposition.
+                .attr => {
+                    const v = cst.data(part).node;
+                    switch (cst.tag(v)) {
+                        .block, .group => try entries(a, v),
+                        else => {},
+                    }
+                },
+                else => {},
+            };
         },
         .operation => try operation(a, node),
-        // A token bound in a record: `[ink] [#dddddd]`.
-        .o_chain => if (!isPair(cst, node, .val)) try a.fail(.bare_term_in_definition, cst.firstToken(node)),
+        // `[ink] := [#dddddd]` names in the record; `::` declares only in a
+        // type being declared, `:Style :: { … }` (step 9b).
+        .statement => switch (cst.tokenTag(cst.mainToken(node))) {
+            .decl => try a.fail(.declaration_in_record, cst.mainToken(node)),
+            else => {},
+        },
         // A group of propositions: `(f h == g k, +f :pullback)`.
         .group => try entries(a, cst.children(node)[0]),
         .invalid => {},
-        else => try a.fail(.bare_term_in_definition, cst.firstToken(node)),
+        else => try a.fail(.bare_term_in_record, cst.firstToken(node)),
     }
 }
 

@@ -125,15 +125,17 @@ fn parseProgram(p: *Parser) Error!void {
     p.nodes.set(0, .{ .tag = .root, .main_token = 0, .data = .{ .range = range } });
 }
 
-/// statement = ( primitive DECL | subject DEFN ) ( levels | block )
-/// The head is read as an item; which heads each operator allows is the
-/// analyser's call.
+/// statement = part ( DECL | DEFN ) ( levels | block ) | part
+/// The head is read as a part; which heads each operator allows is the
+/// analyser's call. With no operator the part must be an entry: a
+/// description, `G :style { … }` (statements.md §22.1).
 fn parseStatement(p: *Parser) Error!Node.Index {
     if (!p.startsItem()) return p.fail(.expected_statement, .invalid);
-    const head = try p.parseItem();
+    const head = try p.parsePart();
     switch (p.cur()) {
         .decl, .defn => {},
-        else => return p.fail(.expected_token, .decl),
+        // A description: an entry, with no operator (statements.md §22.1).
+        else => return if (p.nodes.items(.tag)[@backingInt(head)] == .entry) head else p.fail(.expected_token, .decl),
     }
     const op = p.next();
     const body = try p.parseLevels();
@@ -226,8 +228,23 @@ fn parseItemRecovering(p: *Parser) Error!Node.Index {
     };
 }
 
-/// item = [ chain ] ( attr | block ) | chain { operator chain }
+/// item = part [ ( DECL | DEFN ) part ]
+/// Inside a record, a naming or a declaration is a statement of its own:
+/// `[ink] := [#dddddd]`. Which ones a record allows is the analyser's call.
 fn parseItem(p: *Parser) Error!Node.Index {
+    const head = try p.parsePart();
+    switch (p.cur()) {
+        .decl, .defn => {
+            const op = p.next();
+            const body = try p.parsePart();
+            return p.addNode(.statement, op, .{ .nodes = .{ head, body } });
+        },
+        else => return head,
+    }
+}
+
+/// part = [ chain ] ( attr | block ) | chain { operator chain }
+fn parsePart(p: *Parser) Error!Node.Index {
     _ = p.cur(); // skip newlines first, so `start` is a real token
     const start = p.tok_i;
     switch (p.cur()) {
@@ -259,17 +276,26 @@ fn parseEntry(p: *Parser, subject: Node.Index, start: TokenIndex) Error!Node.Ind
     return p.addNode(.entry, start, .{ .range = try p.listFrom(top) });
 }
 
-/// attr = ATTR_ID [ ~ BANG ] [ literal ]
+/// attr = ATTR_ID [ ~ DOT ~ VAL ] [ ~ BANG ] [ literal | L_PAR items R_PAR | block ]
 /// A `!` touching the attribute is part of it: `:hide!` turns a flag off.
 /// Apart, `:hide !`, it is a node, as anywhere else.
 fn parseAttr(p: *Parser) Error!Node.Index {
     const name = p.next();
+    // A key, `:lemma.[a]`: the node stores nothing, as for `!` (Cst.key).
+    if (p.cur() == .dot and p.touchesPrev() and p.touchesNext() and p.tags[p.tok_i + 1] == .val) {
+        _ = p.next();
+        _ = p.next();
+    }
     if (p.cur() == .bang and p.touchesPrev()) _ = p.next();
-    const literal: Node.Index = switch (p.cur()) {
+    const value: Node.Index = switch (p.cur()) {
         .str, .math, .val => try p.addLeaf(.leaf, p.next()),
+        // A proposition, the fifth shape of a value: `:axiom (f == g)`.
+        .l_par => try p.parseGroup(),
+        // A record: `G :style { … }`.
+        .l_cur => try p.parseBlock(),
         else => .root,
     };
-    return p.addNode(.attr, name, .{ .node = literal });
+    return p.addNode(.attr, name, .{ .node = value });
 }
 
 /// The rest of an operation: { operator chain }. One level, left to right;

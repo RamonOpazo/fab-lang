@@ -200,7 +200,7 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  )
         \\}
         \\
-        \\Order :style := {
+        \\Order :style {
         \\  #Received  :label "Order received",
         \\  validate+  :label "Valid?",
         \\  charge+    :label "Payment accepted?",
@@ -232,9 +232,9 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  Tagging/(doc/Document, tag/Tag)
         \\}
         \\
-        \\Db :kind := [schema]
+        \\Db :kind [schema]
         \\
-        \\Db :prove := {
+        \\Db :prove {
         \\  &node.id :pk,
         \\  &edge :card [0..*/1],
         \\
@@ -247,8 +247,8 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  parent document == document         // a reply is on the same document as its parent
         \\}
         \\
-        \\Db :style := writer :label "author_id"
-        \\User :style := :label "users", :fill [muted]
+        \\Db :style { writer :label "author_id" }
+        \\User :style { :label "users", :fill [muted] }
         ,
         \\Repo :: {
         \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
@@ -257,7 +257,7 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\
         \\:ref := :shape [round], :fill [muted]
         \\
-        \\Repo :style := {
+        \\Repo :style {
         \\  &node :shape [point],
         \\  #Head    { :ref, :label "main" },
         \\  #Feature { :ref, :label "feature/auth" },
@@ -275,7 +275,7 @@ test "the spec's larger examples lex with no invalid tokens" {
         \\  spike   :label "2c9f try cache"
         \\}
         \\
-        \\Repo :prove := {
+        \\Repo :prove {
         \\  fix merge == login session merge',   // both paths from the fork reach the same state
         \\  #Merged :pushout                      // the merge is clean: the least common state
         \\}

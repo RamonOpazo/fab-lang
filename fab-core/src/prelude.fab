@@ -161,13 +161,13 @@
 // what it is.
 
 :Record [base] := {
-  [ink] [#333333],
-  [soft] [#555555],
-  [muted] [#888888],
-  [accent] [#1f6feb],
-  [error] [#d1242f],
-  [warning] [#bf8700],
-  [unsupported] [#8250df],
+  [ink] := [#333333],
+  [soft] := [#555555],
+  [muted] := [#888888],
+  [accent] := [#1f6feb],
+  [error] := [#d1242f],
+  [warning] := [#bf8700],
+  [unsupported] := [#8250df],
 
   &node {
     :shape [circle], :stroke [ink], :pen [normal], :line [solid],
@@ -192,17 +192,17 @@
 // ── 6. Built-in themes ────────────────────────────────────────────────
 
 :Record [dark] := {
-  [ink] [#dddddd],
-  [soft] [#aaaaaa],
-  [muted] [#888888],
+  [ink] := [#dddddd],
+  [soft] := [#aaaaaa],
+  [muted] := [#888888],
   &zone :fill [#1e1e1e]
 }
 
 :Record [print] := {
-  [ink] [#000000],
-  [soft] [#000000],
-  [muted] [#555555],
-  [accent] [#000000]
+  [ink] := [#000000],
+  [soft] := [#000000],
+  [muted] := [#555555],
+  [accent] := [#000000]
 }
 
 :Record [compact] := {

@@ -28,14 +28,23 @@ pub const Tag = enum(u8) {
     value_in_zone_declaration,
     /// `G :: f :Color`.
     type_in_zone_declaration,
-    /// `yes, paid :label "yes"`: the bare `yes`.
-    bare_term_in_definition,
-    /// `:x := a | b`.
-    levels_in_definition,
+    /// `yes, paid :label "yes"`: the bare `yes`; `[ink] [#ddd]`, a token
+    /// named without `:=`.
+    bare_term_in_record,
+    /// `:x := a | b`, `G :style { a | b }`.
+    levels_in_naming,
     /// `[red] :: f`, `G :style :: f`.
     bad_declaration_head,
     /// `f g := [red]`, `G := [red]`.
-    bad_definition_head,
+    bad_naming_head,
+    /// `G :style := { … }`, `G.f :arrow := [epi]`.
+    description_with_operator,
+    /// `:fill [red]` at the top level, with nothing to describe.
+    context_missing,
+    /// `:Style [x] := { [ink] :: :Color }`: `::` in a record.
+    declaration_in_record,
+    /// Warning. `G :style { &node :fill [red], :caption "x" }`.
+    owner_after_part,
     /// `f == g ~= h`.
     mixed_operators,
     /// `G :: f` … `G :: g`.
@@ -99,7 +108,7 @@ pub const Tag = enum(u8) {
     only_a_flag_inverts,
     /// `[ink] [circle]`.
     key_of_wrong_type,
-    /// `:t := { &node :fill [red] }`, `:t := { [ink] [#fff] }`.
+    /// `:t := { &node :fill [red] }`, `:t := { [ink] := [#fff] }`.
     subject_in_bundle,
     /// `:Record [x] := { G.f :pen [thin] }`.
     element_in_theme,
@@ -223,13 +232,13 @@ pub const Tag = enum(u8) {
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 
-    /// A layer, `G :style := …`, until plan steps 9 and 11.
-    unsupported_definition,
+    /// A layer, `G :style { … }`, until plan steps 9 and 11.
+    unsupported_layer,
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
-            .chain_broken_across_lines, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
-            .unsupported_definition => .unsupported,
+            .chain_broken_across_lines, .owner_after_part, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
+            .unsupported_layer => .unsupported,
             else => .@"error",
         };
     }

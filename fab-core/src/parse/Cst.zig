@@ -251,7 +251,7 @@ pub fn lastToken(cst: Cst, node: Node.Index) TokenIndex {
         .root => @intCast(cst.tokens.len - 1),
         .postfix, .leaf, .invalid => cst.mainToken(node),
         .block, .group => d.node_token[1],
-        .attr => if (d.node != .root) cst.lastToken(d.node) else if (cst.inverted(node)) cst.mainToken(node) + 1 else cst.mainToken(node),
+        .attr => if (d.node != .root) cst.lastToken(d.node) else if (cst.inverted(node)) cst.bangOf(node) else cst.key(node) orelse cst.mainToken(node),
         .statement,
         .levels,
         .items,
@@ -269,12 +269,29 @@ pub fn lastToken(cst: Cst, node: Node.Index) TokenIndex {
 }
 
 /// An attribute turned off by a `!` touching it: `:hide!`. The `!` is the
-/// token right after the attribute's name, so the node stores nothing.
+/// token right after the attribute's name, or after its key, so the node
+/// stores nothing.
 pub fn inverted(cst: Cst, attr: Node.Index) bool {
+    const bang = cst.bangOf(attr);
+    return cst.tokenTag(bang) == .bang and cst.touch(bang - 1, bang);
+}
+
+/// Where an attribute's `!` would be: after its name, or after its key.
+fn bangOf(cst: Cst, attr: Node.Index) TokenIndex {
+    return if (cst.key(attr)) |k| k + 1 else cst.mainToken(attr) + 1;
+}
+
+/// A table's key, `:lemma.[a]`: a bracket after a dot, all three touching.
+pub fn key(cst: Cst, attr: Node.Index) ?TokenIndex {
     const name = cst.mainToken(attr);
-    if (cst.tokenTag(name + 1) != .bang) return false;
-    const tokens = cst.tokens;
-    return tokens.items(.end)[name] == tokens.items(.start)[name + 1];
+    if (cst.tokenTag(name + 1) != .dot or cst.tokenTag(name + 2) != .val) return null;
+    if (!cst.touch(name, name + 1) or !cst.touch(name + 1, name + 2)) return null;
+    return name + 2;
+}
+
+/// Token `b` starts where token `a` ends.
+fn touch(cst: Cst, a: TokenIndex, b: TokenIndex) bool {
+    return cst.tokens.items(.end)[a] == cst.tokens.items(.start)[b];
 }
 
 /// The operators of an `operation`, in order: the tokens between its operands.
@@ -296,7 +313,11 @@ fn dumpNode(cst: Cst, w: *std.Io.Writer, node: Node.Index, depth: usize) std.Io.
     try w.writeAll(@tagName(t));
     switch (t) {
         .statement, .prefix, .postfix => try w.print(" {s}", .{cst.tokenText(main)}),
-        .attr => try w.print(" {s}{s}", .{ cst.tokenText(main), if (cst.inverted(node)) "!" else "" }),
+        .attr => {
+            try w.print(" {s}", .{cst.tokenText(main)});
+            if (cst.key(node)) |k| try w.print(".{s}", .{cst.tokenText(k)});
+            if (cst.inverted(node)) try w.writeAll("!");
+        },
         .operation => for (0..cst.children(node).len - 1) |i| {
             try w.print(" {s}", .{cst.tokenText(cst.operator(node, i))});
         },

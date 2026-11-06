@@ -139,9 +139,9 @@ test "a diagram's frame is its worst issue; unsupported adds the caption, even u
     var c = try Compilation.init(testing.allocator,
         \\K :: (f/*, g) h
         \\J :: f
-        \\J :style := f :label "x"
+        \\J :style { f :label "x" }
         \\G :: f g/+k h
-        \\G :style := f :label "x"
+        \\G :style { f :label "x" }
     , preview);
     defer c.deinit();
     const s = (try c.sheet()).?;

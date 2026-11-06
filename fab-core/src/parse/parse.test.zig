@@ -264,44 +264,43 @@ test "braces let a statement span lines; inside them a newline is a space" {
     );
 }
 
-test "definitions: entries, groups of subjects, and blocks as factored subjects" {
+test "descriptions: entries, groups of contexts, and blocks as factored contexts" {
     try expectDump(
-        \\G :style := { #Done :label "x", (yes, paid) :label "yes", +f { :shape [circle] } }
+        \\G :style { #Done :label "x", (yes, paid) :label "yes", +f { :shape [circle] } }
     ,
         \\root
-        \\  statement :=
-        \\    entry
-        \\      leaf zone_id G
-        \\      attr :style
-        \\    block
-        \\      items
-        \\        entry
-        \\          leaf node_id #Done
-        \\          attr :label
-        \\            leaf str "x"
-        \\        entry
-        \\          group
-        \\            items
-        \\              leaf edge_id yes
-        \\              leaf edge_id paid
-        \\          attr :label
-        \\            leaf str "yes"
-        \\        entry
-        \\          prefix +
-        \\            leaf edge_id f
-        \\          block
-        \\            entry
-        \\              attr :shape
-        \\                leaf val [circle]
+        \\  entry
+        \\    leaf zone_id G
+        \\    attr :style
+        \\      block
+        \\        items
+        \\          entry
+        \\            leaf node_id #Done
+        \\            attr :label
+        \\              leaf str "x"
+        \\          entry
+        \\            group
+        \\              items
+        \\                leaf edge_id yes
+        \\                leaf edge_id paid
+        \\            attr :label
+        \\              leaf str "yes"
+        \\          entry
+        \\            prefix +
+        \\              leaf edge_id f
+        \\            block
+        \\              entry
+        \\                attr :shape
+        \\                  leaf val [circle]
         \\
     );
 }
 
-test "the heads of definitions: a value, a bundle, an attribute at a subject" {
+test "namings and a description: a value, a bundle, a descriptor at a context" {
     try expectDump(
         \\[red] := [#ff0000]
         \\:terminal := :shape [circle], :fill [red]
-        \\G.f :arrow := [epi]
+        \\G.f :arrow [epi]
     ,
         \\root
         \\  statement :=
@@ -317,51 +316,55 @@ test "the heads of definitions: a value, a bundle, an attribute at a subject" {
         \\      entry
         \\        attr :fill
         \\          leaf val [red]
-        \\  statement :=
-        \\    entry
-        \\      juxtafix
-        \\        leaf zone_id G
-        \\        leaf edge_id f
-        \\      attr :arrow
-        \\    leaf val [epi]
+        \\  entry
+        \\    juxtafix
+        \\      leaf zone_id G
+        \\      leaf edge_id f
+        \\    attr :arrow
+        \\      leaf val [epi]
         \\
     );
 }
 
 test "operations: one level, a flat run, groups to mix" {
-    try expectDump("Sq :prove := { f h == g k == d, (f == g) ~= h, +f :pullback }",
+    try expectDump("Sq :prove { :axiom (f h == g k == d, (f == g) ~= h, +f :pullback) }",
         \\root
-        \\  statement :=
-        \\    entry
-        \\      leaf zone_id Sq
-        \\      attr :prove
-        \\    block
-        \\      items
-        \\        operation == ==
-        \\          o_chain
-        \\            leaf edge_id f
-        \\            leaf edge_id h
-        \\          o_chain
-        \\            leaf edge_id g
-        \\            leaf edge_id k
-        \\          leaf edge_id d
-        \\        operation ~=
-        \\          group
-        \\            operation ==
-        \\              leaf edge_id f
-        \\              leaf edge_id g
-        \\          leaf edge_id h
+        \\  entry
+        \\    leaf zone_id Sq
+        \\    attr :prove
+        \\      block
         \\        entry
-        \\          prefix +
-        \\            leaf edge_id f
-        \\          attr :pullback
+        \\          attr :axiom
+        \\            group
+        \\              items
+        \\                operation == ==
+        \\                  o_chain
+        \\                    leaf edge_id f
+        \\                    leaf edge_id h
+        \\                  o_chain
+        \\                    leaf edge_id g
+        \\                    leaf edge_id k
+        \\                  leaf edge_id d
+        \\                operation ~=
+        \\                  group
+        \\                    operation ==
+        \\                      leaf edge_id f
+        \\                      leaf edge_id g
+        \\                  leaf edge_id h
+        \\                entry
+        \\                  prefix +
+        \\                    leaf edge_id f
+        \\                  attr :pullback
         \\
     );
 }
 
 test "the superset: shapes the analyser will reject still parse" {
     try expectErrors("G :: f == g ~= h", &.{}); // mixed operators
-    try expectErrors("G :style := f g", &.{}); // a bare term in a definition
+    try expectErrors("G :style { f g }", &.{}); // a bare term in a record
+    try expectErrors("G :style := { f }", &.{}); // a description with an operator
+    try expectErrors(":fill [red]", &.{}); // a description with no context
+    try expectErrors(":R [x] := { [ink] :: :Color }", &.{}); // a declaration in a record
     try expectErrors("G :: f (g :label \"x\")", &.{}); // an entry in a declaration
     try expectErrors("f :: g", &.{}); // an edge's declaration
     try expectErrors("G :: f (g | h)", &.{.{ .bar_in_group, "|" }}); // but not this
@@ -530,8 +533,8 @@ test "a type's parameters are a juxtafix" {
     );
 }
 
-test "a record binds a token: two values side by side" {
-    try expectDump(":Record [dark] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }",
+test "a record names a token: a naming inside braces" {
+    try expectDump(":Record [dark] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }",
         \\root
         \\  statement :=
         \\    o_chain
@@ -539,7 +542,7 @@ test "a record binds a token: two values side by side" {
         \\      leaf val [dark]
         \\    block
         \\      items
-        \\        o_chain
+        \\        statement :=
         \\          leaf val [ink]
         \\          leaf val [#dddddd]
         \\        entry
@@ -551,46 +554,74 @@ test "a record binds a token: two values side by side" {
 }
 
 test "the empty list" {
-    try expectDump("&zone :theme := []",
+    try expectDump("G :theme []",
         \\root
-        \\  statement :=
-        \\    entry
-        \\      leaf class_id &zone
-        \\      attr :theme
-        \\    leaf val []
+        \\  entry
+        \\    leaf zone_id G
+        \\    attr :theme
+        \\      leaf val []
         \\
     );
 }
 
 test "a ! touching a flag turns it off" {
-    try expectDump("G :style := { f :hide!, g :hide! [x] }",
+    try expectDump("G :style { f :hide!, g :hide! [x] }",
         \\root
-        \\  statement :=
-        \\    entry
-        \\      leaf zone_id G
-        \\      attr :style
-        \\    block
-        \\      items
-        \\        entry
-        \\          leaf edge_id f
-        \\          attr :hide!
-        \\        entry
-        \\          leaf edge_id g
-        \\          attr :hide!
-        \\            leaf val [x]
+        \\  entry
+        \\    leaf zone_id G
+        \\    attr :style
+        \\      block
+        \\        items
+        \\          entry
+        \\            leaf edge_id f
+        \\            attr :hide!
+        \\          entry
+        \\            leaf edge_id g
+        \\            attr :hide!
+        \\              leaf val [x]
         \\
     );
 
-    var cst = try parse(testing.allocator, "G :style := f :hide!");
+    var cst = try parse(testing.allocator, "G.f :hide!");
     defer cst.deinit(testing.allocator);
-    const statement = cst.children(.root)[0];
-    const attr = cst.children(cst.children(statement)[1])[1];
+    const entry = cst.children(.root)[0];
+    const attr = cst.children(entry)[1];
     try testing.expect(cst.inverted(attr));
-    try testing.expectEqualStrings("!", cst.tokenText(cst.lastToken(statement)));
+    try testing.expectEqualStrings("!", cst.tokenText(cst.lastToken(entry)));
+}
+
+test "a table's key touches its descriptor, before any !" {
+    try expectDump("R :prove { :lemma.[clean] (#M :pushout), :axiom.[a]! }",
+        \\root
+        \\  entry
+        \\    leaf zone_id R
+        \\    attr :prove
+        \\      block
+        \\        items
+        \\          entry
+        \\            attr :lemma.[clean]
+        \\              group
+        \\                entry
+        \\                  leaf node_id #M
+        \\                  attr :pushout
+        \\          entry
+        \\            attr :axiom.[a]!
+        \\
+    );
+
+    var cst = try parse(testing.allocator, "R.f :axiom.[a]!");
+    defer cst.deinit(testing.allocator);
+    const entry = cst.children(.root)[0];
+    const attr = cst.children(entry)[1];
+    try testing.expectEqualStrings("[a]", cst.tokenText(cst.key(attr).?));
+    try testing.expect(cst.inverted(attr));
+    try testing.expectEqualStrings("!", cst.tokenText(cst.lastToken(entry)));
+    // Apart, the dot is detached.
+    try expectFirstError("R :prove { :lemma .[b] }", .detached_dot, ".");
 }
 
 test "a ! apart from a flag is a node" {
-    try expectErrors("G :style := { g :hide ! }", &.{.{ .missing_comma, "!" }});
+    try expectErrors("G :style { g :hide ! }", &.{.{ .missing_comma, "!" }});
 }
 
 // ---------------------------------------------------------------------------
@@ -598,11 +629,11 @@ test "a ! apart from a flag is a node" {
 
 test "statement errors" {
     try expectFirstError("Db :: (\n  f\n)", .statement_spans_lines, "\n");
-    try expectFirstError("G :style := #Done :terminal f :label \"x\"", .missing_comma, "f");
+    try expectFirstError(":t := #Done :terminal f :label \"x\"", .missing_comma, "f");
     try expectFirstError("G :: (f, g,)", .trailing_comma, ",");
-    try expectFirstError("G :style := { a :x, }", .trailing_comma, ",");
+    try expectFirstError("G :style { a :x, }", .trailing_comma, ",");
     try expectFirstError("G :: {}", .empty_braces, "{");
-    try expectFirstError("G :style := {}", .empty_braces, "{");
+    try expectFirstError("G :style { :x {} }", .empty_braces, "{"); // until step 9b makes `{}` a value
     try expectFirstError("Db :: (f,\n  g)", .statement_spans_lines, "\n");
     try expectFirstError("G :: f | | m", .empty_level, "|");
     try expectFirstError(") f", .expected_statement, ")");
@@ -690,40 +721,38 @@ test "recovery: a stray token after the first item of a group in braces keeps th
 }
 
 test "an entry has one attribute; several go in braces" {
-    try expectDump("G :style := { f { :label \"x\", :bend [inner] } }",
+    try expectDump("G :style { f { :label \"x\", :bend [inner] } }",
         \\root
-        \\  statement :=
-        \\    entry
-        \\      leaf zone_id G
-        \\      attr :style
-        \\    block
-        \\      entry
-        \\        leaf edge_id f
-        \\        block
-        \\          items
-        \\            entry
-        \\              attr :label
-        \\                leaf str "x"
-        \\            entry
-        \\              attr :bend
-        \\                leaf val [inner]
+        \\  entry
+        \\    leaf zone_id G
+        \\    attr :style
+        \\      block
+        \\        entry
+        \\          leaf edge_id f
+        \\          block
+        \\            items
+        \\              entry
+        \\                attr :label
+        \\                  leaf str "x"
+        \\              entry
+        \\                attr :bend
+        \\                  leaf val [inner]
         \\
     );
 }
 
 test "attributes side by side are an error, never a missing comma" {
     // An assumed comma would make `:bend` bind G.
-    try expectErrors("G :style := { f :label \"x\" :bend [inner] }", &.{.{ .attributes_side_by_side, ":bend" }});
-    try expectErrors("User :style := :label \"users\" :fill [muted] :ink [red]", &.{.{ .attributes_side_by_side, ":fill" }});
+    try expectErrors("G :style { f :label \"x\" :bend [inner] }", &.{.{ .attributes_side_by_side, ":bend" }});
+    try expectErrors("User :style { :label \"users\" :fill [muted] :ink [red] }", &.{.{ .attributes_side_by_side, ":fill" }});
 }
 
 test "recovery: a missing comma is assumed, a trailing comma ends the list" {
-    try expectRecovery("G :style := #Done :terminal f :label \"x\"", &.{.{ .missing_comma, "f" }},
+    try expectRecovery(":t := #Done :terminal f :label \"x\"", &.{.{ .missing_comma, "f" }},
         \\root
         \\  statement :=
         \\    entry
-        \\      leaf zone_id G
-        \\      attr :style
+        \\      attr :t
         \\    items
         \\      entry
         \\        leaf node_id #Done

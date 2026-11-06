@@ -79,7 +79,7 @@ test "braces that are not placeholders are written as they are" {
     const source = ") f";
     const ds = try diagnose(source);
     defer testing.allocator.free(ds);
-    try expectLayer(ds[0], .explanation, source, "Every statement is a head, then `::` or `:=`, then its body: `G :: f g` declares a diagram, `G :style := { … }` defines a value.");
+    try expectLayer(ds[0], .explanation, source, "A statement is a declaration (`G :: f g`), a naming (`[warn] := [red]`) or a description (`G :style { … }`).");
 }
 
 test "every code has all three layers, and names are unique across stages" {

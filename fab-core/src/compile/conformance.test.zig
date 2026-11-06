@@ -7,7 +7,7 @@
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
-//! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on). `done` is the last one finished; later cases
+//! to 9 (1 for 7a, 8a or 9a, 2 for 7b, 8b or 9b, and so on). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -20,7 +20,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 8, .rule = 5 };
+const done: Progress = .{ .step = 9, .rule = 1 };
 
 const Progress = struct {
     step: u8,
@@ -700,8 +700,10 @@ test "Diagrams and names: a group of another diagram's edges" {
 // ---------------------------------------------------------------------------
 // Statements (rule 0)
 
-test "Statements: a bare term in a definition" {
-    try check(.{ .step = 5, .source = "G :style := yes, paid :label \"yes\"", .codes = &.{.{ .analysis = .bare_term_in_definition }} });
+test "Statements: a bare term in a record" {
+    try check(.{ .step = 5, .source = "G :style { yes, paid :label \"yes\" }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
+    // A token is named: `[ink] [#fff]` is two terms side by side.
+    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] [#fff] }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
 }
 
 test "Statements: an entry in a declaration" {
@@ -716,8 +718,8 @@ test "Statements: a class in a declaration" {
     try check(.{ .step = 5, .source = "G :: &node f", .codes = &.{.{ .analysis = .class_in_zone_declaration }} });
 }
 
-test "Statements: levels in a definition" {
-    try check(.{ .step = 5, .source = ":x := a | b", .codes = &.{.{ .analysis = .levels_in_definition }} });
+test "Statements: levels in a naming" {
+    try check(.{ .step = 5, .source = ":x := a | b", .codes = &.{.{ .analysis = .levels_in_naming }} });
 }
 
 test "Statements: a value as a declaration's head" {
@@ -736,19 +738,19 @@ test "Statements: an edge declared, reserved" {
     try check(.{ .step = 5, .source = "review :: a b", .codes = &.{.{ .analysis = .reserved_node_or_edge_declaration }} });
 }
 
-test "Statements: a chain as a definition's head" {
-    try check(.{ .step = 5, .source = "f g := [red]", .codes = &.{.{ .analysis = .bad_definition_head }} });
+test "Statements: a chain as a naming's head" {
+    try check(.{ .step = 5, .source = "f g := [red]", .codes = &.{.{ .analysis = .bad_naming_head }} });
 }
 
-test "Statements: a diagram as a definition's head" {
-    try check(.{ .step = 5, .source = "G := [red]", .codes = &.{.{ .analysis = .bad_definition_head }} });
+test "Statements: a diagram as a naming's head" {
+    try check(.{ .step = 5, .source = "G := [red]", .codes = &.{.{ .analysis = .bad_naming_head }} });
 }
 
 test "Statements: a bad head's body is not checked, but its brackets are" {
-    try check(.{ .step = 8, .rule = 3, .source = ":List.(:Color) := :Text", .codes = &.{.{ .analysis = .bad_definition_head }} });
-    try check(.{ .step = 8, .rule = 3, .source = "f g := { h k, :x }", .codes = &.{.{ .analysis = .bad_definition_head }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":List.(:Color) := :Text", .codes = &.{.{ .analysis = .bad_naming_head }} });
+    try check(.{ .step = 8, .rule = 3, .source = "f g := { h k, :x }", .codes = &.{.{ .analysis = .bad_naming_head }} });
     try check(.{ .step = 8, .rule = 3, .source = "G := [1.]", .codes = &.{
-        .{ .analysis = .bad_definition_head }, .{ .analysis = .malformed_number },
+        .{ .analysis = .bad_naming_head }, .{ .analysis = .malformed_number },
     } });
 }
 
@@ -760,15 +762,44 @@ test "Statements: a chain across lines in a group" {
     try check(.{ .step = 5, .source = "G :: {\n  (f g\n  h k)\n}" });
 }
 
-test "Statements: the three forms of definition" {
-    try check(.{ .step = 5, .source =
+test "Statements: the three forms" {
+    try check(.{ .step = 9, .rule = 1, .source =
         \\[brand] := [#ff0000]
         \\:terminal := { :shape [circle], :fill [brand] }
         \\G :: f
-        \\&node :shape := [circle]
-        \\G :style := { f :label "x", +f { :label $P$ } }
-        \\G.f :arrow := [epi]
+        \\G :style { :caption "x", &node :shape [circle], f :label "x", +f { :label $P$ } }
+        \\G.f :arrow [epi]
+        \\G { :style { f :hide } }
     });
+}
+
+test "Statements: a description written with :=" {
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style := { f :label \"x\" }", .codes = &.{.{ .analysis = .description_with_operator }} });
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG.f :arrow := [epi]", .codes = &.{.{ .analysis = .description_with_operator }} });
+    // Its body is still checked, as a description's.
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style := { f, f :label \"x\" }", .codes = &.{
+        .{ .analysis = .description_with_operator }, .{ .analysis = .bare_term_in_record },
+    } });
+}
+
+test "Statements: a description with no context" {
+    try check(.{ .step = 9, .rule = 1, .source = ":fill [red]", .codes = &.{.{ .analysis = .context_missing }} });
+    try check(.{ .step = 9, .rule = 1, .source = "{ :fill [red] }", .codes = &.{.{ .syntax = .expected_token }} });
+}
+
+test "Statements: a declaration in a record" {
+    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] :: :Color }", .codes = &.{.{ .analysis = .declaration_in_record }} });
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style { f :: g }", .codes = &.{.{ .analysis = .declaration_in_record }} });
+}
+
+test "Statements: warning, owner described after a part" {
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style { &node :fill [red], :caption \"x\" }", .codes = &.{.{ .analysis = .owner_after_part }} });
+    // Tokens are no parts: they name, and describe nothing.
+    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] := [#fff], :fill [red] }" });
+}
+
+test "Statements: a table's key, and a proposition as a value" {
+    try check(.{ .step = 9, .rule = 1, .source = "G :: f g, h\nG :prove { :axiom.[a] (f g == h), :lemma (#M :pushout), :axiom (f g == h ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
 }
 
 test "Relations: a diagram declared twice" {
@@ -776,7 +807,7 @@ test "Relations: a diagram declared twice" {
 }
 
 test "Definitions and values: attributes side by side" {
-    try check(.{ .step = 4, .source = "G :: f\nG :style := { f :label \"x\" :bend [inner] }", .codes = &.{.{ .syntax = .attributes_side_by_side }} });
+    try check(.{ .step = 4, .source = "G :: f\nG :style { f :label \"x\" :bend [inner] }", .codes = &.{.{ .syntax = .attributes_side_by_side }} });
 }
 
 test "Definitions and values: a value in a declaration" {
@@ -799,11 +830,11 @@ test "Definitions and values: types, labels and signatures are accepted" {
 }
 
 test "Definitions and values: a record binds tokens" {
-    try check(.{ .step = 8, .rule = 1, .source = ":Record [night] := { [ink] [#dddddd], &zone :fill [#1e1e1e] }" });
+    try check(.{ .step = 8, .rule = 1, .source = ":Record [night] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }" });
 }
 
 test "Definitions and values: a flag turned off" {
-    try check(.{ .step = 8, .rule = 1, .source = "G :: f\nG :style := { f :hide! }" });
+    try check(.{ .step = 8, .rule = 1, .source = "G :: f\nG :style { f :hide! }" });
 }
 
 test "Definitions and values: uppercase name" {
@@ -820,11 +851,11 @@ test "Definitions and values: colour malformed" {
 }
 
 test "Definitions and values: negative number" {
-    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG.f :bend := [-30]", .codes = &.{.{ .analysis = .negative_number }} });
+    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG.f :bend [-30]", .codes = &.{.{ .analysis = .negative_number }} });
 }
 
 test "Definitions and values: number malformed" {
-    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG :style := { f :at [.5], f :size [1.] }", .codes = &.{
+    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG :style { f :at [.5], f :size [1.] }", .codes = &.{
         .{ .analysis = .malformed_number }, .{ .analysis = .malformed_number },
     } });
     try check(.{ .step = 8, .rule = 2, .source = "[big] := [1234567890123456789]", .codes = &.{.{ .analysis = .malformed_number }} });
@@ -947,8 +978,8 @@ test "Definitions and values: a bundle, applied where all its contents apply" {
 }
 
 test "Definitions and values: a theme: tokens, classes, and functions binding its diagram" {
-    try check(.{ .step = 8, .rule = 5, .source = ":Record [paper] := { [ink] [#000], :fill [white], &node { :fill [white], &choice :shape [box] }, &hole :line [dashed] }" });
-    try check(.{ .step = 8, .rule = 5, .source = "[plainer] := { [circle] [box] }" });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [paper] := { [ink] := [#000], :fill [white], &node { :fill [white], &choice :shape [box] }, &hole :line [dashed] }" });
+    try check(.{ .step = 8, .rule = 5, .source = "[plainer] := { [circle] := [box] }" });
 }
 
 test "Definitions and values: unknown attribute" {
@@ -987,14 +1018,14 @@ test "Definitions and values: only a flag inverts" {
 }
 
 test "Definitions and values: key of the wrong type" {
-    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [ink] [circle] }", .codes = &.{.{ .analysis = .key_of_wrong_type }} });
-    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [red] [#fff] }", .codes = &.{.{ .analysis = .not_a_label }} });
-    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [inc] [#fff] }", .codes = &.{.{ .analysis = .undefined_name }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [ink] := [circle] }", .codes = &.{.{ .analysis = .key_of_wrong_type }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [red] := [#fff] }", .codes = &.{.{ .analysis = .not_a_label }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { [inc] := [#fff] }", .codes = &.{.{ .analysis = .undefined_name }} });
 }
 
 test "Definitions and values: subject in a bundle" {
     try check(.{ .step = 8, .rule = 5, .source = ":t := { &node :fill [red] }", .codes = &.{.{ .analysis = .subject_in_bundle }} });
-    try check(.{ .step = 8, .rule = 5, .source = ":t := { [ink] [#fff] }", .codes = &.{.{ .analysis = .subject_in_bundle }} });
+    try check(.{ .step = 8, .rule = 5, .source = ":t := { [ink] := [#fff] }", .codes = &.{.{ .analysis = .subject_in_bundle }} });
 }
 
 test "Definitions and values: element in a theme" {
@@ -1012,11 +1043,11 @@ test "Statements: a signature's subjects are classes" {
 }
 
 test "Proofs: different operators without a group" {
-    try check(.{ .step = 5, .source = "G :prove := f == g ~= h", .codes = &.{.{ .analysis = .mixed_operators }} });
+    try check(.{ .step = 5, .source = "G :prove { :axiom (f == g ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
 }
 
 test "Proofs: different operators, grouped" {
-    try check(.{ .step = 5, .source = "G :prove := (f == g) ~= h, f == g == h" });
+    try check(.{ .step = 5, .source = "G :prove { :axiom ((f == g) ~= h, f == g == h) }" });
 }
 
 // ---------------------------------------------------------------------------
@@ -1146,7 +1177,7 @@ test "Statements: a statement spanning lines" {
 }
 
 test "Statements: a missing comma" {
-    try check(.{ .step = 4, .source = "G :style := #Done :terminal f :label \"x\"", .codes = &.{.{ .syntax = .missing_comma }} });
+    try check(.{ .step = 4, .source = "G :style { #Done :terminal f :label \"x\" }", .codes = &.{.{ .syntax = .missing_comma }} });
 }
 
 test "Statements: a trailing comma in a group" {
@@ -1154,15 +1185,15 @@ test "Statements: a trailing comma in a group" {
 }
 
 test "Statements: a trailing comma in braces" {
-    try check(.{ .step = 4, .source = "G :style := { a :x, }", .codes = &.{.{ .syntax = .trailing_comma }} });
+    try check(.{ .step = 4, .source = "G :style { a :x, }", .codes = &.{.{ .syntax = .trailing_comma }} });
 }
 
 test "Statements: empty braces in a declaration" {
     try check(.{ .step = 4, .source = "G :: {}", .codes = &.{.{ .syntax = .empty_braces }} });
 }
 
-test "Statements: empty braces in a definition" {
-    try check(.{ .step = 4, .source = "G :style := {}", .codes = &.{.{ .syntax = .empty_braces }} });
+test "Statements: empty braces are only a value" {
+    try check(.{ .step = 9, .rule = 2, .source = "G :: f\nG :style {}\n:Record [x] := {}" });
 }
 
 test "Relations: a marker touching both sides" {
@@ -1370,7 +1401,7 @@ test "Examples: a flowchart: order fulfilment" {
         \\  )
         \\}
         \\
-        \\Order :style := {
+        \\Order :style {
         \\  #Received  :label "Order received",
         \\  validate+  :label "Valid?",
         \\  charge+    :label "Payment accepted?",
@@ -1406,23 +1437,17 @@ test "Examples: a database schema: documents and comments" {
         \\  Tagging/(doc/Document, tag/Tag)
         \\}
         \\
-        \\Db :kind := [schema]
+        \\Db :prove {
+        \\  :kind [schema],
         \\
-        \\Db :prove := {
-        \\  &node.id :pk,
-        \\  &edge :card [0..*/1],
-        \\
-        \\  User.(email, nick)! :uk,
-        \\  Tag.label :uk,
-        \\  (user, org)! :uk,
-        \\  (doc, tag)! :uk,
-        \\
-        \\  parent { :nullable, :card [0..*/0..1] },
-        \\  parent document == document         // a reply is on the same document as its parent
+        \\  :axiom (&node.id :pk, &edge :card [0..*/1]),
+        \\  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
+        \\  :axiom (parent { :nullable, :card [0..*/0..1] }),
+        \\  :axiom (parent document == document)    // a reply is on the same document as its parent
         \\}
         \\
-        \\Db :style := writer :label "author_id"
-        \\User :style := :label "users", :fill [muted]
+        \\Db :style { writer :label "author_id" }
+        \\User :style { :label "users", :fill [muted] }
     });
 }
 
@@ -1437,7 +1462,7 @@ test "Examples: a git history: commits as arrows" {
         \\
         \\:ref := :shape [round], :fill [muted]
         \\
-        \\Repo :style := {
+        \\Repo :style {
         \\  &node :shape [point],
         \\  #Head    { :ref, :label "main" },
         \\  #Feature { :ref, :label "feature/auth" },
@@ -1455,9 +1480,10 @@ test "Examples: a git history: commits as arrows" {
         \\  spike   :label "2c9f try cache"
         \\}
         \\
-        \\Repo :prove := {
-        \\  fix merge == login session merge',   // both paths from the fork reach the same state
-        \\  #Merged :pushout                      // the merge is clean: the least common state
+        \\Repo :prove {
+        \\  :kind [category],
+        \\  :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
+        \\  :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
         \\}
         ,
     });

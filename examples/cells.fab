@@ -7,4 +7,4 @@ Id  :: #A/f/#A | f/α/#A                    // α : f ⇒ 1_A, a side from a low
 Ud  :: #A/f/#B/, #B/g/#A | f/α/g           // a cell on an undirected edge
 W   :: +(f h, k, g)+ | k/α/g               // a composite as a source: name it first
 
-W :prove := { k == f h }
+W :prove { :axiom (k == f h) }

@@ -67,7 +67,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | next    |
+| 9    | Style layer                               | 9a done |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -192,7 +192,7 @@ Done when every level case passes.
 
 **9. Style layer** (`statements.md` §22). The three forms, typed records, then the style pass, with `style.md` as the vocabulary. In increments:
 
-- **9a. Three forms.** A description is a statement with no operator (`G :style { … }`, `G.f :arrow [epi]`); `G :style := …` is *description written with `:=`*. Inside braces, `:=` names in the record (tokens: `[ink] := [#dddddd]`) and `::` declares in the type being declared. A table's key, `:lemma.[a]`; a context left out only inside a block; the warning *owner described after a part*. The 8e checks move to the new forms; the prelude, examples, corpus and `parse.test.zig` follow.
+- **9a. Three forms** (done; `statements.md` §22.1, Implemented). A description is a statement with no operator (`G :style { … }`, `G.f :arrow [epi]`); `G :style := …` is *description written with `:=`*. Inside braces, `:=` names in the record (tokens: `[ink] := [#dddddd]`) and `::` declares in the type being declared. A table's key, `:lemma.[a]`; a context left out only inside a block; the warning *owner described after a part*. The 8e checks move to the new forms; the prelude, examples, corpus and `parse.test.zig` follow.
 - **9b. Types.** `:Nil`: a bracket has one element more than its slashes, an empty element is nil, `[]` is nil, lists admit it, nil fits only where a type admits it (`:Tip`). Record types declared by their descriptors (`:Style :: { … }`), one descriptor one record type, a record's type read from its descriptors; `:Record` goes, themes are `:Style`. `:Table.(T)`: keys optional (a missing one is fresh, never referred to), local to their descriptor. *Not invertible*. The prelude: `:style`, `:prove`, `:place`, nil unions, `[base]` total; `Style.Line` gains `[triple]`. Values decoded once: records keep decoded bindings.
 - **9c. Layers read.** Contexts resolved in their diagram: names, canonical ends, classes, groups, blocks. Errors: *description at an undeclared context*, *context in another diagram*, *non-canonical reference*, *named node referenced by an end*, *binding made twice* (per element), *does not apply* per element. `:prove` and `:place` contents stay unsupported.
 - **9d. The cascade.** `format/` becomes `style/`, `Formatter` the `Styler`. Computed defaults, `[base]`, themes left to right (a theme's `:theme` includes), the program, then marks. Specificity: element, class in a diagram, narrower class, class; at one rank, the order of definition, errors last (`&node` < kinds < `&canonical` < `&hole`). Tokens resolved in core to RGBA, one step. `kindDefault` and `builtin` go. `Style` typed from `:Style`: unknown labels carried by name, unknown descriptors beside the style; the prelude test covers every descriptor and `:Line`. fab-render adapted to draw what it draws today.

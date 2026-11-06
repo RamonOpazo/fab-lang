@@ -561,7 +561,7 @@ Lengths are numbers in **em**, relative to the theme's text size. Angles are in 
 - **Records:** `{ … }`, holding descriptions, namings and, in a type's declaration, signatures. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`. A naming inside a record binds a name in that record only: `[ink] := [#dddddd]` binds a label to a value of its own type.
 - **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle holds descriptors only, and joins the record type of its contents. It applies where all its contents apply: `:terminal` applies to nodes.
 - **Themes:** `:Style [dark] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named style, of contexts and tokens, chosen with `:theme`. Its contexts are classes, since it applies to any diagram; a descriptor with no context describes the diagram it is applied to.
-- **Tables:** a descriptor of type `:Table.(T)` takes a key, then a value: `Repo :prove { :lemma.[merge] (fix merge == login session merge') }`. A binding is (context, descriptor, key), once; keys are required, written with `.`, and local to their descriptor.
+- **Tables:** a descriptor of type `:Table.(T)` takes a key, then a value: `Repo :prove { :lemma.[merge] (fix merge == login session merge') }`. A binding is (context, descriptor, key), once; keys are optional (an entry without one has a fresh key nothing can refer to), written with `.`, and local to their descriptor.
 - **Signatures:** `(&node, &zone) :fill :: :Color` declares a descriptor: the classes it applies to, and the type it takes. Anywhere else it does not apply. A class includes the classes inside it: what applies to `&node` applies to `&choice`.
 - **Names** are defined once, and before their first use.
 
@@ -879,11 +879,13 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Bare term in a record              | `yes, paid :label "yes"`                     | Several subjects are a group: `(yes, paid) :label`               |
 | Entry or equation in a diagram's declaration | `G :: f (g :label "x")`            | A diagram's declaration holds terms                              |
 | Class in a diagram's declaration   | `G :: &node f`                               | Classes are contexts of descriptions and signatures only         |
-| Levels in a naming                 | `:x := a \| b`                               | `\|` separates the levels of a declaration                       |
+| Levels in a naming or a record     | `:x := a \| b`, `G :style { a \| b }`        | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
 | Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]`, `:Type` or `:descriptor` |
 | Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
+| Description with no context        | `:fill [red]` at the top level               | A context is left out only inside a block, where it is the owner |
+| Declaration in a record            | `:Style [x] := { [ink] :: :Color }`          | Inside braces, `::` declares only in a record type: `:Style :: { … }` |
 | Warning: owner described after a part | `G :style { &node :fill [red], :caption "x" }` | The owner's descriptors come first in a block                 |
 | Warning: chain broken across lines | `f g` then `h k` on the next line, in braces | Write `,` for two items, or group the chains                     |
 
@@ -974,7 +976,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; it holds descriptors only                   |
 | Element in a theme                  | `:Style [x] := { G.f :pen [thin] }`      | A theme applies to any diagram; its contexts are classes                             |
 | Binding made twice in a layer       | `#Done :shape` twice                     | Each (context, descriptor) pair is bound once, and each key of a table               |
-| Key missing, key not taken          | `:lemma (f == g)`, `:fill.[a] [red]`     | A table's descriptor takes a key, then a value; other descriptors take no key        |
+| Key not taken                       | `:fill.[a] [red]`                        | Only a table's descriptor takes a key; an entry without one has a fresh key          |
 | Description at an undeclared context | `G :style { … }` before `G ::`         | A description comes after what it talks about                                        |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
 | Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |

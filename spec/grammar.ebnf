@@ -58,9 +58,10 @@ operator
 
 # A table's descriptor takes a key: :lemma.[merge] ( … ). ! touching a
 # descriptor turns a flag off: f :hide!. A group after a descriptor is a
-# proposition, the fifth shape of a value: :lemma.[a] (f h == g k).
+# proposition, the fifth shape of a value: :lemma.[a] (f h == g k); a block
+# is a record: G :style { … }.
 attr
-    = ATTR_ID [ ~ DOT ~ VAL ] [ ~ BANG ] [ literal | L_PAR items R_PAR ]
+    = ATTR_ID [ ~ DOT ~ VAL ] [ ~ BANG ] [ literal | L_PAR items R_PAR | block ]
     ;
 
 literal

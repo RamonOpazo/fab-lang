@@ -162,7 +162,11 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
         const start = if (i == 0) 0 else cst.firstToken(node);
         const end = if (i + 1 < statements.len) cst.firstToken(statements[i + 1]) else std.math.maxInt(TokenIndex);
         if (try a.broken(node, start, end)) continue;
-        if (cst.tag(node) == .statement) try a.statement(node);
+        switch (cst.tag(node)) {
+            .statement => try a.statement(node),
+            .entry => try a.description(node),
+            else => {},
+        }
     }
     try elaborate.graph(&a);
 
@@ -262,14 +266,29 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const zone_index: ?Ir.ZoneIndex = switch (cst.tokenTag(cst.mainToken(node))) {
         .decl => try a.declaration(head, body),
         .defn => blk: {
-            try definitions.definition(a, node, head, body);
+            try definitions.naming(a, node, head, body);
             break :blk a.namedDiagram(head);
         },
         else => unreachable,
     };
     a.pending.clearRetainingCapacity();
     a.pending_joins.clearRetainingCapacity();
+    try a.markStatement(first, zone_index, head);
+}
 
+/// `G :style { … }`: a layer's description, unsupported once checked.
+fn description(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const first = a.errors.items.len;
+    if (try definitions.description(a, node))
+        try a.fail(.unsupported_layer, cst.firstToken(cst.children(node)[1]));
+    try a.markStatement(first, a.namedDiagram(node), node);
+}
+
+/// Gives the statement's errors from `first` on that have no subject of
+/// their own: its diagram, or a placeholder named after `head`.
+fn markStatement(a: *Analyser, first: usize, zone_index: ?Ir.ZoneIndex, head: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
     const rest = a.errors.items[first..];
     for (rest) |err| {
         if (err.subject == null) break;
@@ -284,7 +303,7 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     }
 }
 
-/// The diagram a definition is about: `G :style`, `G.f :label`. Its first
+/// The diagram a naming or a description is about: `G :style`, `G.f :label`. Its first
 /// declaration, if it has one.
 fn namedDiagram(a: *Analyser, head: Node.Index) ?Ir.ZoneIndex {
     const token = a.cst.firstToken(head);

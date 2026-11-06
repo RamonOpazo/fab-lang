@@ -118,7 +118,7 @@ test "a diagram's mark: the border of its worst issue, and the unsupported label
         \\J :: f
         \\K :: f
         \\review :: a b
-        \\J :style := f :label "x"
+        \\J :style { f :label "x" }
     , preview);
     defer c.deinit();
     const Mark = Compilation.ZoneMark;
@@ -190,7 +190,9 @@ test "running out of memory at any allocation leaks nothing" {
         \\G :: f? (g/+k, h) f, (a, b)/?, a/#A #B/b
         \\H :: x /y
         \\review :: a b
-        \\G :style := f :label "x" | g
+        \\G :style { f :label "x" | g, :fill [red] }
+        \\G :prove { :axiom.[a] (f == g ~= h), :lemma (#M :pushout) }
+        \\:Record [x] := { [ink] := [#fff], [ink] :: :Color, &edge :fill [red] }
         \\J :: +(f, g)+ | f/α/g, f/β/g | α/m/β, f/γ
         \\
     ;

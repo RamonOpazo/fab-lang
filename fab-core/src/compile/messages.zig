@@ -41,7 +41,7 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
         },
         .expected_statement => .{
             .message = "Expected a statement, found {}",
-            .explanation = "Every statement is a head, then `::` or `:=`, then its body: `G :: f g` declares a diagram, `G :style := { … }` defines a value.",
+            .explanation = "A statement is a declaration (`G :: f g`), a naming (`[warn] := [red]`) or a description (`G :style { … }`).",
             .hint = "Start the line with a name, or remove what is left over from the line before.",
         },
         .expected_atom => .{
@@ -56,7 +56,7 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
         },
         .missing_comma => .{
             .message = "Expected a comma before {}",
-            .explanation = "Items are separated by commas: terms in a declaration, entries and equations in a definition.",
+            .explanation = "Items are separated by commas: terms in a declaration, descriptions and equations in a record.",
             .hint = "Add `,` before this item.",
         },
         .attributes_side_by_side => .{
@@ -71,7 +71,7 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
         },
         .empty_braces => .{
             .message = "Empty braces",
-            .explanation = "There are no empty declarations or definitions, and braces always hold something.",
+            .explanation = "There are no empty declarations, and braces in a statement always hold something; `{}` is only a value.",
             .hint = "Write what the braces hold, or remove them.",
         },
         .empty_level => .{
@@ -121,32 +121,32 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
     return switch (tag) {
         .entry_in_zone_declaration => .{
             .message = "An entry or equation in a diagram's declaration",
-            .explanation = "A diagram's declaration builds structure: its items are terms, edges, nodes and groups of them. Attributes and equations are bound in definitions.",
-            .hint = "Move it to a definition: `G :style := { … }` or `G :prove := { … }`.",
+            .explanation = "A diagram's declaration builds structure: its items are terms, edges, nodes and groups of them. Descriptors and equations belong in descriptions.",
+            .hint = "Move it to a description: `G :style { … }` or `G :prove { … }`.",
         },
         .class_in_zone_declaration => .{
             .message = "The class {} in a diagram's declaration",
-            .explanation = "Classes name sets of subjects for definitions. A diagram's declaration builds structure from edges and nodes only.",
-            .hint = "Bind it in a definition: `&node :shape := [circle]`.",
+            .explanation = "Classes name sets of contexts for descriptions and signatures. A diagram's declaration builds structure from edges and nodes only.",
+            .hint = "Describe it in a layer: `G :style { &node :shape [circle] }`.",
         },
         .value_in_zone_declaration => .{
             .message = "The value {} in a diagram's declaration",
-            .explanation = "Strings, math and brackets are values, and values are bound in definitions. A diagram's declaration builds structure from edges and nodes only.",
-            .hint = "Remove it, or bind it in a definition: `G :style := { f :label \"x\" }`.",
+            .explanation = "Strings, math and brackets are values, and values are bound in descriptions and namings. A diagram's declaration builds structure from edges and nodes only.",
+            .hint = "Remove it, or bind it in a description: `G :style { f :label \"x\" }`.",
         },
         .type_in_zone_declaration => .{
             .message = "The type {} in a diagram's declaration",
-            .explanation = "Types say what values are: they are declared on their own (`:Shape :: [circle]`) and used in definitions and signatures. A diagram's declaration builds structure from edges and nodes only.",
-            .hint = "Remove it, or use it in a definition: `:Color [warn] := [red]`.",
+            .explanation = "Types say what values are: they are declared on their own (`:Shape :: [circle]`) and used in namings and signatures. A diagram's declaration builds structure from edges and nodes only.",
+            .hint = "Remove it, or use it in a naming: `:Color [warn] := [red]`.",
         },
-        .bare_term_in_definition => .{
+        .bare_term_in_record => .{
             .message = "{} binds nothing",
-            .explanation = "A definition's items are entries (`subject :attr value`) and equations. A term on its own has no attribute to bind.",
-            .hint = "Give it an attribute, or group several subjects: `(yes, paid) :label \"yes\"`.",
+            .explanation = "A record's items are descriptions (`context :descriptor value`), namings (`[ink] := [#dddddd]`) and equations. A term on its own describes nothing.",
+            .hint = "Give it a descriptor, group several contexts (`(yes, paid) :label \"yes\"`), or name a token with `:=`: `[ink] := [#dddddd]`.",
         },
-        .levels_in_definition => .{
-            .message = "Levels in a definition",
-            .explanation = "`|` separates the levels of a declaration. A definition binds values, which have no levels.",
+        .levels_in_naming => .{
+            .message = "Levels in a naming or a record",
+            .explanation = "`|` separates the levels of a declaration. Namings and records bind values, which have no levels.",
             .hint = "Write `,` between items, or move the levels to the diagram's declaration.",
         },
         .bad_declaration_head => .{
@@ -154,10 +154,30 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A declaration builds structure, and only diagrams, nodes and edges are structure: `G :: f g`.",
             .hint = "Use a diagram name for the head, or `:=` to define a value.",
         },
-        .bad_definition_head => .{
-            .message = "{} is not the head of a definition",
-            .explanation = "A definition's left side is `[name]` (a value), `:attr` (a bundle) or `subject :attr` (an attribute at a subject).",
-            .hint = "Add the attribute being defined, as in `G :style := { … }`, or use `::` to declare a diagram.",
+        .bad_naming_head => .{
+            .message = "{} is not the head of a naming",
+            .explanation = "A naming's left side is `[name]` (a value), `:Type [name]` (a typed value), `:Type` (an alias) or `:descriptor` (a bundle).",
+            .hint = "Use one of those forms, or `::` to declare a diagram.",
+        },
+        .description_with_operator => .{
+            .message = "A description written with `:=`",
+            .explanation = "`::` declares and `:=` names; a description, `context :descriptor value`, has no operator.",
+            .hint = "Remove the `:=`: `G :style { … }`, `G.f :arrow [epi]`.",
+        },
+        .context_missing => .{
+            .message = "{} describes nothing",
+            .explanation = "A context is left out only inside a block, where it means the block's owner. At the top level there is no owner, so the context is always written.",
+            .hint = "Write what it describes first: `G :style { … }`, `G.f :label \"x\"`.",
+        },
+        .declaration_in_record => .{
+            .message = "A declaration in a record",
+            .explanation = "Inside braces, `::` declares in the type being declared (`:Style :: { &node :fill :: :Color }`). A record binds values; it declares nothing.",
+            .hint = "Name it with `:=`, as a token: `[ink] := [#dddddd]`.",
+        },
+        .owner_after_part => .{
+            .message = "{} describes the owner after a part",
+            .explanation = "A descriptor with no context describes the block's owner. Written after the parts' descriptions, it is easy to read as one of theirs.",
+            .hint = "Move the owner's descriptors to the start of the block.",
         },
         .uppercase_name => .{
             .message = "{} has an uppercase letter in a name",
@@ -202,7 +222,7 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         .undefined_name => .{
             .message = "{} names something not defined",
             .explanation = "Every name is defined before its first use: a value with `[name] := …`, a label with `:Type :: [name]`. Names defined further down are not seen yet.",
-            .hint = "Check the spelling, or move its definition above this line.",
+            .hint = "Check the spelling, or move its naming above this line.",
         },
         .name_defined_twice => .{
             .message = "{} is already defined",
@@ -226,7 +246,7 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .contract_broken => .{
             .message = "{} does not fit the type written before its name",
-            .explanation = "A type written in a definition is a contract: the value must be of that type, or fit it (a label of a type in a union, a tuple matching element by element).",
+            .explanation = "A type written in a naming is a contract: the value must be of that type, or fit it (a label of a type in a union, a tuple matching element by element).",
             .hint = "Change the value, or the type.",
         },
         .not_a_label => .{
@@ -276,7 +296,7 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .key_of_wrong_type => .{
             .message = "{} is not of the label's type",
-            .explanation = "In a record, a label binds a value of its own type: `[ink] [#dddddd]` binds a colour token to a colour.",
+            .explanation = "In a record, a label binds a value of its own type: `[ink] := [#dddddd]` binds a colour token to a colour.",
             .hint = "Give a value of the label's type.",
         },
         .subject_in_bundle => .{
@@ -524,9 +544,9 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A cell goes between two cells that leave the same place and reach the same place: α : f ⇒ g needs f and g to share their start and their end. A side from a lower level stands for its identity, which starts and ends on itself, so α : f ⇒ #A needs f to go from A to A. An undirected side may be read either way.",
             .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
         },
-        .unsupported_definition => .{
+        .unsupported_layer => .{
             .message = "Layers are not supported yet",
-            .explanation = "The program is valid, but this compiler only checks the shape of a layer (`G :style := …`, `:prove`, `:place`) so far. Its contents are not applied.",
+            .explanation = "The program is valid, but this compiler only checks the shape of a layer (`G :style { … }`, `:prove`, `:place`) so far. Its contents are not applied.",
             .hint = "Nothing to fix in the program.",
         },
     };

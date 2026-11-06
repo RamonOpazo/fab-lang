@@ -42,7 +42,7 @@ fn expectTags(source: [:0]const u8, want: []const Analyser.Error.Tag) !void {
 // Zones
 
 test "every declared diagram becomes a zone, in order" {
-    var a = try analyse("A :: f\nB :: g\nA :style := f :label \"x\"");
+    var a = try analyse("A :: f\nB :: g\nA :style { f :label \"x\" }");
     defer a.deinit();
     const ir = a.result.ir;
     try testing.expectEqual(@as(usize, 2), ir.zones.len);
@@ -131,13 +131,32 @@ test "a broken statement naming no diagram draws a placeholder named by its firs
 // ---------------------------------------------------------------------------
 // Unsupported
 
-test "every definition is reported once as unsupported, after its errors" {
-    try expectTags("G :style := yes, paid :label \"yes\"", &.{ .bare_term_in_definition, .unsupported_definition });
+test "every description is reported once as unsupported, after its errors" {
+    try expectTags("G :style { yes, paid :label \"yes\" }", &.{ .bare_term_in_record, .unsupported_layer });
+    try expectTags("G :style { f :label \"x\" }\nG.f :arrow [epi]", &.{ .unsupported_layer, .unsupported_layer });
+}
+
+test "a description with an operator, or with no context, is no layer" {
+    try expectTags("G :style := { f :label \"x\" }", &.{.description_with_operator});
+    try expectTags(":fill [red]", &.{.context_missing});
+}
+
+test "the owner is described first, and warned about once per descriptor" {
+    try expectTags("G :style { f :label \"x\", :fill [red], :caption \"y\" }", &.{ .owner_after_part, .owner_after_part, .unsupported_layer });
+    // Each block is its own: a part's block starts afresh.
+    try expectTags("G :style { f { :label \"x\" }, g { :label \"y\" } }", &.{.unsupported_layer});
+}
+
+test "a theme's tokens are namings; a bundle holds none" {
+    // No prelude here: the labels are declared first.
+    try expectTags(":Color :: [ink]\n:Shape :: [circle]\n[x] := { [ink] := [#fff], [ink] := [circle] }", &.{.key_of_wrong_type});
+    try expectTags(":t := { [ink] := [#fff] }", &.{.subject_in_bundle});
+    try expectTags("[x] := { [ink] :: :Color }", &.{.declaration_in_record});
 }
 
 test "unsupported and warnings have their own severity" {
     const T = Analyser.Error.Tag;
-    try testing.expectEqual(.unsupported, T.unsupported_definition.severity());
+    try testing.expectEqual(.unsupported, T.unsupported_layer.severity());
     try testing.expectEqual(.warning, T.chain_broken_across_lines.severity());
     try testing.expectEqual(.@"error", T.reserved_node_or_edge_declaration.severity());
 }
@@ -351,14 +370,14 @@ test "a cell declared twice keeps the first, and points back to it" {
 // Operators
 
 test "a mixed run is reported once, at the first different operator" {
-    var a = try analyse("G :prove := a == b ~= c == d ~= e");
+    var a = try analyse("G :prove { :axiom (a == b ~= c == d ~= e) }");
     defer a.deinit();
-    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .mixed_operators, .unsupported_definition }, a.tags());
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .mixed_operators, .unsupported_layer }, a.tags());
     try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[0].token));
 }
 
 test "runs inside groups are checked on their own" {
-    try expectTags("G :prove := (a == b ~= c) == d", &.{ .mixed_operators, .unsupported_definition });
+    try expectTags("G :prove { :axiom ((a == b ~= c) == d) }", &.{ .mixed_operators, .unsupported_layer });
 }
 
 // ---------------------------------------------------------------------------

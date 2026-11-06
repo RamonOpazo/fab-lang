@@ -8,7 +8,7 @@ Order :: {
   )
 }
 
-Order :style := {
+Order :style {
   #Received  :label "Order received",
   validate+  :label "Valid?",
   charge+    :label "Payment accepted?",

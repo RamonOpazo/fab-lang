@@ -873,6 +873,12 @@ Revises 1.1–1.3, 12 (the comma after `:=`), 17 (the proof's shape), 19, and 21
 - **Contexts left out at the top level:** the owner would be invisible.
 - **"Owner first" as an error:** it is good practice, not meaning.
 
+**Implemented (plan step 9a, 6 November).**
+- **A descriptor's value may be a record:** `attr = ATTR_ID [key] [!] [literal | ( items ) | block]`. The grammar named `G :style { … }` an entry but gave `attr` no block, so the rule now reads as the examples do. A description is then one entry, `context attr`, and the parser takes an entry with no operator as a statement.
+- **Two errors the forms imply:** a top-level description with no context is **description with no context** (`:fill [red]`), and `::` inside a record that is not a type being declared is **declaration in a record** (`:Style [x] := { [ink] :: :Color }`). A token written the old way, `[ink] [#dddddd]`, is two terms side by side, so it is a **bare term in a record**.
+- **A description written with `:=`** has its body checked as a description's would be, since what it meant is plain.
+- **`{}` as a value** (`G :style {}`) waits for 9b, with the record types it fits; until then empty braces stay a syntax error everywhere.
+
 ### 22.2 Nil, and the elements of a bracket
 
 **A bracket has one element more than it has slashes, and an element with nothing in it is nil.**

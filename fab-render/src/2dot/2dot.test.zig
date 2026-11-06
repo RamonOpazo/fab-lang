@@ -247,7 +247,7 @@ test "a reserved head draws a placeholder too" {
 }
 
 test "unsupported: a violet frame, and the caption above the name" {
-    try expectDot("J :: f\nJ :style := f :label \"x\"",
+    try expectDot("J :: f\nJ :style { f :label \"x\" }",
         \\  subgraph cluster_0 {
         \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>J>
         \\    pencolor="#8250df"
@@ -261,7 +261,7 @@ test "unsupported: a violet frame, and the caption above the name" {
 }
 
 test "under a red frame, the caption stays violet" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style := f :label \"x\"", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }", preview);
     defer c.deinit();
     var o = try render((try c.sheet()).?);
     defer o.deinit();
@@ -309,7 +309,7 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
 
 test "a marked diagram that owns no node still shows its frame" {
     // Db's edge joins A's and B's own nodes; its unsupported proof marks Db.
-    try expectDot("A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove := { :kind [schema] }",
+    try expectDot("A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="A", shape=circle, width=0.37, height=0.37, fixedsize=true]
@@ -608,7 +608,7 @@ pub const spec_programs = [_][]const u8{
     "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
     "G :: f\nH :: g /k\nreview :: a b",
-    "A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove := { :kind [schema] }",
+    "A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
     "T :: #UUID7, #String\nUser :: @/(id/T.#UUID7, name/T.#String)",
     \\Order :: {
     \\  */receive/#Received validate/? +(

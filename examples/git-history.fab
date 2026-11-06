@@ -5,7 +5,7 @@ Repo :: {
 
 :ref := :shape [round], :fill [muted]
 
-Repo :style := {
+Repo :style {
   &node :shape [point],
   #Head    { :ref, :label "main" },
   #Feature { :ref, :label "feature/auth" },
@@ -23,7 +23,8 @@ Repo :style := {
   spike   :label "2c9f try cache"
 }
 
-Repo :prove := {
-  fix merge == login session merge',   // both paths from the fork reach the same state
-  #Merged :pushout                      // the merge is clean: the least common state
+Repo :prove {
+  :kind [category],
+  :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
+  :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
 }

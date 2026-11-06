@@ -1,16 +1,16 @@
-//! Records, `{ … }`, checked against the environment (statements.md §21.6).
-//! Two of them are read here; the layers (`G :style := { … }`) wait for
+//! Records, `{ … }`, checked against the environment (statements.md §21.6,
+//! §22). Two of them are read here; the layers (`G :style { … }`) wait for
 //! plan steps 9 and 11.
 //!
-//!   :Record [dark] := { [ink] [#ddd], &zone :fill [#111] }   a theme
-//!   :terminal := { :shape [circle], :fill [red] }             a bundle
+//!   :Record [dark] := { [ink] := [#ddd], &zone :fill [#111] }   a theme
+//!   :terminal := { :shape [circle], :fill [red] }                a bundle
 //!
-//! A theme holds tokens, class subjects, and functions with no subject,
-//! which bind the diagram it is applied to. A bundle holds functions only,
-//! and applies where all of them apply.
+//! A theme holds tokens, named with `:=`, class contexts, and descriptors
+//! with no context, which bind the diagram it is applied to. A bundle holds
+//! descriptors only, and applies where all of them apply.
 //!
-//! The shapes `definitions.entries` reports (bare terms, levels) are passed
-//! over here.
+//! The shapes `definitions.entries` reports (bare terms, levels,
+//! declarations) are passed over here.
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
@@ -34,7 +34,7 @@ fn themeItems(a: *Analyser, node: Node.Index, owner: Env.Classes) error{OutOfMem
     const cst = a.cst;
     var one: [1]Node.Index = undefined;
     for (vocabulary.itemsOf(cst, node, &one)) |item| switch (cst.tag(item)) {
-        .o_chain => if (definitions.isPair(cst, item, .val)) try token(a, item),
+        .statement => if (cst.tokenTag(cst.mainToken(item)) == .defn) try token(a, item),
         .entry => {
             const parts = cst.children(item);
             const subject = cst.subject(item) orelse {
@@ -67,7 +67,7 @@ pub fn bundle(a: *Analyser, name: Node.Index, body: Node.Index) error{OutOfMemor
     const cst = a.cst;
     const name_token = cst.mainToken(name);
     if (cst.inverted(name)) {
-        try a.fail(.bad_definition_head, name_token);
+        try a.fail(.bad_naming_head, name_token);
         return;
     }
     var classes: Env.Classes = .full;
@@ -87,8 +87,8 @@ fn bundleItems(a: *Analyser, node: Node.Index, classes: *Env.Classes) error{OutO
     const cst = a.cst;
     var one: [1]Node.Index = undefined;
     for (vocabulary.itemsOf(cst, node, &one)) |item| switch (cst.tag(item)) {
-        // A token is no function either.
-        .o_chain => if (definitions.isPair(cst, item, .val)) try a.fail(.subject_in_bundle, cst.firstToken(item)),
+        // A token is no descriptor either.
+        .statement => try a.fail(.subject_in_bundle, cst.firstToken(item)),
         .entry => {
             if (cst.subject(item)) |subject| {
                 try a.fail(.subject_in_bundle, cst.firstToken(subject));
@@ -151,10 +151,10 @@ fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
         try a.errors.append(a.gpa, .{ .tag = .wrong_type, .token = cst.firstToken(value), .related = signature });
 }
 
-/// `[ink] [#dddddd]`: a label bound to a value of its type.
-fn token(a: *Analyser, pair: Node.Index) error{OutOfMemory}!void {
+/// `[ink] := [#dddddd]`: a label bound to a value of its type.
+fn token(a: *Analyser, naming: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
-    const key, const value = cst.children(pair)[0..2].*;
+    const key, const value = cst.data(naming).nodes;
     const key_token = switch (vocabulary.labelToken(cst, key)) {
         .label => |t| t,
         .malformed => return,
