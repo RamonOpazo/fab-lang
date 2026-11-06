@@ -87,7 +87,7 @@ G.f :label "x"
 - **Different contexts may overlap**, such as `&node` and `#Done`. The more specific context wins (see Subjects and classes). Nothing is ever silently overridden.
 - **Before use.** Names are defined before their first use, and a description at a context comes after the context's declaration.
 
-**The header.** A diagram's kind (flow, category, schema, plain graph), its strictness and its boundary are naturally descriptions of the zone, such as `Sq :kind [category]`. Which header descriptors exist, and what each changes, is open.
+**The header.** A file's general rules, applying to every diagram in it: the kind of its graphs (flow, category, schema, plain graph), whether its proofs are strict, how errors are treated. The same description may be written at three levels, and **the most specific wins: command line < header < local** (`Db :prove { :kind [schema] }` overrides the header for Db). Descriptors of the compilation, `:warnings [error]` (warnings become errors) and `:broken [withhold]` (no drawing while errors remain), are header and command line only. The command line follows shell conventions, derived from the header's definition: `fab check db.fab -H kind=schema -H strict -H no-strict -H warnings=error`. The header's syntax, its boundary, and a flag to force a rule from the command line are open.
 
 - **Kind** decides what the relations mean. In category mode `f g` also implies that the composite exists; in flow mode it is two steps. The kind also decides what is drawn: a flow draws no cells.
 - **Strictness** decides which warnings are errors, for example an unmatched `!` fork.
@@ -805,7 +805,7 @@ Sq :prove {
 }
 ```
 
-- **A proof is a record of type `:Proof`:** `:kind` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `:Table.(:Proposition)`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
+- **A proof is a record of type `:Proof`:** `:kind` and `:strict` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `:Table.(:Proposition)`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
 - **A proposition is the fifth shape of a value,** `( … )`, a record type whose descriptors are properties: `:pullback`, `:pushout`, `:card`, `:pk` and the rest are declared in `:Proposition :: { … }`, with ordinary types. Equations stand among them, and a comma means *and*: `:axiom (&node.id :pk, &edge :card [0..*/1])`.
 - **How each is checked:**
 
@@ -815,7 +815,7 @@ Sq :prove {
 | `:lemma` | error | error | error | warning; a pass acknowledges it |
 
 - **An axiom fits the structure, or it is an error:** its truth is never checked, and no pass reaches it, since from an inconsistent theory everything follows. An axiom states what it presupposes: `#M :pushout` as an axiom states its commuting square too.
-- **Independence is opt-in:** with `G :independent` in the header, or `fab check --independent`, an axiom that follows from the others warns that it could be a lemma.
+- **A strict proof uses no axiom it does not need.** With `:strict` (in the proof, in the header, or `-H strict`), each axiom that follows from the others warns that it could be a lemma. It is opt-in, since checking costs a proof per axiom.
 
 - **Axioms have no order; a lemma may use every axiom and the lemmas before it.**
 - **Chains of equations** state each step: `(f h == g k == d)` is `f h == g k` and `g k == d`.
@@ -1217,7 +1217,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Structure**
 
 - **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures; labels and signatures declare vocabulary, not structure. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
-- **The header.** Which attributes (`:kind`, boundary) and what each changes. `:kind` is one attribute, the same in the header and in the proof, where it wins (Coming, Restrictions and passes).
+- **The header.** Its syntax, its boundary, which further descriptors it holds, and the command line's flag to force a rule on files that opted out (`statements.md` §22.7).
 - **Diagram composition.** How one diagram is used inside another, through its boundary.
 - **What a flow could draw of its cells,** if anything, and how many levels stay readable.
 - **How a category draws `?` and `!`.** They are declared the same way in every diagram; what a category shows of them is the renderer's to decide.

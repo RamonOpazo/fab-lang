@@ -963,7 +963,7 @@ and a proof says what T(G) holds: **axioms** state, **lemmas** are checked. An a
 
 - **No pass reaches an axiom.** From an inconsistent theory everything follows, so every lemma would be confirmed and none would mean anything: a broken fact is fixed, never acknowledged.
 - **An axiom states what it presupposes.** `#M :pushout` needs its square to commute: as an axiom it states the commuting square too, so no precondition is left to decide; as a lemma, both are checked.
-- **Independence is opt-in.** An axiom that follows from the others is redundant, and could be a lemma. Checking every axiom costs a proof each, so fAB looks only when asked, in the header (`Repo :independent`, a flag) or from the command line (`fab check --independent`); each axiom that follows is then a warning ("follows from the other axioms; it could be a lemma"), and one fAB cannot decide is left alone.
+- **Independence is opt-in** (amended in 22.7: the flag is `:strict`, `-H strict` on the command line). An axiom that follows from the others is redundant, and could be a lemma. Checking every axiom costs a proof each, so fAB looks only when asked, in the header (`Repo :independent`, a flag) or from the command line (`fab check --independent`); each axiom that follows is then a warning ("follows from the other axioms; it could be a lemma"), and one fAB cannot decide is left alone.
 - **Axioms have no order;** nothing derives them. **A lemma may use every axiom and the lemmas before it,** so lemmas never prove each other.
 - **Both are tables:** `&zone :axiom :: :Table.(:Proposition)`, `&zone :lemma :: :Table.(:Proposition)`. **A key is optional:** an entry without one has a fresh key no one can refer to, so each entry is still one binding. Name only what is referred to, as with nodes: `Repo :lemma.[clean]`, for a pass or a drawing.
 - **`( … )` is the fifth shape of a value, `:Proposition`,** a record type declared by its descriptors, the properties:
@@ -1022,3 +1022,44 @@ fAB checks claims about one finite presentation; it is not a proof assistant. Th
 So §17's classes have content: *refutable* is a counterexample found, *undecidable* is no procedure, or the budget spent.
 
 **Rejected.** A general logic with written proofs (Lean, Coq): what anything can state, nothing can check unaided, and fAB is a description language. Unbounded checks: a drawing must always finish.
+
+### 22.7 The header, the command line, and strict proofs, 2026-11-06
+
+Amends 22.5 (independence) and the header's open question. The header's syntax, and the command line's, wait for the CLI's revision (plan step 12); what is settled here is what they say and who wins.
+
+**The header holds the file's general rules,** applying to every diagram in it: what kind of graphs its structures are, how strict their proofs are, how errors are treated. It is defined in fab-core, with its descriptors and their types, like any record type.
+
+**One description, three levels:**
+
+| Level | Where | Example |
+| --- | --- | --- |
+| Command line | `fab check` | `fab check db.fab -H kind=schema -H strict` |
+| Header | the file, once | the file's `:kind [schema]`, `:strict` |
+| Local | a diagram's layer | `Db :prove { :kind [schema], :strict }` |
+
+- **The most specific wins: command line < header < local.** A local description overrides the header for its diagram, and the header overrides the command line. The command line is a default for what the file leaves unsaid.
+- **Why the file wins.** The header changes what diagrams mean (`:kind [category]` makes `f g` a composite); if a flag could override it, one file would mean different things depending on how it is run, and a file that states its rules would stop being the truth. rustc does the same: `#[allow]` in the source overrides `-D` on the command line.
+- **Forcing is its own flag,** as rustc's `--cap-lints` is: CI that must impose a rule on files that opted out says so explicitly. Its name and shape wait for the CLI.
+- **Descriptors that are a diagram's** (`:kind`, `:strict`) may be written at all three levels. **Descriptors of the compilation** (`:warnings`, `:broken`) only in the header and on the command line.
+
+**The command line follows shell conventions,** not fAB syntax: arguments are what a shell loop expects, even when wordier. fab-cli derives its options from the header's definition in fab-core, by fixed translation rules, so the two never drift:
+
+- `-H name` sets a flag; `-H no-name` turns it off. Never `name!`: interactive bash and zsh read `!` as history expansion.
+- `-H name=value` sets a value; the value is the bracket's contents: `-H kind=category`, `-H warnings=error`. Always the descriptor's name: never `-H category`, even though a label names its type.
+
+**`:strict` replaces `:independent`:** a strict proof uses no axiom it does not need. `G :prove { :strict, :axiom (…), :lemma (…) }`, or `:strict` in the header for every diagram, or `-H strict`. Each axiom that follows from the others is a warning: "follows from the other axioms; it could be a lemma". One fAB cannot decide is left alone, as before. The word is plain on purpose: a programmer learns what independence is from the message, without the word.
+
+**The compilation's tolerance becomes two descriptors,** each named after what it does, freeing "strict" for proofs:
+
+| Today (`Compilation.Tolerance`) | Header | Command line |
+| --- | --- | --- |
+| warnings promoted to errors | `:warnings [error]`, default `[warn]` | `-H warnings=error` |
+| a broken IR withheld | `:broken [withhold]`, default `[draw]` | `-H broken=withhold` |
+
+The code's `strict` and `preview` tolerances are renamed to match when the header lands.
+
+**Rejected.**
+- **fAB syntax in arguments** (`--with 'Db :strict'`): not how a shell is used, and quoting gets in the way.
+- **The command line on top:** it would let the way a file is run change what it means.
+- **`:independent`, `:minimal`:** exact, but they need the formalism to explain; `:strict` needs one sentence.
+- **`-H category`:** short, but scripts read better with the descriptor named.

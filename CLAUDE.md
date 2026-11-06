@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict` (6 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -216,7 +216,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 9 |
-| The header's attributes (`:kind`, boundary, `:independent`); `:kind` is the same attribute as the proof's, which wins | after fab-core |
+| The header's syntax, boundary and further descriptors; the CLI's force flag (settled: command line < header < local, `-H name[=value]`, `:strict`, `:warnings`, `:broken`; `statements.md` §22.7) | after fab-core |
 | Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |
