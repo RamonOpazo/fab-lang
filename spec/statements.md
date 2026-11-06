@@ -1063,3 +1063,72 @@ The code's `strict` and `preview` tolerances are renamed to match when the heade
 - **The command line on top:** it would let the way a file is run change what it means.
 - **`:independent`, `:minimal`:** exact, but they need the formalism to explain; `:strict` needs one sentence.
 - **`-H category`:** short, but scripts read better with the descriptor named.
+
+### 22.8 Types are declared; twins, 2026-11-06
+
+Amends 21.2, 22.2–22.5 (plan step 9b); the tables of 22.3 and 22.5 are declared as below. Settles how a type says where `!` is allowed, and with it how types are written.
+
+**`::` introduces a type; `:=` binds values only.** A declaration's body says what the new thing holds: `G :: f g` its edges, `:Shape :: [circle], [box]` its labels, `:Style :: { … }` its descriptors, and `:Angle :: :Number!` its values, those of `:Number!`. `[red] := [#f00]` says red *is* `#f00`; no type is a value, so type aliases go, and `:Length := :Number` is an error (**type named with `:=`**).
+
+- **Declared types are distinct.** `:Length`, `:Angle` and `:Fraction` all hold numbers, but a length is no angle: `:Length [gap] := [2]` then `:bend [gap]` is a wrong type. The unit, carried only by the type's name until now, is checked.
+- **Literals fit by shape:** a declared type accepts its body's values as written, literals and untyped names, so `:size [2]` fits `:Length`. A value already typed by a declaration fits that type, and every type whose body includes it.
+- **Repeating a declaration adds to the type,** uniformly: labels (`:Shape :: [blob]`), descriptors (`:Style :: { &node :glow :: :Color }`) and types (`:Tip :: :Arc`). A pro user extends the vocabulary where it lives, with no new types and no new names.
+
+**A type is spelled like its values.**
+
+| Body of `:T :: …` | Declares | Example |
+| --- | --- | --- |
+| labels | a label type | `:Shape :: [circle], [box]` |
+| descriptors | a record type | `:Style :: { (&node, &zone) :fill :: (:Color, :Nil) }` |
+| types, by commas | a union | `:Tip :: :Head, :Hook!, :Nil` |
+| a bracket of two or more type names | a tuple | `:Arrow :: [:Tip/:Stroke/:Tip]` |
+| a bracket of one type name | a list | `:Themes :: [:Style]` |
+
+- **A comma is a choice, as in a diagram's declaration** (side by side, the coproduct). Parentheses group, as in a graph: `:Tip :: (:Head, :Hook!, :Nil)` is `:Tip :: :Head, :Hook!, :Nil`, as `G :: (f, g)` is `G :: f, g`. Inside an expression the group is needed: `&node :fill :: (:Color, :Nil)`.
+- **A bracket is a tuple of its slots,** as `[>/solid/>]` is a tuple of values.
+- **`[:T]` is a list of `:T`:** a deliberate shorthand. A one-slot tuple would only repeat `:T`, so the spelling is free to mean the list. Its values are as before: `[dark]` is a list of one, `[dark/compact]` of two, `[]` none.
+- **A bracket holds type names only,** each with an optional `!`: no expression, so what it needs is named first, as a composite is before it is a side (`W :: +(f h, k, g)+`): `:Stroke :: :Line!, :Nil`, then `[:Tip/:Stroke/:Tip]`. A list of tuples is `:Pair :: [:A/:B]`, then `[:Pair]`.
+- **No `(`, `)` or `,` inside any bracket,** of values or of types: they are fAB's own grouping, so `[:A/(:B,:C)/:D]` cannot be smuggled in without spaces. Symbols lose these three glyphs; none of the prelude's uses them.
+- **Types and values never mix in a bracket:** `[:Tip/solid/>]` is an error (**types and values mixed**). Verbose in an edge case, easy to decide always.
+- **No constructors remain.** `:Union.(…)`, `:Tuple.(…)`, `:List.(…)` and `:Table.(…)` go, and with them `.( … )` on a type (**type with parameters**). A type is names, `!`, commas, groups and brackets.
+
+**A table is a descriptor that takes a key, declared by its key slot.** No value is a table: `(f == g)` is a `:Proposition`, and what makes `:axiom` a table is that the descriptor takes a key. So being a table is the descriptor's arity (a flag; a value; a key and a value), written where the key is written:
+
+```
+:Proof :: {
+  &zone :kind      :: :Kind,              // a value
+  &zone :strict    :: :Flag,              // a flag
+  &zone :axiom.[]  :: :Proposition,       // a table: a key, then a value
+  &zone :lemma.[]  :: :Proposition
+}
+
+Repo :prove {
+  :kind [category],
+  :strict,
+  :axiom (fix merge == login session merge'),    // no key: a fresh one
+  :axiom.[root] (*/init :initial),
+  :lemma.[clean] (#Merged :pushout)
+}
+Repo :lemma.[clean]                              // a reference
+```
+
+- **`.[]` is the key slot, empty because a declaration names no key:** nil is nothing written, so `.[]` reads "a key goes here, and may be empty", which is the rule that keys are optional and a missing one is fresh. A filled slot in a declaration, `:axiom.[a] :: …`, is an error (**key in a declaration**).
+- **The declaration looks like its use,** as every other type in this section does, and the value keeps its own type: `&zone :note.[] :: :Text, :Math` is a table of text or maths.
+- **Any record type may hold tables:** `:Style :: { &zone :legend.[] :: :Label }`, then `Board :style { :legend.[done] "green: shipped", :legend.[late] "red: overdue", :legend "grey: not started" }`. A legend is facts under their keys, where `:theme [dark/compact]` is one choice.
+- **Errors read from the slot:** **key not taken** is a key on a descriptor declared without `.[]` (`:kind.[x] [category]`); two entries under one key are a **binding made twice**.
+- A typed key, `.[:Name]`, would fit this spelling later; nothing asks for it.
+
+**`!` names a value's twin.** The three uses of 3.2 in style.md are one idea: a two-sided value has exactly one partner, its unmarked spelling is the first. The flag's twin is off, a hook's or an angle's is the inner side, a line's is struck. A type with twins is `T × 2`, and `!` swaps the halves; the twin of a twin is the value itself, so `[30!!]` stays an error.
+
+- **Twins are declared on types, never on labels:** `T!` is `T` with its twins. `:Angle :: :Number!`, `:Hook :: [?], [^]` with `:Hook!` in `:Tip`, `:Line!` in `:Stroke`. A type at each use decides: an arrow's line may be struck, a node's border (`:line :: (:Line, :Nil)`) may not.
+- **`T` fits `T!`,** an unmarked value being the first of its pair; **`T!` does not fit `T`**. On a union `!` distributes: `(:Head, :Hook)!` is `(:Head!, :Hook!)`. `:Flag` has twins by nature; `:Nil` and records have none.
+- **`:Angle :: :Number!` leaves `:Number` as it is:** `:size [2!]` is still an error. It declares a new type, holding the numbers and their twins.
+- **One error, not invertible:** `!` where the type has no twins. It replaces *only a flag inverts* (`:fill!`): a bundle is no `:Flag!`, so `:terminal!` is the same error.
+- **Zig gives each twin its meaning,** per type, as it does labels: `:Hook!` the side, `:Angle` inward, `:Line!` struck, `:Flag!` off. The `!` of a node kind (`f/!`, a parallel) is another position and unrelated.
+
+**Rejected.**
+- **Twins on labels** (`:Head :: [?!], [^!]`): it reads as a value, the inner hook, while it would mean "both sides"; it cannot vary with use, so struck lines would reach node borders; and it is a second way to say what `T!` says.
+- **Type aliases with `:=`:** a type is not a value, and aliases make units unchecked.
+- **`:Union.(…)` beside the comma:** two spellings of one choice. **`[:Style..]` for a list:** `..` would mean two things inside brackets.
+- **`:Table.(T)` and `:{ :A, :B }` for tables:** both spell as a type what no value has; a table is the descriptor's arity, so it is declared on the descriptor.
+- **Expressions inside brackets:** the token holds no spaces, so they would depend on whitespace; naming first keeps a type readable.

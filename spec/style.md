@@ -1,6 +1,6 @@
 # fAB `:style`: the complete vocabulary, 2026-10-23
 
-Decided in the design session of 23 October 2026. This document formalizes the `:style` layer: every attribute, which subjects it applies to, its values and its default, plus the arrow grammar and themes. It builds on the general decisions in [`statements.md`](statements.md) (statements, values, subjects and classes), which it assumes. Its example (section 11) predates the grammar of joining ([`joining.md`](joining.md)); the spec's own example is current. Sections 3, 4.6, 7, 9 and 10 were revised on 3 November by the types and the prelude ([`statements.md`](statements.md) §21), and on 5 November by the three forms and typed records (§22): a description has no `:=`, a theme is a `:Style`, nil is written `[]`; the vocabulary itself is now written in the prelude, [`prelude.fab`](../fab-core/src/prelude.fab), which this document explains.
+Decided in the design session of 23 October 2026. This document formalizes the `:style` layer: every attribute, which subjects it applies to, its values and its default, plus the arrow grammar and themes. It builds on the general decisions in [`statements.md`](statements.md) (statements, values, subjects and classes), which it assumes. Its example (section 11) predates the grammar of joining ([`joining.md`](joining.md)); the spec's own example is current. Sections 3, 4.6, 7, 9 and 10 were revised on 3 November by the types and the prelude ([`statements.md`](statements.md) §21), and on 5 November by the three forms and typed records (§22): a description has no `:=`, a theme is a `:Style`, nil is written `[]`; and on 6 November by declared types and twins (§22.8): types are declared with `::` and spelled like their values, `!` is allowed where a type has twins (`:Number!`); the vocabulary itself is now written in the prelude, [`prelude.fab`](../fab-core/src/prelude.fab), which this document explains.
 
 Status words: **Decided**, **Open**, **Rejected** (with the reason).
 
@@ -76,19 +76,19 @@ From general to narrow; a narrower subject wins where subjects overlap:
 | `:Math`                  | `$…$`                                                                 | LaTeX                                                       |
 | `:Color`                 | `[#c0392b]`, `[#f00]`, a named colour (`[red]`), a token (`[ink]`)    |                                                             |
 | `:Number`                | `[2]`, `[0.5]`, `[30!]`                                               | an exact decimal, never negative (3.2)                      |
-| `:Length`                | a number, in **em**                                                   | an alias of `:Number`; relative to the theme's text size    |
-| `:Angle`                 | a number, in **degrees**                                              | an alias; `!` for the inner side: `[30!]`                   |
-| `:Fraction`              | a number from `0` to `1`                                              | an alias; a position along an edge                          |
+| `:Length`                | a number, in **em**                                                   | `:Length :: :Number`; relative to the theme's text size     |
+| `:Angle`                 | a number, in **degrees**                                              | `:Angle :: :Number!`; `!` for the inner side: `[30!]`       |
+| `:Fraction`              | a number from `0` to `1`                                              | `:Fraction :: :Number`; a position along an edge            |
 | `:Range`                 | `[0..*]`, `[1..3]`                                                    |                                                             |
 | labels                   | `[dashed]`, `[italic]`, `[outer]`, …                                  | declared by their type in the prelude: `:Line :: [solid], …` |
 | `:Arrow`                 | `[tail/line/head]`                                                    | a tuple (4.6)                                               |
 | `:Cardinality`           | `[0..*/1..1]`                                                         | a tuple of two ranges                                       |
-| `:List.(:Style)`         | `[dark]`, or several: `[dark/compact]`                                | themes (section 7)                                          |
+| `[:Style]`               | `[dark]`, or several: `[dark/compact]`                                | themes (section 7)                                          |
 | `:Style`                 | `{ … }`                                                               | a style, a theme, a bundle's contents: a record type        |
 | `:Nil`                   | `[]`, an empty slot                                                   | nothing; admitted where a type says so                      |
 | `:Flag`                  | no value; `!` turns it off                                            | `:hide`, `:hide!`                                           |
 
-`:Tuple.(…)`, `:List.(T)` and `:Union.(…)` build the rest: `:bend` takes `:Union.(:Facing, :Angle)`, `[outer]` or `[30]`.
+Types are spelled like their values: a comma is a choice, a bracket a tuple, `[:T]` a list (`statements.md` §22.8). `:bend` takes `(:Facing, :Angle)`: `[outer]`, `[30]` or `[30!]`.
 
 ### 3.1 How a bracket is read
 
@@ -204,7 +204,7 @@ These are neither looks nor positions, but they are presentation, so they live i
 
 ### 4.6 Arrows: `[tail/line/head]`
 
-**Decided.** An arrow is a tuple of three fields, `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`:
+**Decided.** An arrow is a tuple of three fields, `:Arrow :: [:Tip/:Stroke/:Tip]`, with `:Tip :: :Head, :Hook!, :Nil` and `:Stroke :: :Line!, :Nil`:
 
 ```
 [tail/line/head]
@@ -401,7 +401,7 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 
 **Decided** (revised 3 November). The prelude is ordinary fAB source, [`prelude.fab`](../fab-core/src/prelude.fab) in fab-core, compiled into the binary and read before every program. It contains:
 
-- the types: aliases (`:Length`, `:Arrow`) and label types (`:Shape :: [circle], …`);
+- the types: declared from other types (`:Length :: :Number`, `:Arrow :: [:Tip/:Stroke/:Tip]`) and label types (`:Shape :: [circle], …`);
 - the attributes, with their signatures: `(&node, &zone) :fill :: :Color`;
 - the colour names and tokens;
 - the named arrows (`[epi]`, `[mono]`, `[incl]`, …);

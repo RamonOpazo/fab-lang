@@ -15,10 +15,11 @@ program
 # Three forms (statements.md §22): a declaration (::), a naming (:=) and a
 # description, which has no operator.
 # DECL heads: a zone (G :: f g), a type (:Shape :: [circle], [box];
-# :Style :: { … }), or contexts and a descriptor (a signature:
-# (&node, &zone) :fill :: :Color).
-# DEFN heads: a value ([red]), a typed value (:Color [red]), a type (an
-# alias, :Length := :Number) or a descriptor (a bundle).
+# :Style :: { … }; :Angle :: :Number!; :Tip :: :Head, :Hook!, :Nil;
+# :Arrow :: [:Tip/:Stroke/:Tip]), or contexts and a descriptor (a
+# signature: (&node, &zone) :fill :: :Color).
+# DEFN heads: a value ([red]), a typed value (:Color [red]) or a descriptor
+# (a bundle). A type is no value: never named with :=.
 # A description is an entry: G :style { … }, G.f :arrow [epi], G { … }.
 # The head is read as a part: :Color [red] is a chain of a type and a
 # value, (&node) :fill an entry.
@@ -110,8 +111,8 @@ marker
 
 # A ? or ! that touches no atom on its right is a node of that kind: the
 # f/? in f/? +(a, b). Touching an atom, it is a prefix marker.
-# A type is a primary so that its parameters are a juxtafix:
-# :Tuple.(:Tip, :Line, :Tip).
+# A type is a primary, so that its twins are a postfix marker: :Number!.
+# A table descriptor is declared by its key slot: &zone :axiom.[] :: :P.
 primary
     = EDGE_ID
     | NODE_ID
@@ -137,9 +138,10 @@ primary
 #   CLASS_ID  &node                & then lowercase
 #   STR       "…"                  one line, \ escapes
 #   MATH      $…$                  one line, \ escapes
-#   VAL       [red], [/solid/>], []  one opaque token; no whitespace, [ or ];
+#   VAL       [red], [/solid/>], []  one opaque token; no whitespace, [ ] ( ) ,
 #                                  / separates its elements, read later;
-#                                  an empty element is nil: [] is nil
+#                                  an empty element is nil: [] is nil;
+#                                  type names make it a type: [:Tip/:Stroke/:Tip]
 #
 #   SLASH /   PLUS +   QUID ?   BANG !   STAR *   AT @   DOT .   BAR |
 #   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )

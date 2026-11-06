@@ -28,14 +28,13 @@ A program is a sequence of statements, one per line; braces let a statement span
 | Naming      | `:=`     | binds a **name** to a value                  | `[red] := [#ff0000]`, `:terminal := { :shape [circle] }`   |
 | Description | none     | says something of a **context**              | `G :style { … }`, `G.f :arrow [epi]`, `Order :theme [dark]` |
 
-**Declarations** build structure: they make something new, bound to nothing. Diagrams (zones) are declared with a term: `G :: term`. The vocabulary is declared too, in the prelude or in a program (see Values and definitions): labels of a type, `:Shape :: [circle], [box]`; descriptors with their signature, `(&node, &zone) :fill :: :Color`; and record types by their descriptors, `:Style :: { … }`. Nodes and edges may become declarable on their own; what that means is open, so it is reserved: an error until decided.
+**Declarations** build structure: they make something new, bound to nothing. Diagrams (zones) are declared with a term: `G :: term`. The vocabulary is declared too, in the prelude or in a program (see Values and definitions): labels of a type, `:Shape :: [circle], [box]`; types from other types, `:Angle :: :Number!`, `:Tip :: :Head, :Hook!, :Nil`; descriptors with their signature, `(&node, &zone) :fill :: :Color`; and record types by their descriptors, `:Style :: { … }`. Nodes and edges may become declarable on their own; what that means is open, so it is reserved: an error until decided.
 
-**Namings** bind a name to a value, read left to right as name, then value:
+**Namings** bind a name to a value, read left to right as name, then value. A type is no value: types are declared, with `::`.
 
 | Left side      | Names                                     | Examples                                                         |
 | -------------- | ----------------------------------------- | ---------------------------------------------------------------- |
 | `[name]`       | a value, with an optional type before it  | `[red] := [#ff0000]`, `:Color [warn] := [red]`, `:Style [dark] := { … }` |
-| `:Type`        | a type: an alias                          | `:Length := :Number`                                             |
 | `:descriptor`  | a new descriptor (a bundle), everywhere   | `:terminal := { :shape [circle], :fill [red] }`                  |
 
 **Descriptions** apply a descriptor, an attribute, to a context. A description has one form, read left to right as context, then descriptor, then value, with no operator:
@@ -502,12 +501,12 @@ Numbers go in brackets too: `:width [2]`. A record is written in braces, `{ … 
 | anything else                  | a symbol          | `[>]`, `[|>]`, `[X]`, `[O{]`                |
 | nothing                        | an empty slot     | the tail in `[/solid/>]`                    |
 
-A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one. Its glyphs are ASCII punctuation (less `/`, `!`, `#`, `[` and `]`, which a bracket uses itself) and the Unicode blocks of arrows, mathematical operators and geometric symbols: U+2190–23FF, U+25A0–27FF, U+2900–2BFF. Never a space, a control, a combining mark or a letter of any script; an allowlist, so nothing new in Unicode slips in. A **colour** is `#` and 3, 4, 6 or 8 hex digits, with alpha or without: without, it is opaque.
+A **symbol** is a run of glyphs with at most one capital letter, so `X` and `O{` are symbols, and no name is ever mistaken for one. Its glyphs are ASCII punctuation (less `/`, `!`, `#`, `[` and `]`, which a bracket uses itself, and `(`, `)` and `,`, which group: no bracket holds them) and the Unicode blocks of arrows, mathematical operators and geometric symbols: U+2190–23FF, U+25A0–27FF, U+2900–2BFF. Never a space, a control, a combining mark or a letter of any script; an allowlist, so nothing new in Unicode slips in. A **colour** is `#` and 3, 4, 6 or 8 hex digits, with alpha or without: without, it is opaque.
 
 **A bracket has one element more than it has slashes, and an element with nothing in it is nil.** One element is the value itself: `[red]`, `[2.5]`, `[#f00]`; there are no one-element lists. Two or more are a tuple of their types: `[>/solid/>>]` is a tuple of a symbol, a label and a symbol, `[1/1.5/2]` a tuple of three numbers. A tuple whose elements share a type is also a list of that type, and a single value is a list of one: `:theme [dark]`, `:theme [dark/compact]`.
 
 - **Nil is nothing written:** `[]` is one empty element, nil; `[/]` is two nils; `[/solid/>]` has a nil tail; `[////1/2]` is six elements, four of them nil. Nothing is marked by its spelling, never by a name. Text has its own nothing, `""`.
-- **Nil fits only where a type admits it** (`:Union.(:Color, :Nil)`), and every list admits it, as its "no elements": `:theme []` chooses no themes.
+- **Nil fits only where a type admits it** (`(:Color, :Nil)`), and every list admits it, as its "no elements": `:theme []` chooses no themes.
 - **Sequences do not nest:** a bracket is one token.
 
 The value's type must be the one the attribute expects: `:ink` takes a colour, `:arrow` an arrow. `:shape [red]` is a type error ("a `:Color` where a `:Shape` is expected").
@@ -523,7 +522,7 @@ The value's type must be the one the attribute expects: `:ink` takes a colour, `
 | an angle          | its side: inward instead of outward | `:bend [30!]`   |
 | a flag            | it: off instead of on               | `f :hide!`      |
 
-So there are **no negative numbers**: every number starts with a digit. Outside brackets `!` follows only a flag; in a term it is a node kind, and attributes never appear in terms.
+These are one idea: **`!` names a value's twin**, its other side, and the unmarked spelling is the first. Only a type with twins takes it, and the type says so: `T!` is `T` with its twins (`:Angle :: :Number!`, `:Hook!`, `:Line!`); `:Flag` has them by nature. `T` fits `T!`, never the reverse: `:size [2!]` is not invertible. So there are **no negative numbers**: every number starts with a digit. Outside brackets `!` follows only a flag; in a term it is a node kind, and attributes never appear in terms.
 
 ### Types
 
@@ -536,32 +535,32 @@ Every value has a type, and so does every name. The kinds of type are fixed by t
 | `:Number`          | `[2]`, `[0.5]`, `[30!]`: an exact decimal                    |
 | `:Range`           | `[0..*]`, `[1..3]`                                           |
 | `:Flag`            | none: written (`:hide`) or not, inverted with `!` (`:hide!`) |
-| `:Tuple.(T, U, …)` | `[a/b/c]`, one element of each type                          |
-| `:List.(T)`        | `[a/b/c]`, any number of elements, all of type T             |
-| `:Union.(T, U, …)` | a value of any of its types                                  |
+| `[:T/:U/…]`        | `[a/b/c]`, a tuple: one element of each type                 |
+| `[:T]`             | `[a/b/c]`, a list: any number of elements, all of type T     |
+| `:T, :U, …`        | a union: a value of any of its types; `(:T, :U)` inside an expression |
+| `:T!`              | the values of T and their twins: `[30]`, `[30!]`             |
 | `:Nil`             | `[]`, and an empty slot: nil                                 |
 | a record type      | `{ … }`, holding its descriptors: `:Style`, `:Proof`, `:Place` |
-| `:Table.(T)`       | for descriptors only: a key, then a value of type T          |
 | a label type       | the labels it declares: `:Shape :: [circle], [box]`          |
 
 - **Types are `:UpperCamel`,** descriptors (attributes) `:lowercase-kebab`, named values and labels `[lowercase-kebab]`.
 - **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, and for `{ … }` the record type its descriptors belong to) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
-- **Aliases** give a type a second name: `:Length := :Number`, `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`. Type parameters are written with `.` and a group, as qualification is.
-- **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side := :Union.(:Facing, :On)`.
+- **Types are declared and spelled like their values:** `:Length :: :Number`, `:Tip :: :Head, :Hook!, :Nil`, `:Arrow :: [:Tip/:Stroke/:Tip]`, `:Themes :: [:Style]`. A comma is a choice, a bracket a tuple, a bracket of one type a list. A bracket holds type names only, never types and values together; what it needs is named first. **Declared types are distinct:** `:Length` and `:Angle` hold numbers, but a length is no angle. A literal fits by its shape; a value typed by a declaration fits that type, and the types that include it. **Repeating a declaration adds to the type:** labels, descriptors or types. There are no type constructors: a type is names, `!`, commas, groups and brackets (`statements.md` §22.8).
+- **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side :: :Facing, :On`.
 - **Numbers are exact decimals:** fAB never computes with them, so `0.1` stays `0.1` from the source to the renderer. Digits on both sides of a point (`[.5]` and `[1.]` are errors), no exponent, at most 18 digits from the first nonzero one. Numbers are normalised, and printed so: `[1.50]` is `1.5`, `[007]` is `7`.
 
 ### Units
 
-Lengths are numbers in **em**, relative to the theme's text size. Angles are in **degrees**. A fraction is a number from 0 to 1, a position along an edge. `:Length`, `:Angle` and `:Fraction` are aliases of `:Number`: the unit belongs to the attribute.
+Lengths are numbers in **em**, relative to the theme's text size. Angles are in **degrees**. A fraction is a number from 0 to 1, a position along an edge. `:Length :: :Number`, `:Angle :: :Number!` and `:Fraction :: :Number` are distinct types, so units are checked: a length is no angle. An angle has a twin, the inner side: `:bend [30!]`.
 
 ### Definitions
 
-- **Values:** `[red] := [#ff0000]`, or with its type, `:Color [red] := [#ff0000]`. Aliases are allowed: `[warn] := [red]` has red's type.
-- **Record types** are declared by their descriptors, as a label type is by its labels: `:Style :: { (&node, &zone) :fill :: :Union.(:Color, :Nil), … }`. **A descriptor belongs to one record type,** so a record's type is read from its descriptors: `{ :fill [red] }` is a `:Style`, and a descriptor of another type in it does not apply. `{}` fits any record type. A descriptor declared outside any record type (`&zone :style :: :Style`) describes at the top level only.
+- **Values:** `[red] := [#ff0000]`, or with its type, `:Color [red] := [#ff0000]`. A value may name another: `[warn] := [red]` has red's type.
+- **Record types** are declared by their descriptors, as a label type is by its labels: `:Style :: { (&node, &zone) :fill :: (:Color, :Nil), … }`. **A descriptor belongs to one record type,** so a record's type is read from its descriptors: `{ :fill [red] }` is a `:Style`, and a descriptor of another type in it does not apply. `{}` fits any record type. A descriptor declared outside any record type (`&zone :style :: :Style`) describes at the top level only.
 - **Records:** `{ … }`, holding descriptions, namings and, in a type's declaration, signatures. `&node :stroke [ink]` is short for `&node { :stroke [ink] }`. A naming inside a record binds a name in that record only: `[ink] := [#dddddd]` binds a label to a value of its own type.
 - **Bundles:** `:terminal := { :shape [circle], :fill [red] }`. A bundle is a new attribute, a flag whose record is applied where it is written, exactly as if its contents were written there; later settings refine it: `#Done { :terminal, :fill [green] }`. A bundle holds descriptors only, and joins the record type of its contents. It applies where all its contents apply: `:terminal` applies to nodes.
 - **Themes:** `:Style [dark] := { [ink] := [#dddddd], &zone :fill [#1e1e1e] }`. A theme is a named style, of contexts and tokens, chosen with `:theme`. Its contexts are classes, since it applies to any diagram; a descriptor with no context describes the diagram it is applied to.
-- **Tables:** a descriptor of type `:Table.(T)` takes a key, then a value: `Repo :prove { :lemma.[merge] (fix merge == login session merge') }`. A binding is (context, descriptor, key), once; keys are optional (an entry without one has a fresh key nothing can refer to), written with `.`, and local to their descriptor.
+- **Tables:** a descriptor declared with a key slot, `&zone :lemma.[] :: :Proposition`, takes a key, then a value: `Repo :prove { :lemma.[merge] (fix merge == login session merge') }`. A binding is (context, descriptor, key), once; keys are optional (an entry without one has a fresh key nothing can refer to), written with `.`, and local to their descriptor.
 - **Signatures:** `(&node, &zone) :fill :: :Color` declares a descriptor: the classes it applies to, and the type it takes. Anywhere else it does not apply. A class includes the classes inside it: what applies to `&node` applies to `&choice`.
 - **Names** are defined once, and before their first use.
 
@@ -700,7 +699,7 @@ A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are a
 
 ### Arrows
 
-An arrow is a tuple of three fields, `[tail/line/head]`: `:Arrow := :Tuple.(:Tip, :Union.(:Line, :Nil), :Tip)`, with `:Tip := :Union.(:Head, :Nil)`. The ends are symbols, the line is a word. Any field may be empty, nil, meaning nothing there, but not all three: `[//]` is an error, since an edge that draws nothing is hidden with `:hide`, never emptied. `[/solid/>]` has no tail, `[>//>]` no line. The arrow only draws: the edge's direction always comes from the relations.
+An arrow is a tuple of three fields, `[tail/line/head]`: `:Arrow :: [:Tip/:Stroke/:Tip]`, with `:Tip :: :Head, :Hook!, :Nil` and `:Stroke :: :Line!, :Nil`. The ends are symbols, the line is a word. Any field may be empty, nil, meaning nothing there, but not all three: `[//]` is an error, since an edge that draws nothing is hidden with `:hide`, never emptied. `[/solid/>]` has no tail, `[>//>]` no line. The arrow only draws: the edge's direction always comes from the relations.
 
 **Lines** use the words of `:line`, plus `triple`: `solid`, `dashed`, `dotted`, `wavy`, `double` (2-cells, ⇒), `triple` (3-cells, ⇛); no line is an empty field. A `!` suffix strikes the line: `[/solid!/>]` is ↛, "does not".
 
@@ -805,7 +804,7 @@ Sq :prove {
 }
 ```
 
-- **A proof is a record of type `:Proof`:** `:kind` and `:strict` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `:Table.(:Proposition)`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
+- **A proof is a record of type `:Proof`:** `:kind` and `:strict` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `&zone :axiom.[] :: :Proposition`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
 - **A proposition is the fifth shape of a value,** `( … )`, a record type whose descriptors are properties: `:pullback`, `:pushout`, `:card`, `:pk` and the rest are declared in `:Proposition :: { … }`, with ordinary types. Equations stand among them, and a comma means *and*: `:axiom (&node.id :pk, &edge :card [0..*/1])`.
 - **How each is checked:**
 
@@ -882,7 +881,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Levels in a naming or a record     | `:x := a \| b`, `G :style { a \| b }`        | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
-| Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]`, `:Type` or `:descriptor` |
+| Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]` or `:descriptor` |
 | Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
 | Description with no context        | `:fill [red]` at the top level               | A context is left out only inside a block, where it is the owner |
 | Declaration in a record            | `:Style [x] := { [ink] :: :Color }`          | Inside braces, `::` declares only in a record type: `:Style :: { … }` |
@@ -951,9 +950,13 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Undefined name                      | `:ink [wran]`                            | Every name is defined before its use                                                 |
 | Name defined twice                  | `[red] := …` twice, `[epi] := …`         | Each name is defined once; the prelude's come first                                  |
 | Label in two types                  | `:Bow :: [outer]` after `:Facing`        | A label belongs to one type; shared words get a type of their own                    |
-| Not a type                          | `:Colour [x] := …`                       | Types are declared or aliased before their use                                       |
+| Not a type                          | `:Colour [x] := …`                       | Types are declared before their use                                                  |
+| Type named with `:=`                | `:Length := :Number`                     | A type is no value: it is declared, `:Length :: :Number`                             |
+| Types and values mixed              | `[:Tip/solid/>]`                         | A bracket holds values, or type names                                                |
+| Expression in a bracket             | `[:Tip/(:Line,:Nil)/:Tip]`, `[a,b]`      | Name the type first: `:Stroke :: :Line!, :Nil`; brackets never hold `(`, `)` or `,`  |
 | Contract broken                     | `:Color [warn] := [circle]`              | A type written in a naming is checked                                                |
-| Wrong type parameters               | `:List`, `:Color.(:Text)`, `:List.(:A, :B)` | `:Tuple` and `:Union` take one type or more, `:List` one; other types none          |
+| Type with parameters                | `:Color.(:Text)`, `:List.(:Style)`       | Types take none: a tuple is `[:A/:B]`, a list `[:A]`, a table a key slot `:d.[] :: :A` |
+| Key in a declaration                | `&zone :axiom.[a] :: :Proposition`       | A declaration names no key: its slot is empty, `:axiom.[]`                           |
 | Not a label                         | `:Shape :: [#f00]`, `[a/b]`, `[x!]`      | A label is one name or one symbol, alone in its bracket                              |
 | Labels on structure                 | `:Arrow :: [x]`                          | Labels are single values; tuples, lists, unions, records and flags take none          |
 | Uppercase name                      | `[Warn]`                                 | Names start with a lowercase letter; a symbol has at most one capital, and no letter after it |
@@ -971,7 +974,6 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Wrong type                          | `:shape [red]`, `:theme [terminal]`      | A `:Color` where a `:Shape` is expected                                              |
 | Does not apply                      | `f :shape [box]`                         | An attribute applies to the classes its signature names                              |
 | Value given to a flag, value missing | `:hide [on]`, `:shape`                  | Flags take no value; other attributes need one                                       |
-| Only a flag inverts                 | `:fill!`, `:terminal!`                   | `!` after an attribute turns a flag off                                              |
 | Key of the wrong type               | `[ink] [circle]` in a record             | A label binds a value of its own type                                                |
 | Subject in a bundle                 | `:t := { &node :fill [red] }`            | A bundle is applied where it is written; it holds descriptors only                   |
 | Element in a theme                  | `:Style [x] := { G.f :pen [thin] }`      | A theme applies to any diagram; its contexts are classes                             |
@@ -994,7 +996,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Another diagram's subject              | `A.+f` styled from C                                       | Each diagram styles itself                                   |
 | Empty arrow                            | `[//]`                                                     | An arrow draws something; to draw no edge, `:hide` it        |
 | Unknown line word or end               | `[/zigzag/>]`, `[/solid/%]`                                | Lines are words from a fixed list; ends from the glyph table |
-| Not invertible                         | `[/solid/>!]`, `:size [2!]`                                | Only hooks `?`, harpoons `^` and `:bend` angles have a side  |
+| Not invertible                         | `[/solid/>!]`, `:size [2!]`, `:fill!`, `:terminal!`        | `!` names a twin, and only a type with twins (`T!`) has one  |
 | Head on an undirected edge             | `f/` with `:arrow [/solid/>]`                              | The drawing would show a direction the relations don't have  |
 
 ### Named nodes and schemas
