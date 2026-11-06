@@ -216,7 +216,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 9 |
-| The header's attributes (`:kind`, boundary); `:kind` is the same attribute as the proof's, which wins | after fab-core |
+| The header's attributes (`:kind`, boundary, `:independent`); `:kind` is the same attribute as the proof's, which wins | after fab-core |
 | Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |

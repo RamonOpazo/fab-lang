@@ -944,11 +944,20 @@ T(G) = the generators (the cells G declares) + the laws of K + the axioms
 
 and a proof says what T(G) holds: **axioms** state, **lemmas** are checked. An axiom is what the user tells fAB about the system (this square commutes, this column is a key); a lemma is what the user asks fAB to confirm (is this a pushout?), a proved step that later lemmas may build on. Most programs, a git history or a schema, use only axioms: they are the standard way to give a structure its features. Lemmas are for questions about the structure built.
 
-| | Ill-formed (unknown names, paths whose ends differ) | Refuted | Undecidable |
-| --- | --- | --- | --- |
-| `:axiom` | error | error: inconsistent with K or the other axioms, where decidable | fine: stating what cannot be derived is what axioms are for |
-| `:lemma` | error | error, `&refutable` (17) | warning, `&undecidable`; a pass acknowledges it |
+**An axiom's truth is never checked: it fits the structure, or it is an error.** What can be wrong with it is what it is stated about:
 
+1. **Ill-formed:** an unknown name, an equation between paths whose ends differ, a property on the wrong class. Always decidable.
+2. **Not admitted by the kind:** `:pullback` in a flow, `:pk` outside a schema, an equation through an undirected edge in a category. Always decidable.
+3. **Inconsistent with the other axioms,** where a contradiction can be shown. Where it cannot, the axiom is **trusted**: facts are stated, not evidenced.
+
+| | Ill-formed | Not admitted by the kind | Inconsistent, or refuted | Cannot tell |
+| --- | --- | --- | --- | --- |
+| `:axiom` | error | error | error, when decidable | trusted, silent |
+| `:lemma` | error | error | error, `&refutable` (17) | warning, `&undecidable`; a pass acknowledges it |
+
+- **No pass reaches an axiom.** From an inconsistent theory everything follows, so every lemma would be confirmed and none would mean anything: a broken fact is fixed, never acknowledged.
+- **An axiom states what it presupposes.** `#M :pushout` needs its square to commute: as an axiom it states the commuting square too, so no precondition is left to decide; as a lemma, both are checked.
+- **Independence is opt-in.** An axiom that follows from the others is redundant, and could be a lemma. Checking every axiom costs a proof each, so fAB looks only when asked, in the header (`Repo :independent`, a flag) or from the command line (`fab check --independent`); each axiom that follows is then a warning ("follows from the other axioms; it could be a lemma"), and one fAB cannot decide is left alone.
 - **Axioms have no order;** nothing derives them. **A lemma may use every axiom and the lemmas before it,** so lemmas never prove each other.
 - **Both are tables:** `&zone :axiom :: :Table.(:Proposition)`, `&zone :lemma :: :Table.(:Proposition)`. **A key is optional:** an entry without one has a fresh key no one can refer to, so each entry is still one binding. Name only what is referred to, as with nodes: `Repo :lemma.[clean]`, for a pass or a drawing.
 - **`( … )` is the fifth shape of a value, `:Proposition`,** a record type declared by its descriptors, the properties:

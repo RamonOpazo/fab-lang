@@ -809,10 +809,13 @@ Sq :prove {
 - **A proposition is the fifth shape of a value,** `( … )`, a record type whose descriptors are properties: `:pullback`, `:pushout`, `:card`, `:pk` and the rest are declared in `:Proposition :: { … }`, with ordinary types. Equations stand among them, and a comma means *and*: `:axiom (&node.id :pk, &edge :card [0..*/1])`.
 - **How each is checked:**
 
-| | Ill-formed | Refuted | Undecidable |
-| --- | --- | --- | --- |
-| `:axiom` | error | error: inconsistent with the kind or other axioms, where decidable | fine |
-| `:lemma` | error | error | warning; a pass acknowledges it |
+| | Ill-formed | Not admitted by the kind | Inconsistent, or refuted | Cannot tell |
+| --- | --- | --- | --- | --- |
+| `:axiom` | error | error | error, when decidable | trusted, silent |
+| `:lemma` | error | error | error | warning; a pass acknowledges it |
+
+- **An axiom fits the structure, or it is an error:** its truth is never checked, and no pass reaches it, since from an inconsistent theory everything follows. An axiom states what it presupposes: `#M :pushout` as an axiom states its commuting square too.
+- **Independence is opt-in:** with `G :independent` in the header, or `fab check --independent`, an axiom that follows from the others warns that it could be a lemma.
 
 - **Axioms have no order; a lemma may use every axiom and the lemmas before it.**
 - **Chains of equations** state each step: `(f h == g k == d)` is `f h == g k` and `g k == d`.
