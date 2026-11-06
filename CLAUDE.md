@@ -67,7 +67,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | 9b0 done |
+| 9    | Style layer                               | 9b1 done |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -195,7 +195,7 @@ Done when every level case passes.
 - **9a. Three forms** (done; `statements.md` §22.1, Implemented). A description is a statement with no operator (`G :style { … }`, `G.f :arrow [epi]`); `G :style := …` is *description written with `:=`*. Inside braces, `:=` names in the record (tokens: `[ink] := [#dddddd]`) and `::` declares in the type being declared. A table's key, `:lemma.[a]`; a context left out only inside a block; the warning *owner described after a part*. The 8e checks move to the new forms; the prelude, examples, corpus and `parse.test.zig` follow.
 - **9b. Types** (`statements.md` §22.2–22.3, §22.8). In increments:
   - **9b0. Declared types** (done). `::` introduces a type; aliases go (*type named with `:=`*). Declared types are distinct, literals fit by shape, a typed value fits its type and those including it; repeating a declaration adds to the type. Types spelled like values: a comma is a union (a group inside expressions), `[:A/:B]` a tuple, `[:T]` a list, brackets of type names only (*types and values mixed*, *expression in a bracket*); `:Union`, `:Tuple`, `:List` and `:Table` go: no type takes parameters (*type with parameters*). The lexer: no `(`, `)` or `,` in a bracket. Twins: `T!`, `T` fits `T!`, `!` distributes over a union; *not invertible* replaces *only a flag inverts*. The prelude: `:Length`, `:Angle :: :Number!`, `:Fraction`, `:Head` and `:Hook`, `:Tip`, `:Stroke :: :Line!, :Nil`, `:Arrow :: [:Tip/:Stroke/:Tip]`.
-  - **9b1. Nil.** A bracket has one element more than its slashes; `[]` is one nil, `[/]` two. `:Nil` built in; nil fits only where a type admits it, and every list. `:None` and `[none]` go; Zig's `none` values stop being labels.
+  - **9b1. Nil** (done). A bracket has one element more than its slashes; `[]` is one nil, `[/]` two. `:Nil` built in; nil fits only where a type admits it, and every list. `:None` and `[none]` go; Zig's `none` values stop being labels.
   - **9b2. Record types.** `:Style :: { … }` declares by descriptors, one descriptor one record type, a record's type read from its descriptors (*does not apply* for another's); `{}` is a value, fitting any record type. `:Record` goes: themes are `:Style`, `:theme :: [:Style]`, `&zone :style :: :Style`, a bundle joins its contents' type. The prelude's descriptors move into `:Style`.
   - **9b3. Tables.** A descriptor declared with a key slot, `&zone :axiom.[] :: :Proposition`, is a table; arity follows the declaration; keys optional; *key not taken*, *key in a declaration*.
   - **9b4. Value checks.** *Empty arrow*; `Style.Line` gains `triple` (the prelude test covers `:Line`); `[base]` binds every descriptor, with nil where it means nothing.

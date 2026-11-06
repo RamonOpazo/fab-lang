@@ -47,8 +47,9 @@ pub const TypeIndex = enum(u32) {
     range,
     flag,
     record,
-    /// An empty slot, `[/solid/>]`'s tail: it fits any slot (until 9b1).
-    nothing,
+    /// Nil, nothing written: `[]`, `[/solid/>]`'s tail. It fits only where
+    /// a type admits it, and every list, as its "no elements".
+    nil,
     /// Whatever failed to type. It fits anywhere, so one error says it.
     unknown,
     _,
@@ -62,7 +63,7 @@ pub const Type = union(enum) {
     range,
     flag,
     record,
-    nothing,
+    nil,
     unknown,
     /// `:T :: …`, with an identity of its own: its labels, and the members
     /// in `declared`.
@@ -122,10 +123,10 @@ pub fn init(gpa: std.mem.Allocator) error{OutOfMemory}!Env {
     var env: Env = .{ .arena = .init(gpa) };
     errdefer env.deinit(gpa);
     // The scalars first, in TypeIndex's order, so their indices are fixed.
-    for ([_]Type{ .text, .math, .color, .number, .range, .flag, .record, .nothing, .unknown }) |t| _ = try env.intern(gpa, t);
+    for ([_]Type{ .text, .math, .color, .number, .range, .flag, .record, .nil, .unknown }) |t| _ = try env.intern(gpa, t);
     const builtins = [_]struct { []const u8, TypeIndex }{
         .{ ":Text", .text },   .{ ":Math", .math }, .{ ":Color", .color },   .{ ":Number", .number },
-        .{ ":Range", .range }, .{ ":Flag", .flag }, .{ ":Record", .record },
+        .{ ":Range", .range }, .{ ":Flag", .flag }, .{ ":Record", .record }, .{ ":Nil", .nil },
     };
     for (builtins) |b| {
         try env.type_table.put(gpa, b[0], .{ .index = b[1], .token = null });
@@ -192,7 +193,7 @@ pub fn newDeclared(env: *Env, gpa: std.mem.Allocator) error{OutOfMemory}!TypeInd
 pub fn twin(env: *Env, gpa: std.mem.Allocator, t: TypeIndex) error{OutOfMemory}!?TypeIndex {
     switch (env.get(t)) {
         .twin, .flag, .unknown => return t,
-        .tuple, .list, .record, .nothing => return null,
+        .tuple, .list, .record, .nil => return null,
         .@"union" => |members| {
             var twins: std.ArrayList(TypeIndex) = .empty;
             defer twins.deinit(gpa);
@@ -241,7 +242,7 @@ pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
 
 /// Whether a value of type `actual` can stand where `expected` is.
 pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
-    if (actual == expected or actual == .unknown or expected == .unknown or actual == .nothing) return true;
+    if (actual == expected or actual == .unknown or expected == .unknown) return true;
     return switch (env.get(expected)) {
         // A declared type holds its members' values; a value typed by
         // another declared type is never unwrapped, so units stay apart.
@@ -256,8 +257,9 @@ pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
         .@"union" => |members| for (members) |m| {
             if (env.fits(actual, m)) break true;
         } else false,
-        .list => |element| switch (env.get(actual)) {
-            // A tuple of elements that each fit, and so `[]`, a list of nothing.
+        .list => |element| actual == .nil or switch (env.get(actual)) {
+            // Nil, before the switch, is no elements; a tuple, elements that
+            // each fit.
             .tuple => |ts| for (ts) |t| {
                 if (!env.fits(t, element)) break false;
             } else true,

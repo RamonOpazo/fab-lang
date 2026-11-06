@@ -32,8 +32,8 @@
 :Label :: :Text, :Math
 
 // Labels: each is declared in exactly one type. Words two types share get
-// a type of their own, which both include (:None, :Facing).
-:None   :: [none]
+// a type of their own, which both include (:Facing). Nothing is written
+// [], nil, of the built-in :Nil: never a label.
 :All    :: [all]
 :Facing :: [outer], [inner]
 :On     :: [on]
@@ -61,11 +61,11 @@
   [||], [O|], [|{], [O{], [|O], [}|], [}O]
 }
 :Hook :: [?], [^]
-:Tip  :: :Head, :Hook!
+:Tip  :: :Head, :Hook!, :Nil
 
 // An empty slot is nothing there: [/solid/>] has no tail, [/solid/] no
 // head, [>//>] no line. A line in an arrow may be struck: [/solid!/>].
-:Stroke      :: :Line!, :None
+:Stroke      :: :Line!, :Nil
 :Arrow       :: [:Tip/:Stroke/:Tip]
 :Cardinality :: [:Range/:Range]
 
@@ -103,10 +103,10 @@
 (&node, &zone)               :fill   :: :Color
 (&node, &edge, &cell, &zone) :stroke :: :Color
 (&node, &edge, &cell, &zone) :pen    :: :Pen
-(&node, &zone)               :line   :: :Line, :None
+(&node, &zone)               :line   :: :Line, :Nil
 
 // Nodes
-&node          :shape   :: :Shape, :None
+&node          :shape   :: :Shape, :Nil
 &node          :width   :: :Length    // a minimum
 &node          :height  :: :Length    // a minimum
 (&node, &zone) :padding :: :Length
@@ -126,7 +126,7 @@
 &zone :as      :: :As
 &zone :caption :: :Label
 &zone :theme   :: [:Record]            // applied left to right
-&zone :marks   :: :All, :None
+&zone :marks   :: :All, :Nil
 &zone :cross   :: :Cross
 &zone :alt     :: :Text
 

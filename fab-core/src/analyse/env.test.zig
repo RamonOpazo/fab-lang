@@ -49,29 +49,43 @@ test "fits: the same type, and unions" {
     try testing.expect(!env.fits(side, facing));
 }
 
-test "fits: lists take tuples of their elements, one value, and []" {
+test "fits: lists take tuples of their elements, one value, and nil" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
     const sizes = try env.intern(gpa, .{ .list = .number });
     try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ .number, .number, .number } }), sizes));
     try testing.expect(env.fits(.number, sizes));
-    try testing.expect(env.fits(try env.intern(gpa, .{ .list = .nothing }), sizes));
-    try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ .nothing, .number } }), sizes));
+    try testing.expect(env.fits(.nil, sizes));
+    // A list's nil is no elements; nil among its elements is no number.
+    try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ .nil, .number } }), sizes));
     try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ .number, .color } }), sizes));
     try testing.expect(!env.fits(.color, sizes));
 }
 
-test "fits: tuples match element by element, empty slots anywhere" {
+test "fits: tuples match element by element, nil only where a slot admits it" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
     const head = try env.newDeclared(gpa);
     const line = try env.newDeclared(gpa);
     const arrow = try env.intern(gpa, .{ .tuple = &.{ head, line, head } });
     try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ head, line, head } }), arrow));
-    try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ .nothing, line, head } }), arrow));
+    try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ .nil, line, head } }), arrow));
+    const tip = try env.intern(gpa, .{ .@"union" = &.{ head, .nil } });
+    const arrow_with_tips = try env.intern(gpa, .{ .tuple = &.{ tip, line, tip } });
+    try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ .nil, line, head } }), arrow_with_tips));
+    try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ head, .nil, head } }), arrow_with_tips));
     try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ head, head, head } }), arrow));
     try testing.expect(!env.fits(try env.intern(gpa, .{ .tuple = &.{ line, head } }), arrow));
     try testing.expect(!env.fits(line, arrow));
+}
+
+test "fits: nil only where a type admits it" {
+    var env: Env = try .init(gpa);
+    defer env.deinit(gpa);
+    try testing.expect(env.fits(.nil, .nil));
+    try testing.expect(!env.fits(.nil, .color));
+    try testing.expect(env.fits(.nil, try env.intern(gpa, .{ .@"union" = &.{ .color, .nil } })));
+    try testing.expectEqual(@as(?Env.TypeIndex, null), try env.twin(gpa, .nil));
 }
 
 test "fits: what failed to type fits anywhere, so it says nothing more" {

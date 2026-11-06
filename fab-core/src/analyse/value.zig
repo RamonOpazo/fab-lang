@@ -3,8 +3,11 @@
 //!
 //!   [>/solid!/>>]  symbol `>`, name `solid` inverted, symbol `>>`
 //!   [0..*/1..1]    range 0..∞, range 1..1
-//!   [/solid/>]     an empty slot, then a name and a symbol
-//!   []             no elements: the empty list
+//!   [/solid/>]     nil, then a name and a symbol
+//!   []             one element, nil; [/] is two
+//!
+//! A bracket has one element more than it has slashes (statements.md
+//! §22.2): the reader never yields none.
 //!   [:Tip/:Tip]    two type names: a bracket in a type (statements.md §22.8)
 //!
 //! The reader checks shapes only. What a name refers to, and whether a type
@@ -24,7 +27,7 @@ pub const Element = struct {
 };
 
 pub const Kind = union(enum) {
-    /// Nothing there: the tail of `[/solid/>]`.
+    /// Nil, nothing written: `[]`, the tail of `[/solid/>]`.
     empty,
     /// Lowercase-kebab: `red`, `warn-bg`. A named value or a label.
     name,
@@ -47,7 +50,7 @@ pub const Range = struct { lo: Decimal, hi: ?Decimal };
 pub fn read(token: []const u8) Reader {
     std.debug.assert(token.len >= 2 and token[0] == '[' and token[token.len - 1] == ']');
     const inner = token[1 .. token.len - 1];
-    return .{ .rest = inner, .done = inner.len == 0 };
+    return .{ .rest = inner, .done = false };
 }
 
 pub const Reader = struct {

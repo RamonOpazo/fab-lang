@@ -55,8 +55,8 @@ test "one element per slash" {
     try expectKinds("[1/1.5/2]", &.{ .number, .number, .number });
 }
 
-test "the empty list has no elements; empty slots are elements" {
-    try expectKinds("[]", &.{});
+test "one element more than slashes: [] is one nil, empty slots are nil" {
+    try expectKinds("[]", &.{.empty});
     try expectKinds("[/solid/>]", &.{ .empty, .name, .symbol });
     try expectKinds("[/]", &.{ .empty, .empty });
     try expectKinds("[////1/2]", &.{ .empty, .empty, .empty, .empty, .number, .number });

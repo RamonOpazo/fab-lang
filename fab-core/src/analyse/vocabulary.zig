@@ -327,8 +327,8 @@ fn notAType(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {
 }
 
 /// A value's type, read from its shape: `"…"` text, `$…$` math, `{ … }` a
-/// record, a bracket its elements' (one, or a tuple of several; `[]` a list
-/// of nothing). A name not yet defined is reported, and is unknown.
+/// record, a bracket its elements' (one, or a tuple of several; `[]` nil).
+/// A name not yet defined is reported, and is unknown.
 pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
     const cst = a.cst;
     if (cst.tag(node) == .block) return .record;
@@ -352,7 +352,7 @@ pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
             continue;
         }) orelse break;
         const t: TypeIndex = switch (element.kind) {
-            .empty => .nothing,
+            .empty => .nil,
             .color => .color,
             .number => .number,
             .range => .range,
@@ -378,7 +378,7 @@ pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
         return .unknown;
     }
     return switch (elements.items.len) {
-        0 => try a.env.intern(a.gpa, .{ .list = .nothing }),
+        0 => unreachable, // one element more than slashes
         1 => elements.items[0],
         else => try a.env.intern(a.gpa, .{ .tuple = elements.items }),
     };

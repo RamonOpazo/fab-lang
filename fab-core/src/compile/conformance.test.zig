@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 20 };
+const done: Progress = .{ .step = 9, .rule = 21 };
 
 const Progress = struct {
     step: u8,
@@ -975,6 +975,30 @@ test "Definitions and values: expression in a bracket" {
     try check(.{ .step = 9, .rule = 20, .source = "[x] := [a,b]", .codes = &.{.{ .syntax = .expression_in_bracket }} });
 }
 
+test "Definitions and values: nil fits where a type admits it" {
+    try check(.{ .step = 9, .rule = 21, .source =
+        \\[nothing] := []
+        \\:Nil [also] := []
+        \\:Arrow [no-tail] := [/solid/>]
+        \\:Arrow [no-line] := [>//>]
+        \\:Arrow [no-head] := [>/solid/]
+        \\:Sizes :: [:Number]
+        \\:Sizes [none-yet] := []
+        \\:Maybe :: :Color, :Nil
+        \\:Maybe [m] := []
+        \\:Record [x] := { :theme [], &node :shape [], &node :line [] }
+    });
+}
+
+test "Definitions and values: nil where a type does not admit it" {
+    try check(.{ .step = 9, .rule = 21, .source = ":Color [w] := []", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 9, .rule = 21, .source = ":Cardinality [c] := [/1..1]", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 9, .rule = 21, .source = ":Record [x] := { &node :size [] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    // A list's nil is no elements, never one of them.
+    try check(.{ .step = 9, .rule = 21, .source = ":Sizes :: [:Number]\n:Sizes [s] := [/2]", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 9, .rule = 21, .source = "[none] := [#000]\n:Shape [s] := [none]", .codes = &.{.{ .analysis = .contract_broken }} });
+}
+
 test "Definitions and values: twins" {
     try check(.{ .step = 9, .rule = 20, .source =
         \\:Angle [inward] := [30!]
@@ -1001,7 +1025,6 @@ test "Definitions and values: contracts that hold" {
     try check(.{ .step = 8, .rule = 3, .source =
         \\:Arrow [twice] := [/solid/>>]
         \\:Arrow [ends] := [>//>]
-        \\:Arrow [lineless] := [>/none/>]
         \\:Sizes :: [:Number]
         \\:Sizes [some] := [1/1.5/2]
         \\:Sizes [one] := [2]

@@ -512,23 +512,31 @@ test "a typed name is a type and a value side by side" {
     );
 }
 
-test "a type's parameters are a juxtafix" {
-    try expectDump(":Arrow := :Tuple.(:Head, :Union.(:Line, :None), :Head)",
+test "types are spelled like their values: a choice, a twin, a bracket, a group" {
+    try expectDump(
+        \\:Tip :: :Head, :Hook!, :Nil
+        \\:Arrow :: [:Tip/:Stroke/:Tip]
+        \\&node :fill :: (:Color, :Nil)
+    ,
         \\root
-        \\  statement :=
+        \\  statement ::
+        \\    leaf type_id :Tip
+        \\    items
+        \\      leaf type_id :Head
+        \\      postfix !
+        \\        leaf type_id :Hook
+        \\      leaf type_id :Nil
+        \\  statement ::
         \\    leaf type_id :Arrow
-        \\    juxtafix
-        \\      leaf type_id :Tuple
-        \\      group
-        \\        items
-        \\          leaf type_id :Head
-        \\          juxtafix
-        \\            leaf type_id :Union
-        \\            group
-        \\              items
-        \\                leaf type_id :Line
-        \\                leaf type_id :None
-        \\          leaf type_id :Head
+        \\    leaf val [:Tip/:Stroke/:Tip]
+        \\  statement ::
+        \\    entry
+        \\      leaf class_id &node
+        \\      attr :fill
+        \\    group
+        \\      items
+        \\        leaf type_id :Color
+        \\        leaf type_id :Nil
         \\
     );
 }
