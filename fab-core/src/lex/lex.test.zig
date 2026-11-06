@@ -127,7 +127,12 @@ test "a flag's ! touches it" {
 
 test "a value is one token" {
     try expectTags("[red] [0..*/1] [/dashed/>] [||-0{] [2] [#ff0000]", &.{ .val, .val, .val, .val, .val, .val });
-    try expectTexts("[0..*/0..1] [(->]", &.{ "[0..*/0..1]", "[(->]" });
+    try expectTexts("[0..*/0..1] [:Tip/:Stroke/:Tip]", &.{ "[0..*/0..1]", "[:Tip/:Stroke/:Tip]" });
+}
+
+test "not a value: a bracket never holds ( ) or ," {
+    try expectTags("[(a]", &.{ .invalid, .l_par, .edge_id, .invalid });
+    try expectTags("[a,b]", &.{ .invalid, .edge_id, .comma, .edge_id, .invalid });
 }
 
 test "the empty list is a value" {

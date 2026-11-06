@@ -312,14 +312,14 @@ fn namedDiagram(a: *Analyser, head: Node.Index) ?Ir.ZoneIndex {
     return zone_entry.index;
 }
 
-/// `G :: body`, a diagram; `:Shape :: [circle]`, a type's labels;
+/// `G :: body`, a diagram; `:Shape :: [circle]`, `:Angle :: :Number!`, a type;
 /// `(&node) :fill :: :Color`, a function. Nodes and edges are reserved.
 /// Returns the diagram, if it is one.
 fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!?Ir.ZoneIndex {
     const cst = a.cst;
     if (definitions.isVocabulary(cst, head)) {
         try definitions.brackets(a, body);
-        if (cst.tag(head) == .leaf) try vocabulary.labels(a, head, body) else try vocabulary.signature(a, head, body);
+        if (cst.tag(head) == .leaf) try vocabulary.declareType(a, head, body) else try vocabulary.signature(a, head, body);
         return null;
     }
     const name = cst.mainToken(head);

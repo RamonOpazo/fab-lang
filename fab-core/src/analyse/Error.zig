@@ -81,13 +81,21 @@ pub const Tag = enum(u8) {
     label_in_two_types,
     /// `:Colour [x] := …`, `(&node) :fill :: [red]`.
     not_a_type,
-    /// `:List`, `:Color.(:Text)`, `:List.(:A, :B)`.
-    wrong_type_parameters,
+    /// `:Color.(:Text)`, `:List.(:Style)`: no type takes parameters.
+    type_with_parameters,
+    /// `:Length := :Number`: a type is declared, never named.
+    type_named_with_defn,
+    /// `[:Tip/solid/>]`.
+    types_and_values_mixed,
+    /// `:theme [:Style]`: a bracket of type names where a value goes.
+    type_as_value,
+    /// `:A :: :B` then `:B :: :A`, `:A :: [:A]`.
+    type_includes_itself,
     /// `:Color [w] := [circle]`.
     contract_broken,
     /// `:Shape :: [#f00]`, `[a/b]`, `[x!]`, `f`.
     not_a_label,
-    /// `:Arrow :: [x]`.
+    /// `:Flag :: [x]`, `:Record :: [x]`.
     labels_on_structure,
     /// `(&nodes) :fill :: :Color`.
     unknown_class,
@@ -104,8 +112,9 @@ pub const Tag = enum(u8) {
     value_given_to_flag,
     /// `&node :shape`.
     value_missing,
-    /// `&node :fill!`, `:terminal!`.
-    only_a_flag_inverts,
+    /// `&node :fill!`, `:terminal!`, `:size [2!]`, `[>!/solid/>]`, `[:A/:B]!`:
+    /// `!` where the type has no twins.
+    not_invertible,
     /// `[ink] [circle]`.
     key_of_wrong_type,
     /// `:t := { &node :fill [red] }`, `:t := { [ink] := [#fff] }`.

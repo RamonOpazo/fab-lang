@@ -418,8 +418,8 @@ fn parsePostfix(p: *Parser) Error!Node.Index {
 /// primary = EDGE_ID | NODE_ID | ZONE_ID | CLASS_ID | TYPE_ID | AT | STAR
 ///         | QUID | BANG | literal | L_PAR items R_PAR
 /// A `?` or `!` gets here only when it touches no atom on its right: a node
-/// of that kind, as in `f/?`. A type is a primary so that its parameters are
-/// a juxtafix: `:Tuple.(:Head, :Line)`.
+/// of that kind, as in `f/?`. A type is a primary so that its twins are a
+/// postfix, `:Number!`; `:Color.(:Text)` parses, for the analyser to refuse.
 fn parsePrimary(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
         .edge_id, .node_id, .zone_id, .class_id, .type_id, .at, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
@@ -575,12 +575,25 @@ fn refine(p: *Parser, tag: Cst.Error.Tag) Cst.Error.Tag {
     const prev = p.touchesPrev();
     const next_ = p.touchesNext();
     return switch (p.cur()) {
-        .invalid => .invalid_token,
+        .invalid => if (p.groupsInBracket()) .expression_in_bracket else .invalid_token,
         .eol => if (p.parens > 0) .statement_spans_lines else tag,
         .slash => if (prev) tag else if (next_) .slash_has_no_prefix_form else .operator_touches_nothing,
         .plus => if (!prev and !next_) .operator_touches_nothing else tag,
         .dot => if (!prev or !next_) .detached_dot else tag,
         else => tag,
+    };
+}
+
+/// The current token is a `[` that stopped at `(`, `)` or `,` before its
+/// `]` or a space: a bracket holding an expression.
+fn groupsInBracket(p: *Parser) bool {
+    var i: usize = p.starts[p.tok_i];
+    if (p.source[i] != '[') return false;
+    i += 1;
+    while (true) : (i += 1) switch (p.source[i]) {
+        '(', ')', ',' => return true,
+        0, ' ', '\t', '\r', '\n', '[', ']' => return false,
+        else => {},
     };
 }
 

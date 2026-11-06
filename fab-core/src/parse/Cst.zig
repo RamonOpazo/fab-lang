@@ -162,6 +162,9 @@ pub const Error = struct {
         detached_dot,
         /// A token the lexer couldn't classify.
         invalid_token,
+        /// `[:Tip/(:Line,:Nil)/:Tip]`, `[a,b]`: a bracket holds no `(`, `)`
+        /// or `,`.
+        expression_in_bracket,
     };
 };
 

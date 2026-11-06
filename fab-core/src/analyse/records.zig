@@ -137,18 +137,17 @@ fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
         if (value != .root) {
             try a.fail(.value_given_to_flag, cst.firstToken(value));
         } else if (inverted and f.bundle) {
-            try a.fail(.only_a_flag_inverts, name_token);
+            // A bundle is no `:Flag!`: it has no twin.
+            try a.fail(.not_invertible, name_token);
         }
         return;
     }
-    if (inverted) try a.fail(.only_a_flag_inverts, name_token);
+    if (inverted) try a.fail(.not_invertible, name_token);
     if (value == .root) {
         if (!inverted) try a.fail(.value_missing, name_token);
         return;
     }
-    const t = try vocabulary.typeOf(a, value);
-    if (!a.env.fits(t, f.type))
-        try a.errors.append(a.gpa, .{ .tag = .wrong_type, .token = cst.firstToken(value), .related = signature });
+    try vocabulary.check(a, try vocabulary.typeOf(a, value), f.type, .wrong_type, cst.firstToken(value), signature);
 }
 
 /// `[ink] := [#dddddd]`: a label bound to a value of its type.
@@ -173,9 +172,7 @@ fn token(a: *Analyser, naming: Node.Index) error{OutOfMemory}!void {
         try a.fail(.not_a_label, key_token);
         return;
     }
-    const t = try vocabulary.typeOf(a, value);
-    if (!a.env.fits(t, label.type))
-        try a.errors.append(a.gpa, .{ .tag = .key_of_wrong_type, .token = cst.firstToken(value), .related = if (label.prelude) null else label.token });
+    try vocabulary.check(a, try vocabulary.typeOf(a, value), label.type, .key_of_wrong_type, cst.firstToken(value), if (label.prelude) null else label.token);
 }
 
 fn isLiteral(cst: *const Cst, node: Node.Index) bool {

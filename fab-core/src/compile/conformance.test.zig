@@ -7,7 +7,8 @@
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
-//! to 9 (1 for 7a, 8a or 9a, 2 for 7b, 8b or 9b, and so on). `done` is the last one finished; later cases
+//! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on), and in step 9 its
+//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -20,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 1 };
+const done: Progress = .{ .step = 9, .rule = 20 };
 
 const Progress = struct {
     step: u8,
@@ -703,7 +704,7 @@ test "Diagrams and names: a group of another diagram's edges" {
 test "Statements: a bare term in a record" {
     try check(.{ .step = 5, .source = "G :style { yes, paid :label \"yes\" }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
     // A token is named: `[ink] [#fff]` is two terms side by side.
-    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] [#fff] }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
+    try check(.{ .step = 9, .rule = 10, .source = ":Record [x] := { [ink] [#fff] }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
 }
 
 test "Statements: an entry in a declaration" {
@@ -747,7 +748,7 @@ test "Statements: a diagram as a naming's head" {
 }
 
 test "Statements: a bad head's body is not checked, but its brackets are" {
-    try check(.{ .step = 8, .rule = 3, .source = ":List.(:Color) := :Text", .codes = &.{.{ .analysis = .bad_naming_head }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Label.(:Color) := :Text", .codes = &.{.{ .analysis = .bad_naming_head }} });
     try check(.{ .step = 8, .rule = 3, .source = "f g := { h k, :x }", .codes = &.{.{ .analysis = .bad_naming_head }} });
     try check(.{ .step = 8, .rule = 3, .source = "G := [1.]", .codes = &.{
         .{ .analysis = .bad_naming_head }, .{ .analysis = .malformed_number },
@@ -763,7 +764,7 @@ test "Statements: a chain across lines in a group" {
 }
 
 test "Statements: the three forms" {
-    try check(.{ .step = 9, .rule = 1, .source =
+    try check(.{ .step = 9, .rule = 10, .source =
         \\[brand] := [#ff0000]
         \\:terminal := { :shape [circle], :fill [brand] }
         \\G :: f
@@ -774,32 +775,32 @@ test "Statements: the three forms" {
 }
 
 test "Statements: a description written with :=" {
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style := { f :label \"x\" }", .codes = &.{.{ .analysis = .description_with_operator }} });
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG.f :arrow := [epi]", .codes = &.{.{ .analysis = .description_with_operator }} });
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f\nG :style := { f :label \"x\" }", .codes = &.{.{ .analysis = .description_with_operator }} });
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f\nG.f :arrow := [epi]", .codes = &.{.{ .analysis = .description_with_operator }} });
     // Its body is still checked, as a description's.
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style := { f, f :label \"x\" }", .codes = &.{
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f\nG :style := { f, f :label \"x\" }", .codes = &.{
         .{ .analysis = .description_with_operator }, .{ .analysis = .bare_term_in_record },
     } });
 }
 
 test "Statements: a description with no context" {
-    try check(.{ .step = 9, .rule = 1, .source = ":fill [red]", .codes = &.{.{ .analysis = .context_missing }} });
-    try check(.{ .step = 9, .rule = 1, .source = "{ :fill [red] }", .codes = &.{.{ .syntax = .expected_token }} });
+    try check(.{ .step = 9, .rule = 10, .source = ":fill [red]", .codes = &.{.{ .analysis = .context_missing }} });
+    try check(.{ .step = 9, .rule = 10, .source = "{ :fill [red] }", .codes = &.{.{ .syntax = .expected_token }} });
 }
 
 test "Statements: a declaration in a record" {
-    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] :: :Color }", .codes = &.{.{ .analysis = .declaration_in_record }} });
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style { f :: g }", .codes = &.{.{ .analysis = .declaration_in_record }} });
+    try check(.{ .step = 9, .rule = 10, .source = ":Record [x] := { [ink] :: :Color }", .codes = &.{.{ .analysis = .declaration_in_record }} });
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f\nG :style { f :: g }", .codes = &.{.{ .analysis = .declaration_in_record }} });
 }
 
 test "Statements: warning, owner described after a part" {
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f\nG :style { &node :fill [red], :caption \"x\" }", .codes = &.{.{ .analysis = .owner_after_part }} });
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f\nG :style { &node :fill [red], :caption \"x\" }", .codes = &.{.{ .analysis = .owner_after_part }} });
     // Tokens are no parts: they name, and describe nothing.
-    try check(.{ .step = 9, .rule = 1, .source = ":Record [x] := { [ink] := [#fff], :fill [red] }" });
+    try check(.{ .step = 9, .rule = 10, .source = ":Record [x] := { [ink] := [#fff], :fill [red] }" });
 }
 
 test "Statements: a table's key, and a proposition as a value" {
-    try check(.{ .step = 9, .rule = 1, .source = "G :: f g, h\nG :prove { :axiom.[a] (f g == h), :lemma (#M :pushout), :axiom (f g == h ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
+    try check(.{ .step = 9, .rule = 10, .source = "G :: f g, h\nG :prove { :axiom.[a] (f g == h), :lemma (#M :pushout), :axiom (f g == h ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
 }
 
 test "Relations: a diagram declared twice" {
@@ -823,9 +824,9 @@ test "Definitions and values: types, labels and signatures are accepted" {
     try check(.{ .step = 8, .rule = 1, .source = ":Mood :: [calm], [busy]" });
     try check(.{ .step = 8, .rule = 1, .source = ":Mood :: {\n  [calm],\n  [busy]\n}" });
     try check(.{ .step = 8, .rule = 1, .source = "(&node, &zone) :glow :: :Color" });
-    try check(.{ .step = 8, .rule = 1, .source = "&zone :backdrops :: :List.(:Record)" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Width := :Number" });
-    try check(.{ .step = 8, .rule = 1, .source = ":Tip :: [=>]\n:Stroke :: [clean]\n:Gap :: [nil]\n:Pointer := :Tuple.(:Tip, :Union.(:Stroke, :Gap), :Tip)" });
+    try check(.{ .step = 9, .rule = 20, .source = "&zone :backdrops :: [:Record]" });
+    try check(.{ .step = 9, .rule = 20, .source = ":Width :: :Number" });
+    try check(.{ .step = 9, .rule = 20, .source = ":Tap :: [=>]\n:Trace :: [clean]\n:Gap :: [nil]\n:Mid :: :Trace, :Gap\n:Pointer :: [:Tap/:Mid/:Tap]" });
     try check(.{ .step = 8, .rule = 1, .source = ":Color [brand] := [#d1242f]" });
 }
 
@@ -892,8 +893,7 @@ test "Definitions and values: name defined twice" {
     try check(.{ .step = 8, .rule = 3, .source = "[brand] := [#f00]\n[brand] := [#e00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
     try check(.{ .step = 8, .rule = 3, .source = ":Mood :: [calm]\n:Mood :: [calm]", .codes = &.{.{ .analysis = .name_defined_twice }} });
     try check(.{ .step = 8, .rule = 3, .source = ":Mood :: [calm]\n[calm] := [#f00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":Width := :Number\n:Width := :Text", .codes = &.{.{ .analysis = .name_defined_twice }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":List := :Text", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Color :: :Text", .codes = &.{.{ .analysis = .bad_declaration_head }} });
     try check(.{ .step = 8, .rule = 3, .source = "&node :glow :: :Color\n&edge :glow :: :Color", .codes = &.{.{ .analysis = .name_defined_twice }} });
     // The prelude comes first, and its names count.
     try check(.{ .step = 8, .rule = 3, .source = "[red] := [#f00]", .codes = &.{.{ .analysis = .name_defined_twice }} });
@@ -911,7 +911,7 @@ test "Definitions and values: shared words get a type of their own" {
     try check(.{ .step = 8, .rule = 3, .source =
         \\:Near :: [close], [far]
         \\:Here :: [here]
-        \\:Where := :Union.(:Near, :Here)
+        \\:Where :: :Near, :Here
         \\:Where [away] := [far]
         \\:Where [now] := [here]
         \\:Side [around] := [outer]
@@ -923,15 +923,77 @@ test "Definitions and values: not a type" {
     try check(.{ .step = 8, .rule = 3, .source = "&node :glow :: [red]", .codes = &.{.{ .analysis = .not_a_type }} });
 }
 
-test "Definitions and values: wrong type parameters" {
-    try check(.{ .step = 8, .rule = 3, .source = ":X := :List", .codes = &.{.{ .analysis = .wrong_type_parameters }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":X := :Color.(:Text)", .codes = &.{.{ .analysis = .wrong_type_parameters }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":X := :List.(:Text, :Math)", .codes = &.{.{ .analysis = .wrong_type_parameters }} });
+test "Definitions and values: type with parameters" {
+    try check(.{ .step = 9, .rule = 20, .source = ":X :: :Color.(:Text)", .codes = &.{.{ .analysis = .type_with_parameters }} });
+    try check(.{ .step = 9, .rule = 20, .source = "&zone :backdrops :: :Record.(:Text)", .codes = &.{.{ .analysis = .type_with_parameters }} });
+}
+
+test "Definitions and values: type named with :=" {
+    // Read as the declaration it meant, so its uses don't fail too.
+    try check(.{ .step = 9, .rule = 20, .source = ":Width := :Number\n:Width [w] := [2]", .codes = &.{.{ .analysis = .type_named_with_defn }} });
+}
+
+test "Definitions and values: types are spelled like their values" {
+    try check(.{ .step = 9, .rule = 20, .source =
+        \\:Mood :: [calm], [busy]
+        \\:Moods :: [:Mood]
+        \\:Pair :: [:Mood/:Mood]
+        \\:Either :: (:Mood, :Number)
+        \\:Moods [some] := [calm/busy]
+        \\:Pair [p] := [calm/busy]
+        \\:Either [e] := [2]
+        \\&node :mood :: :Mood, :Pair
+    });
+}
+
+test "Definitions and values: declared types are distinct" {
+    // A literal fits by shape; a length is no angle.
+    try check(.{ .step = 9, .rule = 20, .source = ":Length [spacing] := [2]\n:Angle [right] := [90]\n:Angle [w] := [spacing]", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":Length [spacing] := [2]\n:Number [n] := [spacing]", .codes = &.{.{ .analysis = .contract_broken }} });
+    // A type includes the types its declaration names.
+    try check(.{ .step = 9, .rule = 20, .source = ":Wide :: :Length\n:Length [spacing] := [2]\n:Wide [w] := [spacing]" });
+}
+
+test "Definitions and values: a declaration adds to its type" {
+    try check(.{ .step = 9, .rule = 20, .source = ":Mood :: [calm]\n:Mood :: :Number\n:Mood [a] := [calm]\n:Mood [b] := [2]" });
+    try check(.{ .step = 9, .rule = 20, .source = ":Label :: [blank]\n:Label [x] := [blank]" });
+}
+
+test "Definitions and values: a type including itself" {
+    try check(.{ .step = 9, .rule = 20, .source = ":A :: :Number\n:B :: :A\n:A :: :B", .codes = &.{.{ .analysis = .type_includes_itself }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":A :: [:A]", .codes = &.{.{ .analysis = .type_includes_itself }} });
+}
+
+test "Definitions and values: types and values mixed, a type as a value" {
+    try check(.{ .step = 9, .rule = 20, .source = ":X :: [:Tip/solid/>]", .codes = &.{.{ .analysis = .types_and_values_mixed }} });
+    try check(.{ .step = 9, .rule = 20, .source = "[x] := [:Tip/solid/>]", .codes = &.{.{ .analysis = .types_and_values_mixed }} });
+    try check(.{ .step = 9, .rule = 20, .source = "[x] := [:Style]", .codes = &.{.{ .analysis = .type_as_value }} });
+}
+
+test "Definitions and values: expression in a bracket" {
+    try check(.{ .step = 9, .rule = 20, .source = ":Arrow2 :: [:Tip/(:Line,:Nil)/:Tip]", .codes = &.{.{ .syntax = .expression_in_bracket }} });
+    try check(.{ .step = 9, .rule = 20, .source = "[x] := [a,b]", .codes = &.{.{ .syntax = .expression_in_bracket }} });
+}
+
+test "Definitions and values: twins" {
+    try check(.{ .step = 9, .rule = 20, .source =
+        \\:Angle [inward] := [30!]
+        \\:Arrow [hooked] := [?!/solid/>]
+        \\:Arrow [not] := [/solid!/>]
+        \\:Sides :: (:Facing, :On)!
+    });
+}
+
+test "Definitions and values: not invertible" {
+    try check(.{ .step = 9, .rule = 20, .source = ":Length [l] := [2!]", .codes = &.{.{ .analysis = .not_invertible }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":Arrow [a] := [>!/solid/>]", .codes = &.{.{ .analysis = .not_invertible }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":X :: [:Number/:Number]!", .codes = &.{.{ .analysis = .not_invertible }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":X :: [:Record!/:Number]", .codes = &.{.{ .analysis = .not_invertible }} });
 }
 
 test "Definitions and values: contract broken" {
     try check(.{ .step = 8, .rule = 3, .source = ":Color [w] := [circle]", .codes = &.{.{ .analysis = .contract_broken }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":Pair := :Tuple.(:Number, :Number)\n:Pair [p] := [1/2/3]", .codes = &.{.{ .analysis = .contract_broken }} });
+    try check(.{ .step = 8, .rule = 3, .source = ":Pair :: [:Number/:Number]\n:Pair [p] := [1/2/3]", .codes = &.{.{ .analysis = .contract_broken }} });
     try check(.{ .step = 8, .rule = 3, .source = ":Color [w] := { :fill [#f00] }", .codes = &.{.{ .analysis = .contract_broken }} });
 }
 
@@ -940,7 +1002,7 @@ test "Definitions and values: contracts that hold" {
         \\:Arrow [twice] := [/solid/>>]
         \\:Arrow [ends] := [>//>]
         \\:Arrow [lineless] := [>/none/>]
-        \\:Sizes := :List.(:Number)
+        \\:Sizes :: [:Number]
         \\:Sizes [some] := [1/1.5/2]
         \\:Sizes [one] := [2]
         \\:Sizes [none-yet] := []
@@ -958,8 +1020,8 @@ test "Definitions and values: not a label" {
 }
 
 test "Definitions and values: labels on structure" {
-    try check(.{ .step = 8, .rule = 3, .source = ":Pair := :Tuple.(:Text, :Text)\n:Pair :: [x]", .codes = &.{.{ .analysis = .labels_on_structure }} });
-    try check(.{ .step = 8, .rule = 3, .source = ":List :: [x]", .codes = &.{.{ .analysis = .labels_on_structure }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":Flag :: [x]", .codes = &.{.{ .analysis = .labels_on_structure }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":Record :: [x]", .codes = &.{.{ .analysis = .labels_on_structure }} });
 }
 
 test "Definitions and values: tokens are labels added to a colour" {
@@ -1012,9 +1074,10 @@ test "Definitions and values: value given to a flag, value missing" {
     try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :shape }", .codes = &.{.{ .analysis = .value_missing }} });
 }
 
-test "Definitions and values: only a flag inverts" {
-    try check(.{ .step = 8, .rule = 5, .source = ":Record [x] := { &node :fill! }", .codes = &.{.{ .analysis = .only_a_flag_inverts }} });
-    try check(.{ .step = 8, .rule = 5, .source = ":terminal := :shape [circle]\n:Record [x] := { &node :terminal! }", .codes = &.{.{ .analysis = .only_a_flag_inverts }} });
+test "Definitions and values: only a flag inverts, as not invertible" {
+    try check(.{ .step = 9, .rule = 20, .source = ":Record [x] := { &node :fill! }", .codes = &.{.{ .analysis = .not_invertible }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":terminal := :shape [circle]\n:Record [x] := { &node :terminal! }", .codes = &.{.{ .analysis = .not_invertible }} });
+    try check(.{ .step = 9, .rule = 20, .source = ":Record [x] := { &node :size [2!], &edge :bend [30!] }", .codes = &.{.{ .analysis = .not_invertible }} });
 }
 
 test "Definitions and values: key of the wrong type" {
@@ -1193,7 +1256,7 @@ test "Statements: empty braces in a declaration" {
 }
 
 test "Statements: empty braces are only a value" {
-    try check(.{ .step = 9, .rule = 2, .source = "G :: f\nG :style {}\n:Record [x] := {}" });
+    try check(.{ .step = 9, .rule = 22, .source = "G :: f\nG :style {}\n:Record [x] := {}" });
 }
 
 test "Relations: a marker touching both sides" {

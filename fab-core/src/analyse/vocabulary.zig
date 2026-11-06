@@ -1,10 +1,14 @@
 //! The statements that make vocabulary, not structure (statements.md §21),
 //! read into the environment:
 //!
-//!   :Shape :: [circle], [box]         a label type and its labels
+//!   :Shape :: [circle], [box]         a declared type and its labels
+//!   :Side :: :Facing, :On             a declared type and its members
+//!   :Angle :: :Number!                one member: the numbers and twins
 //!   (&edge, &cell) :side :: :Side     a function's signature
-//!   :Side := :Union.(:Facing, :On)    an alias
 //!   :Color [warn] := [red]            a named value, its type a contract
+//!
+//! Types are declared, never named (statements.md §22.8); a declaration
+//! repeated adds to its type.
 //!
 //! Names are defined once, before use, in source order. Bundles are
 //! functions too, defined by records (`records.zig`).
@@ -22,32 +26,32 @@ const TypeIndex = Env.TypeIndex;
 // ---------------------------------------------------------------------------
 // Declarations
 
-/// `:Shape :: [circle], [box]`: a new label type, or labels added to a type
-/// that takes them (`:Color :: [ink]`).
-pub fn labels(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
+/// `:T :: …`: a new declared type, or what a declaration adds to one. Each
+/// item is a label (`[circle]`) or a member, a type whose values the type
+/// holds (`:Number!`, `:Facing`, `[:Tip/:Stroke/:Tip]`).
+pub fn declareType(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const env = &a.env;
     const type_token = cst.mainToken(head);
     const type_name = cst.tokenText(type_token);
 
-    const t: TypeIndex = if (env.type_table.get(type_name)) |named| switch (named) {
-        .type => |declared| if (env.takesLabels(declared.index)) declared.index else {
-            try a.fail(.labels_on_structure, type_token);
-            return;
-        },
-        .constructor => {
-            try a.fail(.labels_on_structure, type_token);
-            return;
-        },
-    } else blk: {
-        const t = try env.newLabels(a.gpa);
-        try env.type_table.put(a.gpa, type_name, .{ .type = .{ .index = t, .token = type_token } });
+    const t: TypeIndex = if (env.type_table.get(type_name)) |named| named.index else blk: {
+        const t = try env.newDeclared(a.gpa);
+        try env.type_table.put(a.gpa, type_name, .{ .index = t, .token = type_token });
         env.name(t, type_name);
         break :blk t;
     };
 
     var one: [1]Node.Index = undefined;
     for (itemsOf(cst, body, &one)) |item| {
+        if (isTypeItem(cst, item)) {
+            try member(a, t, type_token, item);
+            continue;
+        }
+        if (!env.takesLabels(t)) {
+            try a.fail(.labels_on_structure, type_token);
+            return;
+        }
         const token = switch (labelToken(cst, item)) {
             .label => |token| token,
             // Its shape was reported when the brackets were read.
@@ -60,6 +64,47 @@ pub fn labels(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemor
         const text = cst.tokenText(token);
         try define(a, text[1 .. text.len - 1], .{ .type = t, .token = token, .body = null });
     }
+}
+
+/// A type among a declaration's items, rather than a label: a type name, a
+/// twin, a group, a bracket of type names.
+fn isTypeItem(cst: *const Cst, item: Node.Index) bool {
+    return switch (cst.tag(item)) {
+        .leaf => switch (cst.tokenTag(cst.mainToken(item))) {
+            .type_id => true,
+            .val => blk: {
+                var reader = value.read(cst.tokenText(cst.mainToken(item)));
+                while (true) {
+                    const element = (reader.next() catch continue) orelse break;
+                    if (element.kind == .type) break :blk true;
+                }
+                break :blk false;
+            },
+            else => false,
+        },
+        .postfix, .group, .juxtafix => true,
+        else => false,
+    };
+}
+
+/// Adds the values of `item`'s type to the declared type `t`.
+fn member(a: *Analyser, t: TypeIndex, type_token: TokenIndex, item: Node.Index) error{OutOfMemory}!void {
+    const m = try typeExpression(a, item) orelse return;
+    const id = switch (a.env.get(t)) {
+        .declared => |id| id,
+        // The built-ins are the language's: they take labels, no members.
+        else => {
+            try a.fail(.bad_declaration_head, type_token);
+            return;
+        },
+    };
+    if (a.env.includes(m, t)) {
+        try a.fail(.type_includes_itself, a.cst.firstToken(item));
+        return;
+    }
+    const members = &a.env.declared.items[id].members;
+    for (members.items) |existing| if (existing == m) return;
+    try members.append(a.gpa, m);
 }
 
 /// A label is one name or one symbol, alone in its bracket, with no `!`.
@@ -115,24 +160,6 @@ pub fn readClasses(a: *Analyser, node: Node.Index, classes: *Env.Classes) error{
 // ---------------------------------------------------------------------------
 // Definitions
 
-/// `:Side := :Union.(:Facing, :On)`: a second name for a type.
-pub fn alias(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
-    const cst = a.cst;
-    const token = cst.mainToken(head);
-    const t = try typeExpression(a, body) orelse .unknown;
-    const gop = try a.env.type_table.getOrPut(a.gpa, cst.tokenText(token));
-    if (gop.found_existing) {
-        const first: ?TokenIndex = switch (gop.value_ptr.*) {
-            .type => |declared| if (declared.prelude) null else declared.token,
-            .constructor => null,
-        };
-        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = token, .related = first });
-        return;
-    }
-    gop.value_ptr.* = .{ .type = .{ .index = t, .token = token } };
-    a.env.name(t, cst.tokenText(token));
-}
-
 /// `[warn] := [red]`, `:Color [warn] := [red]`, `:Record [dark] := { … }`.
 /// The name takes the type written before it, a contract the value must
 /// fit, or else the value's own type.
@@ -146,10 +173,8 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
 
     const contract: ?TypeIndex = if (contract_node) |node| try typeExpression(a, node) else null;
     const actual = try typeOf(a, body);
-    if (contract) |expected| {
-        if (!a.env.fits(actual, expected))
-            try a.errors.append(a.gpa, .{ .tag = .contract_broken, .token = cst.firstToken(body), .related = cst.mainToken(contract_node.?) });
-    }
+    if (contract) |expected|
+        try check(a, actual, expected, .contract_broken, cst.firstToken(body), cst.firstToken(contract_node.?));
 
     // The name: one name, alone in its bracket.
     var reader = value.read(cst.tokenText(name_token));
@@ -183,55 +208,117 @@ pub fn define(a: *Analyser, text: []const u8, entry: Env.Value) error{OutOfMemor
 // ---------------------------------------------------------------------------
 // Types
 
-/// `:Color`, `:List.(:Color)`, `:Tuple.(:Head, :Union.(:Line, :None))`.
-/// Null after reporting why it is no type.
+/// A type, as it is written (statements.md §22.8): a name, `:Color`; a
+/// twin, `:Number!`; a union, `:A, :B` or `(:A, :B)`; a bracket of type
+/// names, `[:Tip/:Stroke/:Tip]` a tuple, `[:Style]` a list. Null after
+/// reporting why it is no type.
 pub fn typeExpression(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {
     const cst = a.cst;
+    const token = cst.mainToken(node);
     switch (cst.tag(node)) {
-        .leaf => {
-            const token = cst.mainToken(node);
-            if (cst.tokenTag(token) != .type_id) return notAType(a, node);
-            const named = a.env.type_table.get(cst.tokenText(token)) orelse return notAType(a, node);
-            return switch (named) {
-                .type => |declared| declared.index,
-                .constructor => {
-                    try a.fail(.wrong_type_parameters, token);
-                    return null;
-                },
+        .leaf => switch (cst.tokenTag(token)) {
+            .type_id => {
+                const named = a.env.type_table.get(cst.tokenText(token)) orelse return notAType(a, node);
+                return named.index;
+            },
+            .val => return bracketType(a, token),
+            else => return notAType(a, node),
+        },
+        .postfix => {
+            if (cst.tokenTag(token) != .bang) return notAType(a, node);
+            const inner = try typeExpression(a, cst.data(node).node) orelse return null;
+            return try a.env.twin(a.gpa, inner) orelse {
+                try a.fail(.not_invertible, token);
+                return null;
             };
         },
+        .group => return unionOf(a, cst.children(node)[0]),
+        .items => return unionOf(a, node),
+        // `:List.(:Style)`, `:Color.(:Text)`: no type takes parameters.
         .juxtafix => {
-            const left, const right = cst.data(node).nodes;
-            const token = cst.mainToken(left);
-            if (cst.tag(left) != .leaf or cst.tokenTag(token) != .type_id or cst.tag(right) != .group) return notAType(a, node);
-            const named = a.env.type_table.get(cst.tokenText(token)) orelse return notAType(a, left);
-            const constructor = switch (named) {
-                .constructor => |c| c,
-                .type => {
-                    try a.fail(.wrong_type_parameters, token);
-                    return null;
-                },
-            };
-
-            var params: std.ArrayList(TypeIndex) = .empty;
-            defer params.deinit(a.gpa);
-            var failed = false;
-            var one: [1]Node.Index = undefined;
-            for (itemsOf(cst, cst.children(right)[0], &one)) |item| {
-                if (try typeExpression(a, item)) |t| try params.append(a.gpa, t) else failed = true;
+            const left = cst.data(node).nodes[0];
+            if (cst.tag(left) == .leaf and cst.tokenTag(cst.mainToken(left)) == .type_id) {
+                try a.fail(.type_with_parameters, cst.mainToken(left));
+                return null;
             }
-            if (failed) return null;
-            return switch (constructor) {
-                .list => if (params.items.len != 1) {
-                    try a.fail(.wrong_type_parameters, token);
-                    return null;
-                } else try a.env.intern(a.gpa, .{ .list = params.items[0] }),
-                .tuple => try a.env.intern(a.gpa, .{ .tuple = params.items }),
-                .@"union" => try a.env.intern(a.gpa, .{ .@"union" = params.items }),
-            };
+            return notAType(a, node);
         },
         else => return notAType(a, node),
     }
+}
+
+/// The union of the types among `node`'s items; one item is its own type.
+fn unionOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {
+    var members: std.ArrayList(TypeIndex) = .empty;
+    defer members.deinit(a.gpa);
+    var failed = false;
+    var one: [1]Node.Index = undefined;
+    for (itemsOf(a.cst, node, &one)) |item| {
+        const t = try typeExpression(a, item) orelse {
+            failed = true;
+            continue;
+        };
+        // Unions flatten: a choice among choices is one choice.
+        switch (a.env.get(t)) {
+            .@"union" => |ts| for (ts) |m| try appendNew(a, &members, m),
+            else => try appendNew(a, &members, t),
+        }
+    }
+    if (failed) return null;
+    if (members.items.len == 1) return members.items[0];
+    return try a.env.intern(a.gpa, .{ .@"union" = members.items });
+}
+
+fn appendNew(a: *Analyser, list: *std.ArrayList(TypeIndex), t: TypeIndex) error{OutOfMemory}!void {
+    for (list.items) |existing| if (existing == t) return;
+    try list.append(a.gpa, t);
+}
+
+/// `[:Tip/:Stroke/:Tip]`, a tuple; `[:Style]`, a list. A bracket of values
+/// is no type; one mixing both was reported with the brackets.
+fn bracketType(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?TypeIndex {
+    var slots: std.ArrayList(TypeIndex) = .empty;
+    defer slots.deinit(a.gpa);
+    var values = false;
+    var failed = false;
+    var reader = value.read(a.cst.tokenText(token));
+    while (true) {
+        const element = (reader.next() catch {
+            failed = true;
+            continue;
+        }) orelse break;
+        if (element.kind != .type) {
+            values = true;
+            continue;
+        }
+        const named = a.env.type_table.get(element.text) orelse {
+            try a.fail(.not_a_type, token);
+            failed = true;
+            continue;
+        };
+        const t = if (element.inverted) try a.env.twin(a.gpa, named.index) orelse {
+            try a.fail(.not_invertible, token);
+            failed = true;
+            continue;
+        } else named.index;
+        try slots.append(a.gpa, t);
+    }
+    if (values) {
+        if (slots.items.len == 0 and !failed) try a.fail(.not_a_type, token);
+        return null;
+    }
+    if (failed) return null;
+    if (slots.items.len == 1) return try a.env.intern(a.gpa, .{ .list = slots.items[0] });
+    return try a.env.intern(a.gpa, .{ .tuple = slots.items });
+}
+
+/// Reports `tag` at `token` unless a value of type `actual` fits
+/// `expected`; *not invertible* when only its `!`s are in the way.
+pub fn check(a: *Analyser, actual: TypeIndex, expected: TypeIndex, tag: Analyser.Error.Tag, token: TokenIndex, related: ?TokenIndex) error{OutOfMemory}!void {
+    if (a.env.fits(actual, expected)) return;
+    const plain = try a.env.untwinned(a.gpa, actual);
+    const reported: Analyser.Error.Tag = if (plain != actual and a.env.fits(plain, expected)) .not_invertible else tag;
+    try a.errors.append(a.gpa, .{ .tag = reported, .token = token, .related = related });
 }
 
 fn notAType(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {
@@ -257,22 +344,38 @@ pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
     var elements: std.ArrayList(TypeIndex) = .empty;
     defer elements.deinit(a.gpa);
     var reader = value.read(cst.tokenText(token));
+    var types = false;
     while (true) {
         // Shapes were reported when the brackets were read.
         const element = (reader.next() catch {
             try elements.append(a.gpa, .unknown);
             continue;
         }) orelse break;
-        try elements.append(a.gpa, switch (element.kind) {
+        const t: TypeIndex = switch (element.kind) {
             .empty => .nothing,
             .color => .color,
             .number => .number,
             .range => .range,
+            .type => {
+                types = true;
+                continue;
+            },
             .name, .symbol => if (a.env.values.get(element.text)) |v| v.type else blk: {
                 try a.fail(.undefined_name, token);
                 break :blk .unknown;
             },
+        };
+        // `[30!]`, `[?!]`: the twin, where the type has one.
+        try elements.append(a.gpa, if (!element.inverted) t else try a.env.twin(a.gpa, t) orelse blk: {
+            try a.fail(.not_invertible, token);
+            break :blk .unknown;
         });
+    }
+    // `[:Style]` where a value goes; mixed with values, it was reported
+    // with the brackets.
+    if (types) {
+        if (elements.items.len == 0) try a.fail(.type_as_value, token);
+        return .unknown;
     }
     return switch (elements.items.len) {
         0 => try a.env.intern(a.gpa, .{ .list = .nothing }),

@@ -5,6 +5,7 @@
 //!   [0..*/1..1]    range 0..∞, range 1..1
 //!   [/solid/>]     an empty slot, then a name and a symbol
 //!   []             no elements: the empty list
+//!   [:Tip/:Tip]    two type names: a bracket in a type (statements.md §22.8)
 //!
 //! The reader checks shapes only. What a name refers to, and whether a type
 //! fits, belong to the environment (plan step 8c). It allocates nothing:
@@ -29,6 +30,8 @@ pub const Kind = union(enum) {
     name,
     /// Glyphs, with at most one capital letter: `>`, `|>`, `X`, `O{`, `⊸`.
     symbol,
+    /// A type name, `:` then UpperCamel: `:Tip`. Only in a type's bracket.
+    type,
     color: Rgba,
     number: Decimal,
     range: Range,
@@ -101,6 +104,7 @@ fn element(raw: []const u8) Failure!Element {
 
     const kind: Kind = switch (text[0]) {
         'a'...'z' => try name(text),
+        ':' => if (text.len > 1 and std.ascii.isUpper(text[1])) try typeName(text[1..]) else try symbol(text),
         '#' => .{ .color = try color(text[1..]) },
         '0'...'9', '*' => if (std.mem.indexOf(u8, text, "..") != null)
             .{ .range = try range(text) }
@@ -131,6 +135,12 @@ fn name(text: []const u8) Failure!Kind {
     };
     if (after_hyphen) return error.MalformedName;
     return .name;
+}
+
+/// UpperCamel: letters and digits, after the capital.
+fn typeName(text: []const u8) Failure!Kind {
+    for (text) |c| if (!std.ascii.isAlphanumeric(c)) return error.MalformedSymbol;
+    return .type;
 }
 
 /// 3, 4, 6 or 8 hex digits: `f00`, `f00a`, `d1242f`, `d1242f22`.
@@ -179,7 +189,8 @@ fn range(text: []const u8) Failure!Range {
 }
 
 /// Glyphs, with at most one capital letter. ASCII punctuation, less what a
-/// bracket uses itself (`/`, `!`, `#`, `[`, `]`), and the Unicode blocks of
+/// bracket uses itself (`/`, `!`, `#`, `[`, `]`; `(`, `)` and `,` end the
+/// token, statements.md §22.8), and the Unicode blocks of
 /// arrows, mathematical operators and geometric symbols: never a space, a
 /// control, a combining mark or a letter of any script.
 fn symbol(text: []const u8) Failure!Kind {

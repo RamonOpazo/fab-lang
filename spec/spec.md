@@ -953,12 +953,14 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Not a type                          | `:Colour [x] := …`                       | Types are declared before their use                                                  |
 | Type named with `:=`                | `:Length := :Number`                     | A type is no value: it is declared, `:Length :: :Number`                             |
 | Types and values mixed              | `[:Tip/solid/>]`                         | A bracket holds values, or type names                                                |
+| Type as a value                     | `:theme [:Style]`                        | A bracket of type names is a type; values are written without `:`                    |
+| Type including itself               | `:A :: :B` then `:B :: :A`, `:A :: [:A]` | A type holds other types' values, never its own                                      |
 | Expression in a bracket             | `[:Tip/(:Line,:Nil)/:Tip]`, `[a,b]`      | Name the type first: `:Stroke :: :Line!, :Nil`; brackets never hold `(`, `)` or `,`  |
 | Contract broken                     | `:Color [warn] := [circle]`              | A type written in a naming is checked                                                |
 | Type with parameters                | `:Color.(:Text)`, `:List.(:Style)`       | Types take none: a tuple is `[:A/:B]`, a list `[:A]`, a table a key slot `:d.[] :: :A` |
 | Key in a declaration                | `&zone :axiom.[a] :: :Proposition`       | A declaration names no key: its slot is empty, `:axiom.[]`                           |
 | Not a label                         | `:Shape :: [#f00]`, `[a/b]`, `[x!]`      | A label is one name or one symbol, alone in its bracket                              |
-| Labels on structure                 | `:Arrow :: [x]`                          | Labels are single values; tuples, lists, unions, records and flags take none          |
+| Labels on structure                 | `:Flag :: [x]`, `:Record :: [x]`         | Labels go on declared types and single values; flags and records take none            |
 | Uppercase name                      | `[Warn]`                                 | Names start with a lowercase letter; a symbol has at most one capital, and no letter after it |
 | Bare value                          | `:width 2`                               | Values are written `"…"`, `$…$`, `[…]` or `{ … }`                                     |
 | Space inside brackets               | `[0..* / 1]`                             | A bracket is one token                                                               |

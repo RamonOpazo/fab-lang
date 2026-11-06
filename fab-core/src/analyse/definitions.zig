@@ -1,7 +1,7 @@
 //! Namings, `head := body`, and descriptions, `context :descriptor value`
-//! (statements.md §22.1). A naming's head has one of four forms; its body
-//! holds descriptions, namings, equations and, alone, a literal or a type.
-//! Aliases and named values are read into the environment
+//! (statements.md §22.1). A naming's head has one of three forms; its body
+//! holds descriptions, namings, equations and, alone, a literal. A type is
+//! declared, never named (§22.8). Named values are read into the environment
 //! (`vocabulary.zig`), themes and bundles checked as records
 //! (`records.zig`). Descriptions are the layers, which wait for plan steps 9
 //! and 11, so they are reported as unsupported once checked.
@@ -29,8 +29,13 @@ pub fn naming(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.Index
         return;
     }
 
-    // `:Side := :Union.(…)`: an alias, whose body is a type expression.
-    if (isLeafOf(cst, head, .type_id)) return vocabulary.alias(a, head, body);
+    // `:Length := :Number`: a type is no value. Read as the declaration it
+    // meant, so its uses don't fail too.
+    if (isLeafOf(cst, head, .type_id)) {
+        try a.fail(.type_named_with_defn, cst.mainToken(node));
+        try brackets(a, body);
+        return vocabulary.declareType(a, head, body);
+    }
 
     // `G :style := { … }`: a description, which takes no operator. What it
     // would have meant is plain, so its body is checked as one.
@@ -80,19 +85,24 @@ pub fn brackets(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
         const token = cst.mainToken(node);
         if (cst.tokenTag(token) != .val) return;
         var reader = value.read(cst.tokenText(token));
+        var types = false;
+        var values = false;
         while (true) {
-            const element = reader.next() catch {
+            const element = (reader.next() catch {
                 try a.fail(reader.failure, token);
                 continue;
-            };
-            if (element == null) break;
+            }) orelse break;
+            if (element.kind == .type) types = true else values = true;
         }
+        // `[:Tip/solid/>]`: a bracket holds values, or type names.
+        if (types and values) try a.fail(.types_and_values_mixed, token);
         return;
     }
     for (cst.children(node)) |child| try brackets(a, child);
 }
 
-/// `[name]`, `:Type [name]`, `:Type` (an alias), `:attr` or `subject :attr`:
+/// `[name]`, `:Type [name]`, `:Type` (an error, read as a declaration),
+/// `:attr` or `subject :attr`:
 /// one attribute, with no value.
 fn isHead(cst: *const Cst, head: Node.Index) bool {
     return switch (cst.tag(head)) {

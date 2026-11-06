@@ -109,6 +109,11 @@ pub fn syntax(tag: Cst.Error.Tag) Text {
             .explanation = "The dot joins a qualifier to what it qualifies, as in `A.+f` or `&node.id`, so nothing may separate them.",
             .hint = "Remove the spaces around the dot.",
         },
+        .expression_in_bracket => .{
+            .message = "A bracket holding an expression",
+            .explanation = "A bracket is one token: its elements are separated by `/`, and it never holds fAB's grouping, `(`, `)` or `,`. A type a bracket needs is named first.",
+            .hint = "Name the part first: `:Stroke :: :Line!, :Nil`, then `[:Tip/:Stroke/:Tip]`.",
+        },
         .invalid_token => .{
             .message = "Unrecognised text {}",
             .explanation = "This is not a name, literal or operator of fAB. Unterminated strings and math, and numbers outside a value, end up here too.",
@@ -156,7 +161,7 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .bad_naming_head => .{
             .message = "{} is not the head of a naming",
-            .explanation = "A naming's left side is `[name]` (a value), `:Type [name]` (a typed value), `:Type` (an alias) or `:descriptor` (a bundle).",
+            .explanation = "A naming's left side is `[name]` (a value), `:Type [name]` (a typed value) or `:descriptor` (a bundle). A type is declared, with `::`.",
             .hint = "Use one of those forms, or `::` to declare a diagram.",
         },
         .description_with_operator => .{
@@ -231,18 +236,38 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .label_in_two_types => .{
             .message = "{} is already a label of another type",
-            .explanation = "A label belongs to one type. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, then `:Side := :Union.(:Facing, :On)`.",
-            .hint = "Declare the shared labels once, in a type of their own, and include it with `:Union`.",
+            .explanation = "A label belongs to one type. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, then `:Side :: :Facing, :On`.",
+            .hint = "Declare the shared labels once, in a type of their own, and include it: `:Side :: :Facing, :On`.",
         },
         .not_a_type => .{
             .message = "{} is not a type",
-            .explanation = "A type is `:Text`, `:Math`, `:Color`, `:Number`, `:Range`, `:Flag`, `:Record`, a type declared or aliased before, or one built with `:Tuple.(…)`, `:List.(…)` or `:Union.(…)`.",
+            .explanation = "A type is `:Text`, `:Math`, `:Color`, `:Number`, `:Range`, `:Flag`, `:Record` or a type declared before, and is written like its values: `:A, :B` a choice, `[:A/:B]` a tuple, `[:A]` a list, `:A!` with its twins.",
             .hint = "Check the spelling, or declare the type first: `:Shape :: [circle]`.",
         },
-        .wrong_type_parameters => .{
-            .message = "{} has the wrong parameters",
-            .explanation = "`:Tuple.(…)` and `:Union.(…)` take one type or more, `:List.(…)` exactly one; they are no type without them. Other types take none.",
-            .hint = "Write `:List.(:Color)`, or drop the parameters.",
+        .type_with_parameters => .{
+            .message = "{} takes no parameters",
+            .explanation = "Types are spelled like their values, with no constructors: a tuple is `[:A/:B]`, a list `[:A]`, a choice `:A, :B`, and a table a descriptor declared with a key slot, `&zone :axiom.[] :: :Proposition`.",
+            .hint = "Write `[:Style]` for a list of styles, `[:A/:B]` for a tuple.",
+        },
+        .type_named_with_defn => .{
+            .message = "A type named with `:=`",
+            .explanation = "`:=` binds a name to a value, and a type is no value. A type is declared with `::`, and a declared type is its own: `:Length :: :Number` is no angle.",
+            .hint = "Declare it: `:Length :: :Number`.",
+        },
+        .types_and_values_mixed => .{
+            .message = "{} mixes types and values",
+            .explanation = "A bracket holds values, `[>/solid/>]`, or type names, `[:Tip/:Stroke/:Tip]`, never both.",
+            .hint = "Declare a type for the fixed part, or write the values out.",
+        },
+        .type_as_value => .{
+            .message = "{} is a type where a value goes",
+            .explanation = "A bracket of type names is a type: `[:Style]` is a list of styles. Values are written without `:`.",
+            .hint = "Write the value: `[dark]`, `[dark/compact]`.",
+        },
+        .type_includes_itself => .{
+            .message = "{} would include the type being declared",
+            .explanation = "A type holds the values of other types. Holding its own, directly or through another, would make it endless.",
+            .hint = "Declare the shared part as a type of its own, and include it in both.",
         },
         .contract_broken => .{
             .message = "{} does not fit the type written before its name",
@@ -256,8 +281,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .labels_on_structure => .{
             .message = "{} cannot take labels",
-            .explanation = "A label is a single value. Tuples, lists, unions, records and flags are built from other types, so they take none; their parts do.",
-            .hint = "Declare a label type and use it inside: `:Head :: [>]`, then `:Tuple.(:Head, …)`.",
+            .explanation = "Labels go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record holds descriptors, so neither takes any.",
+            .hint = "Declare a type of your own: `:Mood :: [calm], [busy]`.",
         },
         .unknown_class => .{
             .message = "{} is not a class",
@@ -289,10 +314,10 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Only flags stand alone; every other attribute takes a value of its type.",
             .hint = "Add a value: `:shape [box]`.",
         },
-        .only_a_flag_inverts => .{
-            .message = "{} is not a flag, so `!` cannot turn it off",
-            .explanation = "`!` after an attribute turns a flag off in a later layer. Other attributes are overridden with a new value, and a bundle is applied, never inverted.",
-            .hint = "Give the attribute another value instead.",
+        .not_invertible => .{
+            .message = "{} has no twin for `!` to name",
+            .explanation = "`!` names a value's twin: a flag off, a hook or an angle on the inner side, a line struck. Only a type with twins has them, and says so: `:Angle :: :Number!`, `:Hook!`, `:Line!`. A bundle is applied, never inverted.",
+            .hint = "Remove the `!`, or give another value instead.",
         },
         .key_of_wrong_type => .{
             .message = "{} is not of the label's type",

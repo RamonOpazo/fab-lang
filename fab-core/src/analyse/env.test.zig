@@ -27,11 +27,11 @@ test "the scalars have fixed indices" {
     try testing.expectEqualStrings(":Color", env.type_names.items[@backingInt(Env.TypeIndex.color)].?);
 }
 
-test "each label type has its own identity" {
+test "each declared type has its own identity" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
-    const shape = try env.newLabels(gpa);
-    const line = try env.newLabels(gpa);
+    const shape = try env.newDeclared(gpa);
+    const line = try env.newDeclared(gpa);
     try testing.expect(shape != line);
     try testing.expect(!env.fits(shape, line));
 }
@@ -39,8 +39,8 @@ test "each label type has its own identity" {
 test "fits: the same type, and unions" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
-    const facing = try env.newLabels(gpa);
-    const on = try env.newLabels(gpa);
+    const facing = try env.newDeclared(gpa);
+    const on = try env.newDeclared(gpa);
     const side = try env.intern(gpa, .{ .@"union" = &.{ facing, on } });
     try testing.expect(env.fits(.color, .color));
     try testing.expect(env.fits(facing, side));
@@ -64,8 +64,8 @@ test "fits: lists take tuples of their elements, one value, and []" {
 test "fits: tuples match element by element, empty slots anywhere" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
-    const head = try env.newLabels(gpa);
-    const line = try env.newLabels(gpa);
+    const head = try env.newDeclared(gpa);
+    const line = try env.newDeclared(gpa);
     const arrow = try env.intern(gpa, .{ .tuple = &.{ head, line, head } });
     try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ head, line, head } }), arrow));
     try testing.expect(env.fits(try env.intern(gpa, .{ .tuple = &.{ .nothing, line, head } }), arrow));
@@ -81,11 +81,54 @@ test "fits: what failed to type fits anywhere, so it says nothing more" {
     try testing.expect(env.fits(.color, .unknown));
 }
 
+test "a declared type holds its members' values, and is held by none but its own" {
+    var env: Env = try .init(gpa);
+    defer env.deinit(gpa);
+    const length = try env.newDeclared(gpa);
+    const width = try env.newDeclared(gpa);
+    try env.declared.items[0].members.append(gpa, .number);
+    try env.declared.items[1].members.append(gpa, length);
+    // A literal fits through the members.
+    try testing.expect(env.fits(.number, length));
+    try testing.expect(env.fits(.number, width));
+    // A length is a width, since a width includes lengths; not the reverse,
+    // and a length is no number: declared types are never unwrapped.
+    try testing.expect(env.fits(length, width));
+    try testing.expect(!env.fits(width, length));
+    try testing.expect(!env.fits(length, .number));
+    try testing.expect(env.includes(width, length));
+    try testing.expect(!env.includes(length, width));
+}
+
+test "twins: T fits T!, never the reverse; ! distributes and is idempotent" {
+    var env: Env = try .init(gpa);
+    defer env.deinit(gpa);
+    const angle = (try env.twin(gpa, .number)).?;
+    const inward = angle; // [30!] is typed :Number!
+    try testing.expect(env.fits(.number, angle));
+    try testing.expect(env.fits(inward, angle));
+    try testing.expect(!env.fits(inward, .number));
+    try testing.expectEqual(angle, (try env.twin(gpa, angle)).?);
+    try testing.expectEqual(Env.TypeIndex.flag, (try env.twin(gpa, .flag)).?);
+    try testing.expectEqual(@as(?Env.TypeIndex, null), try env.twin(gpa, .record));
+
+    const hook = try env.newDeclared(gpa);
+    const head = try env.newDeclared(gpa);
+    const both = try env.intern(gpa, .{ .@"union" = &.{ head, hook } });
+    const twins = (try env.twin(gpa, both)).?;
+    try testing.expect(env.fits((try env.twin(gpa, hook)).?, twins));
+    try testing.expect(env.fits(head, twins));
+
+    // Untwinned: what a value would be without its `!`s.
+    const pair = try env.intern(gpa, .{ .tuple = &.{ angle, .color } });
+    try testing.expectEqual(try env.intern(gpa, .{ .tuple = &.{ .number, .color } }), try env.untwinned(gpa, pair));
+}
+
 test "labels go on single values only" {
     var env: Env = try .init(gpa);
     defer env.deinit(gpa);
     try testing.expect(env.takesLabels(.color));
-    try testing.expect(env.takesLabels(try env.newLabels(gpa)));
+    try testing.expect(env.takesLabels(try env.newDeclared(gpa)));
     try testing.expect(!env.takesLabels(.record));
     try testing.expect(!env.takesLabels(.flag));
     try testing.expect(!env.takesLabels(try env.intern(gpa, .{ .list = .color })));

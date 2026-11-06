@@ -155,7 +155,9 @@ fn delimited(self: *Lexer, close: u8, tag: Tag) Tag {
 
 /// At `[`: a value, `[red]`, `[0..*/1]`, `[/dashed/>]`, `[]`, is one token
 /// up to the first `]`. Its contents are read later, by the attribute that
-/// takes it. Whitespace, a `[` or a missing `]` make the `[` invalid.
+/// takes it. Whitespace, a `[`, a missing `]`, or fAB's own grouping, `(`,
+/// `)` and `,`, make the `[` invalid: a bracket never holds an expression
+/// (statements.md §22.8).
 fn value(self: *Lexer) Tag {
     var i = self.index + 1;
     while (true) : (i += 1) switch (self.at(i)) {
@@ -163,7 +165,7 @@ fn value(self: *Lexer) Tag {
             self.index = i + 1;
             return .val;
         },
-        0, ' ', '\t', '\r', '\n', '[' => break,
+        0, ' ', '\t', '\r', '\n', '[', '(', ')', ',' => break,
         else => {},
     };
     return self.one(.invalid);

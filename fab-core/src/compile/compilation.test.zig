@@ -43,7 +43,7 @@ test "the prelude's labels are the ones Zig gives meaning to" {
 /// Every label of `type_name` is a value of `E`, hyphens read as
 /// underscores, and every value of `E` but `internal` is a label of it.
 fn expectLabels(env: *const @import("../analyse/Env.zig"), type_name: []const u8, E: type, internal: []const []const u8) !void {
-    const t = env.type_table.get(type_name).?.type.index;
+    const t = env.type_table.get(type_name).?.index;
     var count: usize = 0;
     var it = env.values.iterator();
     while (it.next()) |entry| {

@@ -2,8 +2,11 @@
 //! labels written in brackets, and functions with their signatures.
 //!
 //! Types are interned: every type is an index into one table, structural
-//! types included, so `:List.(:Color)` written twice is one index, and type
-//! equality is index equality. An alias is a second name for an index.
+//! types included, so `[:Color]` written twice is one index, and type
+//! equality is index equality. A declared type (`:Angle :: :Number!`,
+//! `:Shape :: [circle]`) has an identity of its own (statements.md §22.8):
+//! literals fit it through its members, a value typed by it fits only it and
+//! the types that include it.
 //!
 //! The environment stores where a name was defined, not what it evaluates
 //! to: a value is read again from its node when it is needed. Names are
@@ -33,8 +36,8 @@ type_table: std.StringHashMapUnmanaged(Named) = .empty,
 values: std.StringHashMapUnmanaged(Value) = .empty,
 /// Function names, `:` included: `:fill`.
 functions: std.StringHashMapUnmanaged(Function) = .empty,
-/// The next label type's identity.
-label_types: u32 = 0,
+/// The declared types, by identity: what each holds besides its labels.
+declared: std.ArrayList(Declared) = .empty,
 
 pub const TypeIndex = enum(u32) {
     text,
@@ -44,7 +47,7 @@ pub const TypeIndex = enum(u32) {
     range,
     flag,
     record,
-    /// An empty slot, `[/solid/>]`'s tail: it fits any slot.
+    /// An empty slot, `[/solid/>]`'s tail: it fits any slot (until 9b1).
     nothing,
     /// Whatever failed to type. It fits anywhere, so one error says it.
     unknown,
@@ -61,21 +64,27 @@ pub const Type = union(enum) {
     record,
     nothing,
     unknown,
-    /// A set of labels, `:Shape :: [circle], …`; each declaration of a new
-    /// label type gets its own identity.
-    labels: u32,
+    /// `:T :: …`, with an identity of its own: its labels, and the members
+    /// in `declared`.
+    declared: u32,
+    /// `[:A/:B]`.
     tuple: []const TypeIndex,
+    /// `[:A]`.
     list: TypeIndex,
+    /// `:A, :B` in a declaration, `(:A, :B)` inside an expression.
     @"union": []const TypeIndex,
+    /// `T!`: T's values and their twins. Never of a twin or a union, which
+    /// `twin` normalises.
+    twin: TypeIndex,
 };
 
-/// The parametrised constructors, which are no type until applied.
-pub const Constructor = enum { tuple, list, @"union" };
-
-pub const Named = union(enum) {
-    type: struct { index: TypeIndex, token: ?TokenIndex, prelude: bool = false },
-    constructor: Constructor,
+/// What a declared type holds besides its labels, added to by each
+/// declaration of it.
+pub const Declared = struct {
+    members: std.ArrayList(TypeIndex) = .empty,
 };
+
+pub const Named = struct { index: TypeIndex, token: ?TokenIndex, prelude: bool = false };
 
 pub const Value = struct {
     type: TypeIndex,
@@ -119,17 +128,16 @@ pub fn init(gpa: std.mem.Allocator) error{OutOfMemory}!Env {
         .{ ":Range", .range }, .{ ":Flag", .flag }, .{ ":Record", .record },
     };
     for (builtins) |b| {
-        try env.type_table.put(gpa, b[0], .{ .type = .{ .index = b[1], .token = null } });
+        try env.type_table.put(gpa, b[0], .{ .index = b[1], .token = null });
         env.type_names.items[@backingInt(b[1])] = b[0];
     }
-    try env.type_table.put(gpa, ":Tuple", .{ .constructor = .tuple });
-    try env.type_table.put(gpa, ":List", .{ .constructor = .list });
-    try env.type_table.put(gpa, ":Union", .{ .constructor = .@"union" });
     return env;
 }
 
 pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.types.deinit(gpa);
+    for (env.declared.items) |*d| d.members.deinit(gpa);
+    env.declared.deinit(gpa);
     env.type_names.deinit(gpa);
     env.interned.deinit(gpa);
     env.type_table.deinit(gpa);
@@ -142,10 +150,7 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
 /// Marks every entry as the prelude's, before a program is analysed in it.
 pub fn adopt(env: *Env) void {
     var types = env.type_table.valueIterator();
-    while (types.next()) |named| switch (named.*) {
-        .type => |*t| t.prelude = true,
-        .constructor => {},
-    };
+    while (types.next()) |named| named.prelude = true;
     var values = env.values.valueIterator();
     while (values.next()) |v| v.prelude = true;
     var functions = env.functions.valueIterator();
@@ -173,10 +178,59 @@ pub fn intern(env: *Env, gpa: std.mem.Allocator, t: Type) error{OutOfMemory}!Typ
     return index;
 }
 
-/// A new label type, with its own identity.
-pub fn newLabels(env: *Env, gpa: std.mem.Allocator) error{OutOfMemory}!TypeIndex {
-    defer env.label_types += 1;
-    return env.intern(gpa, .{ .labels = env.label_types });
+/// A new declared type, with its own identity.
+pub fn newDeclared(env: *Env, gpa: std.mem.Allocator) error{OutOfMemory}!TypeIndex {
+    const id: u32 = @intCast(env.declared.items.len);
+    try env.declared.append(gpa, .{});
+    errdefer _ = env.declared.pop();
+    return env.intern(gpa, .{ .declared = id });
+}
+
+/// `T!`. A twin of a twin is the twin; on a union `!` distributes; a flag
+/// has twins by nature. Null for a type with no twins to give: a tuple, a
+/// list, a record.
+pub fn twin(env: *Env, gpa: std.mem.Allocator, t: TypeIndex) error{OutOfMemory}!?TypeIndex {
+    switch (env.get(t)) {
+        .twin, .flag, .unknown => return t,
+        .tuple, .list, .record, .nothing => return null,
+        .@"union" => |members| {
+            var twins: std.ArrayList(TypeIndex) = .empty;
+            defer twins.deinit(gpa);
+            for (members) |m| try twins.append(gpa, try env.twin(gpa, m) orelse return null);
+            return try env.intern(gpa, .{ .@"union" = twins.items });
+        },
+        else => return try env.intern(gpa, .{ .twin = t }),
+    }
+}
+
+/// `t` with every twin taken back: what a value would be without its `!`s.
+pub fn untwinned(env: *Env, gpa: std.mem.Allocator, t: TypeIndex) error{OutOfMemory}!TypeIndex {
+    switch (env.get(t)) {
+        .twin => |inner| return inner,
+        .tuple => |slots| {
+            var plain: std.ArrayList(TypeIndex) = .empty;
+            defer plain.deinit(gpa);
+            for (slots) |slot| try plain.append(gpa, try env.untwinned(gpa, slot));
+            return env.intern(gpa, .{ .tuple = plain.items });
+        },
+        else => return t,
+    }
+}
+
+/// Whether `inner` is `outer`, or among the members `outer` holds, at any
+/// depth: what would make a declaration of `outer` with `inner` cyclic.
+pub fn includes(env: *const Env, outer: TypeIndex, inner: TypeIndex) bool {
+    if (outer == inner) return true;
+    return switch (env.get(outer)) {
+        .declared => |id| for (env.declared.items[id].members.items) |m| {
+            if (env.includes(m, inner)) break true;
+        } else false,
+        .@"union", .tuple => |ts| for (ts) |m| {
+            if (env.includes(m, inner)) break true;
+        } else false,
+        .list, .twin => |m| env.includes(m, inner),
+        else => false,
+    };
 }
 
 /// Gives a type a name for messages, unless it has one.
@@ -189,6 +243,16 @@ pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
 pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
     if (actual == expected or actual == .unknown or expected == .unknown or actual == .nothing) return true;
     return switch (env.get(expected)) {
+        // A declared type holds its members' values; a value typed by
+        // another declared type is never unwrapped, so units stay apart.
+        .declared => |id| for (env.declared.items[id].members.items) |m| {
+            if (env.fits(actual, m)) break true;
+        } else false,
+        // An unmarked value is the first of its pair.
+        .twin => |t| env.fits(actual, t) or switch (env.get(actual)) {
+            .twin => |a| env.fits(a, t),
+            else => false,
+        },
         .@"union" => |members| for (members) |m| {
             if (env.fits(actual, m)) break true;
         } else false,
@@ -215,7 +279,7 @@ pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
 /// structure's.
 pub fn takesLabels(env: *const Env, index: TypeIndex) bool {
     return switch (env.get(index)) {
-        .text, .math, .color, .number, .range, .labels => true,
+        .text, .math, .color, .number, .range, .declared => true,
         else => false,
     };
 }
@@ -229,8 +293,8 @@ const TypeContext = struct {
         var h: std.hash.Wyhash = .init(0);
         h.update(@tagName(t));
         switch (t) {
-            .labels => |id| h.update(std.mem.asBytes(&id)),
-            .list => |e| h.update(std.mem.asBytes(&e)),
+            .declared => |id| h.update(std.mem.asBytes(&id)),
+            .list, .twin => |e| h.update(std.mem.asBytes(&e)),
             .tuple, .@"union" => |ts| h.update(std.mem.sliceAsBytes(ts)),
             else => {},
         }
@@ -240,8 +304,9 @@ const TypeContext = struct {
     pub fn eql(_: TypeContext, a: Type, b: Type) bool {
         if (std.meta.activeTag(a) != std.meta.activeTag(b)) return false;
         return switch (a) {
-            .labels => |id| id == b.labels,
+            .declared => |id| id == b.declared,
             .list => |e| e == b.list,
+            .twin => |e| e == b.twin,
             .tuple => |ts| std.mem.eql(TypeIndex, ts, b.tuple),
             .@"union" => |ts| std.mem.eql(TypeIndex, ts, b.@"union"),
             else => true,

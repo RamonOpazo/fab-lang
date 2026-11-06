@@ -13,19 +13,23 @@
 //   [value]      named values and labels, lowercase-kebab
 //   [>] [X]      symbols: glyphs, with at most one capital letter
 //
-// The constructors are the language, not written here:
-//   :Text "…"   :Math $…$   :Color [#…]   :Number [2] [0.5] [30!]
-//   :Range [0..*]   :Flag (written or not)
-//   :Tuple.(…) [a/b/c]   :List.(T) [a/b/c]   :Union.(…)   :Record { … }
+// The built-in types are the language, not written here:
+//   :Text "…"   :Math $…$   :Color [#…]   :Number [2] [0.5]
+//   :Range [0..*]   :Flag (written or not)   :Record { … }
+//
+// The rest are declared, and spelled like their values (statements.md
+// §22.8): :A, :B a choice, [:A/:B] a tuple, [:A] a list, :A! the values of
+// :A and their twins ([30!], [?!]). A declared type is its own: a length
+// is no angle.
 
 // ── 1. Types ──────────────────────────────────────────────────────────
 
-// Numbers carry their unit in the type's name only: all three are :Number.
-:Length   := :Number        // in em, relative to the theme's text size
-:Angle    := :Number        // in degrees; [30!] is the inner side
-:Fraction := :Number        // 0 to 1, a position along an edge
+// Numbers with a unit: three types of their own, so units are checked.
+:Length   :: :Number        // in em, relative to the theme's text size
+:Angle    :: :Number!       // in degrees; [30!] is the inner side
+:Fraction :: :Number        // 0 to 1, a position along an edge
 
-:Label := :Union.(:Text, :Math)
+:Label :: :Text, :Math
 
 // Labels: each is declared in exactly one type. Words two types share get
 // a type of their own, which both include (:None, :Facing).
@@ -46,20 +50,24 @@
 :As    :: [flat], [cluster], [node], [table]
 :Cross :: [gap], [plain]
 
-:Side  := :Union.(:Facing, :On)
+:Side  :: :Facing, :On
 
 // Arrow ends, read as a picture from tail to head. Any end goes at either
-// side; ! after a hook or a harpoon puts it on the inner side: [?!], [^!].
+// side. Hooks and harpoons curl to one side, so they have twins: ! puts
+// them on the inner side, [?!], [^!].
 :Head :: {
   [>], [<], [>>], [<<], [|>], [<|], [|],
-  [O], [@], [X], [<>], [<@>], [?], [^],
+  [O], [@], [X], [<>], [<@>],
   [||], [O|], [|{], [O{], [|O], [}|], [}O]
 }
+:Hook :: [?], [^]
+:Tip  :: :Head, :Hook!
 
 // An empty slot is nothing there: [/solid/>] has no tail, [/solid/] no
-// head, [>//>] no line. ! after a line word strikes it: [/solid!/>].
-:Arrow       := :Tuple.(:Head, :Union.(:Line, :None), :Head)
-:Cardinality := :Tuple.(:Range, :Range)
+// head, [>//>] no line. A line in an arrow may be struck: [/solid!/>].
+:Stroke      :: :Line!, :None
+:Arrow       :: [:Tip/:Stroke/:Tip]
+:Cardinality :: [:Range/:Range]
 
 // ── 2. Colours ────────────────────────────────────────────────────────
 
@@ -95,10 +103,10 @@
 (&node, &zone)               :fill   :: :Color
 (&node, &edge, &cell, &zone) :stroke :: :Color
 (&node, &edge, &cell, &zone) :pen    :: :Pen
-(&node, &zone)               :line   :: :Union.(:Line, :None)
+(&node, &zone)               :line   :: :Line, :None
 
 // Nodes
-&node          :shape   :: :Union.(:Shape, :None)
+&node          :shape   :: :Shape, :None
 &node          :width   :: :Length    // a minimum
 &node          :height  :: :Length    // a minimum
 (&node, &zone) :padding :: :Length
@@ -107,18 +115,18 @@
 
 // Edges and cells
 (&edge, &cell) :arrow       :: :Arrow
-(&edge, &cell) :bend        :: :Union.(:Facing, :Angle)
+(&edge, &cell) :bend        :: :Facing, :Angle
 (&edge, &cell) :label-start :: :Label
 (&edge, &cell) :label-end   :: :Label
-(&edge, &cell) :label-at    :: :Union.(:Span, :Fraction)
+(&edge, &cell) :label-at    :: :Span, :Fraction
 (&edge, &cell) :side        :: :Side
 (&edge, &cell) :shorten     :: :Length
 
 // Zones
 &zone :as      :: :As
 &zone :caption :: :Label
-&zone :theme   :: :List.(:Record)     // applied left to right
-&zone :marks   :: :Union.(:All, :None)
+&zone :theme   :: [:Record]            // applied left to right
+&zone :marks   :: :All, :None
 &zone :cross   :: :Cross
 &zone :alt     :: :Text
 
