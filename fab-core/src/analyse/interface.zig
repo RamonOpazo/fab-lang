@@ -175,8 +175,8 @@ fn pinchCount(a: *Analyser, node: Node.Index, side: ?Side) error{OutOfMemory}!bo
 /// or its own side. Two or more close a cycle, which exposes its start on the
 /// left and nothing on the right. The side beside `*` is exactly one free
 /// end. Between edges, a `/` glues one to several: never nothing, never
-/// several to several. A trailing `/` belongs to the chain, and needs it to
-/// be one single edge.
+/// several to several. A trailing `/` belongs to the chain, and undirects
+/// its edges: each must be a single edge.
 fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     const cst = a.cst;
     const all = cst.children(node);
@@ -184,15 +184,15 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     const trailing = isTrailingSlash(cst, all[last]);
 
     var edges: usize = 0;
-    var single = false;
+    var single = true;
     for (all, 0..) |link, i| {
         const l = unwrap(cst, link, i == last and trailing);
         if (sort.of(a, l) == .edges) {
             edges += 1;
-            single = sort.isSingleEdge(a, l);
+            if (!sort.isSingleEdge(a, l)) single = false;
         }
     }
-    if (trailing and !(edges == 1 and single)) {
+    if (trailing and !single) {
         try a.failTerm(.undirected_not_one_edge, node, cst.mainToken(all[last]));
         return hole;
     }

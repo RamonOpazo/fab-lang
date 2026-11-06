@@ -495,8 +495,34 @@ test "Relations: nothing to join at a slash, after a cycle" {
     try check(.{ .step = 5, .rule = 3, .source = "G :: (f/g)/h", .codes = &.{.{ .analysis = .nothing_to_join }} });
 }
 
-test "Undirected: a trailing / on a cycle" {
-    try check(.{ .step = 5, .rule = 3, .source = "G :: f/g/", .codes = &.{.{ .analysis = .undirected_not_one_edge }} });
+test "Undirected: a cycle" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: f/g/", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -- n1
+        \\  edge g n1 -- n0
+        \\
+    });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/g/", .ir =
+        \\zone G
+        \\  node n0 #A
+        \\  node n1 #B
+        \\  edge f n0 -- n1
+        \\  edge g n1 -- n0
+        \\
+    });
+}
+
+test "Undirected: a mixed cycle names its nodes" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #A/f/#B/, #B/g/#A", .ir =
+        \\zone G
+        \\  node n0 #A
+        \\  node n1 #B
+        \\  edge f n0 -- n1
+        \\  edge g n1 -> n0
+        \\
+    });
 }
 
 test "Undirected: a trailing / on a group" {

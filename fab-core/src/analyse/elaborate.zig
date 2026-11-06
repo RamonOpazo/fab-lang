@@ -327,8 +327,9 @@ fn marker(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     const tag = cst.tokenTag(main);
 
     if (tag == .slash) {
+        const first = a.builder.edges.len;
         const p = try term(a, operand);
-        undirect(a, operand);
+        undirect(a, first);
         return p;
     }
     if (sort.isPinchedEdge(a, node)) return one(a, try reference(a, node, if (cst.tag(node) == .prefix) .dom else .cod));
@@ -392,15 +393,10 @@ fn singleEdge(cst: *const Cst, node: Node.Index) Node.Index {
     return if (cst.tag(node) == .group) singleEdge(cst, cst.children(node)[0]) else node;
 }
 
-/// Marks a single edge undirected. Anything else waits for its error (5.3b).
-fn undirect(a: *Analyser, node: Node.Index) void {
-    const cst = a.cst;
-    if (!sort.isSingleEdge(a, node)) return;
-    const name = cst.tokenText(cst.mainToken(singleEdge(cst, node)));
-    switch ((a.scope.table.get(name) orelse return).is) {
-        .generator => |e| a.builder.edges.items(.directed)[e.index] = false,
-        .hole, .node => {},
-    }
+/// Marks the edges a chain declared, from `first` on, undirected: in a
+/// chain every edge is new, since a reference is a node (`+f`, `f+`).
+fn undirect(a: *Analyser, first: usize) void {
+    for (a.builder.edges.items(.directed)[first..]) |*directed| directed.* = false;
 }
 
 /// `a/b/…`. One edge attaches to what is beside it, distributing over a
@@ -424,18 +420,16 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         return .{ .left = p.left, .right = &.{} };
     }
 
-    // A trailing `/` belongs to the whole chain: `#A/f/#B/` is undirected f.
+    // A trailing `/` belongs to the whole chain, and undirects its edges:
+    // `#A/f/#B/` is undirected f, `f/g/` an undirected cycle.
     const trailing = cst.tag(links[last]) == .postfix and cst.tokenTag(cst.mainToken(links[last])) == .slash;
     const ports = try a.arena.allocator().alloc(Ports, links.len);
+    const first_edge = a.builder.edges.len;
     var edges: usize = 0;
-    var edge: Node.Index = undefined;
     for (links, ports, 0..) |link, *p, i| {
         const l = if (i == last and trailing) cst.data(link).node else link;
         p.* = try term(a, l);
-        if (sort.of(a, l) == .edges) {
-            edges += 1;
-            edge = l;
-        }
+        if (sort.of(a, l) == .edges) edges += 1;
     }
     for (ports[0..last], ports[1..], links[0..last]) |left, right, link| try slash(a, left.right, right.left, cst.lastToken(link) + 1);
     if (edges > 1) {
@@ -449,7 +443,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         const l = if (i == last and trailing) cst.data(link).node else link;
         if (sort.isLeaf(cst, l, .star)) (try a.uf.edit(p.left[0])).sealed = true;
     }
-    if (trailing and edges == 1) undirect(a, edge);
+    if (trailing) undirect(a, first_edge);
 
     if (edges > 1) return .{ .left = ports[0].left, .right = &.{} };
     return .{

@@ -324,7 +324,19 @@ test "a cell is undirected with a trailing slash on a chain of one cell" {
         \\
     );
     try expectTags("G :: +(f, g)+ | f/α/", &.{.unnamed_side});
-    try expectTags("G :: +(f, g)+ | f/α/g/β/", &.{.undirected_not_one_edge});
+}
+
+test "a cycle of cells is undirected with a trailing slash" {
+    try expectGraph("G :: +(f, g)+ | f/α/g/β/",
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n1
+        \\  cell α f == g
+        \\  cell β g == f
+        \\
+    );
 }
 
 test "a cell declared twice keeps the first, and points back to it" {

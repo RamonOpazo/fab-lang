@@ -146,10 +146,10 @@ fn undirected(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     return p;
 }
 
-/// The one cell a term declared, from `first` on, is undirected. A name
+/// The cells a term declared, from `first` on, are undirected. A name
 /// declared twice declares nothing, and keeps its first direction.
 fn undirect(l: *Level, first: usize) void {
-    if (l.cells.items.len == first + 1) l.cells.items[first].directed = false;
+    for (l.cells.items[first..]) |*cell| cell.directed = false;
 }
 
 fn one(l: *Level, port: Port) error{OutOfMemory}!Ports {
@@ -255,7 +255,8 @@ fn closedChain(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const links = cst.children(node);
     const last = links.len - 1;
 
-    // A trailing `/` belongs to the whole chain: `f/α/g/` is undirected α.
+    // A trailing `/` belongs to the whole chain, and undirects its cells:
+    // `f/α/g/` is undirected α, `α/β/` an undirected cycle.
     const trailing = cst.tag(links[last]) == .postfix and cst.tokenTag(cst.mainToken(links[last])) == .slash;
     const ports = try l.arena().alloc(Ports, links.len);
     const first = l.cells.items.len;
@@ -265,7 +266,7 @@ fn closedChain(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
         p.* = try term(l, one_link);
         if (sort.of(a, one_link) == .edges) cells += 1;
     }
-    if (trailing and cells == 1) undirect(l, first);
+    if (trailing) undirect(l, first);
     // `α/α`: a cell from its own target to its own source.
     if (links.len == 2 and cells == 2 and isSame(cst, links[0], links[1])) {
         try slash(l, ports[0].right, ports[0].left, cst.lastToken(links[0]) + 1);

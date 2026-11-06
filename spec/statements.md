@@ -988,3 +988,22 @@ Repo :prove {
 - **Required keys:** names for every key and cardinality, which nothing refers to.
 - **Properties as bare descriptors of type `:Proposition`:** `:card` takes a value.
 - **Postfix operators for properties** (`#Merged |<`): a closed family in the lexer, and precedence again. The context after the property (`:pushout #Merged`): every description reads context first.
+
+### 22.6 The scope of proof (plan step 11, planned)
+
+fAB checks claims about one finite presentation; it is not a proof assistant. Three rules keep it so:
+
+1. **State, never prove.** A program writes axioms and lemmas, never proofs: no tactics, no proof terms, no steps. fAB confirms a lemma, refutes it, or says it cannot decide. A confirmed lemma is a fact the lemmas after it may use; how they use it is fAB's business, not the program's.
+2. **A small logic.** A proposition is a conjunction (`,`) of atoms; an atom is a path equation (`==`, `~=`) or a property of a named element (`#M :pushout`, `id :pk`). No variables, no quantifiers, no disjunction or implication, and no predicates defined by the program with a meaning: a program may declare a property (`&node :mine :: :Flag`), but with no meaning in Zig it serves only as an axiom, and as a lemma it is undecidable.
+3. **Closed procedures, bounded.** Every property with a meaning has a decision procedure in Zig, per kind, and every check runs within a budget; past it, the lemma is undecidable (a warning). fAB never loops and never asks for help. A new property is a deliberate addition: its signature in the prelude, its procedure in Zig.
+
+| Kind | Lemmas it can decide (examples) | How |
+| --- | --- | --- |
+| plain graph | connected, acyclic, a path exists | graph search |
+| flow | every fork joins, the end is reachable, no deadlock | search of the finite flow |
+| category | an equation follows from the axioms; mono, epi, iso; pullback, pushout | congruence closure on paths: decided outright when the presentation has finitely many paths (acyclic graphs: histories, most schemas), bounded rewriting otherwise |
+| schema | keys and cardinalities agree along paths; path constraints follow | the same, with cardinalities composed |
+
+So §17's classes have content: *refutable* is a counterexample found, *undecidable* is no procedure, or the budget spent.
+
+**Rejected.** A general logic with written proofs (Lean, Coq): what anything can state, nothing can check unaided, and fAB is a description language. Unbounded checks: a drawing must always finish.

@@ -232,11 +232,12 @@ A postfix `/`, touching only the edge before it, makes that edge undirected: f i
 ```
 G :: f/                // f connects N1 and N2, in no direction
 G :: f/ g/             // two undirected edges in a path
+G :: f/g/h/            // an undirected triangle
 ```
 
 - The ends are still distinguished by position: `+f` is the end written first and `f+` the end written second. References and glueing work as before.
 - The default arrow of an undirected edge has no heads, `[/solid/]`. Giving it a head is an error: it would draw a direction the relations don't have.
-- **A trailing `/` ends a chain of one edge,** so the edge may be attached first: `#A/f/` is undirected f with one end at A, and `#A/f/#B/` is undirected f between A and B. Continue with a space: `#A/f/ g/`.
+- **A trailing `/` makes every edge of its chain undirected.** A chain of one edge may be attached first: `#A/f/` is undirected f with one end at A, and `#A/f/#B/` is undirected f between A and B; continue with a space: `#A/f/ g/`. A chain of two or more is an undirected cycle: `f/g/`, `#A/f/#B/g/`. A cycle with some edges directed names its nodes: `#A/f/#B/, #B/g/#A`. After a group or a path there is no chain to end: `(f, g)/` and `(f g)/` are errors.
 - In a diagram whose header kind is undirected, every edge is undirected, and writing `f/` there is an error.
 - Cells may be undirected too, spelled the same way: `f/α/g/` is undirected α between f and g (see Levels).
 
@@ -894,7 +895,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Vacuous self-attachment           | `f/f+`                                          | Glues an end to itself                                                     |
 | `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`, `#A/#B/` | `/` needs an edge between its sides                                        |
 | Slash between two groups          | `(f, g)/(h, k)`                                 | Gluing many ends to many is a collapse nobody wrote; pinch one side: `(f, g)+/(h, k)` |
-| Trailing `/` not on one edge      | `f/g/`, `(f, g)/`, `(f g)/`, `#B/`              | A trailing `/` makes one edge undirected: `f/ g/`                          |
+| Trailing `/` not on a chain       | `(f, g)/`, `(f g)/`, `#B/`                      | A trailing `/` makes a chain's edges undirected: `f/ g/`, `f/g/`          |
 | Cycle that does not close         | `#A/f/#B/g/#C`, `+f/m/n/g+`                     | A chain of two or more edges ends where it began                           |
 | Reference not declared            | `+k/g`, `gg/α/g` with k, gg undeclared          | A reference needs its edge declared before it                              |
 | Forward reference                 | `+f/g f`                                        | References point left only                                                 |
