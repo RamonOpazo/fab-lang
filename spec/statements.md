@@ -1186,3 +1186,27 @@ So one rule covers classes and record types: a bundle applies where all its cont
 - **Inside a record with no expected type,** each descriptor is still checked where it is written for its classes and its value; only belonging waits for the use.
 
 **Rejected.** A record's type read from its first descriptor: a record is its structure, and two records with the same descriptors are the same whatever came first. A bundle joining the record type of its first descriptor: arbitrary, and it reports the second descriptor of `:key` though neither is more wrong than the other. A bundle checked at its definition: a mixed bundle is wrong only where it is used, and the use is what the user must change.
+
+### 22.10 Layers read, 2026-11-09
+
+Settles how descriptions are read into layers (plan step 9c).
+
+**A layer is open.** Every description of a diagram's layer joins one layer, wherever it is written: a block, another block, the top-level shorthand. **Binding made twice** counts the leaf bindings, (element, descriptor, key), never the layer's own descriptor:
+
+```
+G :style { #Done :terminal }
+G.f :label "x"                        // joins G's style: it is G :style { f :label "x" }
+G :style { f :label "y" }             // error: (G.f, :label) bound twice
+```
+
+Two contexts naming one element are one binding: `(f, f) :label "x"` binds twice. Classes and elements overlap freely; specificity orders them.
+
+**A context is a subject:** a diagram's name, an edge's or a cell's, an end (`f+`, `+f`), a named node (`#Done`, `@`), a class (`&edge`), each qualified with `.` (`G.f`), or a group of them, over which the descriptor distributes. A chain, a path or a pinch addresses a structure, not one element: `f g :label`, `f/g :label`, `+(f, g)+ :label` are **not a subject**.
+
+**Only a diagram has parts.** Inside a block whose owner is an element or a class, only the owner is described: `G :style { #Done { f :label "x" } }` is **element has no parts**, as is `&node { #A :fill [red] }`. Nesting means one thing, the part of a diagram.
+
+**A class at the top level describes every diagram:** `&node :fill [red]` is the program's own, at a class's rank, as a theme's class would be. `G.&node` narrows it to G.
+
+**Each diagram styles itself.** In C's layer, `A.+f` is **another diagram's subject**; at the top level, `A.+f :fill [red]` is A's layer, and fine.
+
+**Rejected.** A layer bound once, `(G, :style)`: the top-level shorthand would then conflict with any block. Contexts inside an element read relative to its diagram: nesting would mean nothing. Classes only inside a diagram: a program could not restyle every diagram without a theme.

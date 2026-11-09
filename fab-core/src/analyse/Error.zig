@@ -121,6 +121,14 @@ pub const Tag = enum(u8) {
     not_invertible,
     /// `[ink] [circle]`.
     key_of_wrong_type,
+    /// `G :style { … }` before `G ::`, or with no `G`.
+    description_at_undeclared_context,
+    /// `C :style { A.+f :fill [red] }`: each diagram styles itself.
+    another_diagrams_subject,
+    /// `f g :label "x"`: a chain, a path or a pinch as a context.
+    not_a_subject,
+    /// `G :style { #Done { f :label "x" } }`: only a diagram has parts.
+    element_has_no_parts,
     /// `[//]`: an arrow that draws nothing.
     empty_arrow,
     /// `&zone :axiom.[a] :: :Proposition`.

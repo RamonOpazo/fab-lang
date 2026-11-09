@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 24 };
+const done: Progress = .{ .step = 9, .rule = 31 };
 
 const Progress = struct {
     step: u8,
@@ -702,7 +702,7 @@ test "Diagrams and names: a group of another diagram's edges" {
 // Statements (rule 0)
 
 test "Statements: a bare term in a record" {
-    try check(.{ .step = 5, .source = "G :style { yes, paid :label \"yes\" }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
+    try check(.{ .step = 5, .source = "G :: yes, paid\nG :style { yes, paid :label \"yes\" }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
     // A token is named: `[ink] [#fff]` is two terms side by side.
     try check(.{ .step = 9, .rule = 10, .source = ":Style [x] := { [ink] [#fff] }", .codes = &.{.{ .analysis = .bare_term_in_record }} });
 }
@@ -856,7 +856,7 @@ test "Definitions and values: negative number" {
 }
 
 test "Definitions and values: number malformed" {
-    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG :style { f :at [.5], f :size [1.] }", .codes = &.{
+    try check(.{ .step = 8, .rule = 2, .source = "G :: f\nG :style { f :label-at [.5], f :size [1.] }", .codes = &.{
         .{ .analysis = .malformed_number }, .{ .analysis = .malformed_number },
     } });
     try check(.{ .step = 8, .rule = 2, .source = "[big] := [1234567890123456789]", .codes = &.{.{ .analysis = .malformed_number }} });
@@ -1087,6 +1087,63 @@ test "Definitions and values: a descriptor of another record type does not apply
     try check(.{ .step = 9, .rule = 22, .source = notes ++ ":Style [x] := { :memo \"y\", &node :fill [red], &node :memo \"x\" }", .codes = &.{ .{ .analysis = .does_not_apply }, .{ .analysis = .does_not_apply } } });
 }
 
+test "Layers: contexts are subjects" {
+    const g = "G :: f/#Done g, +(h, k)+ | h/α/k\n";
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { :caption \"G\", #Done :shape [box], (f, g) :label \"x\", f+ :ink [red], +f :ink [red], α :label \"a\", &edge :pen [thin] }" });
+    // The top-level shorthand, a class in a diagram, a class everywhere.
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.f+ :ink [red]\nG.&edge :pen [thin]\n&node :fill [red]\n(G, G.f) :note \"n\"" });
+    // `G.f` inside G's block is `f`; braces and groups organise.
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { G.f :label \"x\", { g :label \"y\" }, f { :label \"z\" } }" });
+    // `@`, a diagram's own node.
+    try check(.{ .step = 9, .rule = 31, .source = "T :: @/(id, name)\nT.@ :shape [box]" });
+}
+
+test "Layers: description at an undeclared context" {
+    try check(.{ .step = 9, .rule = 31, .source = "G :style { :caption \"G\" }\nG :: f", .codes = &.{.{ .analysis = .description_at_undeclared_context }} });
+    try check(.{ .step = 9, .rule = 31, .source = "X.f :label \"x\"", .codes = &.{.{ .analysis = .description_at_undeclared_context }} });
+}
+
+test "Layers: an undeclared name in the diagram" {
+    const g = "G :: f g\n";
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.zz :label \"x\"", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { +zz :label \"x\", #Zz :label \"y\" }", .codes = &.{ .{ .analysis = .undeclared_name_in_diagram }, .{ .analysis = .undeclared_name_in_diagram } } });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.@ :shape [box]", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.&nodes :fill [red]", .codes = &.{.{ .analysis = .unknown_class }} });
+}
+
+test "Layers: another diagram's subject" {
+    const ac = "A :: f\nC :: A.f+/g\n";
+    try check(.{ .step = 9, .rule = 31, .source = ac ++ "C :style { A.f+ :fill [red] }", .codes = &.{.{ .analysis = .another_diagrams_subject }} });
+    try check(.{ .step = 9, .rule = 31, .source = ac ++ "C :style { A :fill [red] }", .codes = &.{.{ .analysis = .another_diagrams_subject }} });
+    // At the top level, A describes itself.
+    try check(.{ .step = 9, .rule = 31, .source = ac ++ "A.f+ :fill [red]" });
+}
+
+test "Layers: not a subject" {
+    const g = "G :: f g\n";
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { f g :label \"x\" }", .codes = &.{.{ .analysis = .not_a_subject }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { f/g :label \"x\" }", .codes = &.{.{ .analysis = .not_a_subject }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { +(f, g)+ :label \"x\" }", .codes = &.{.{ .analysis = .not_a_subject }} });
+    // At the top level, a part is qualified by its diagram.
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "f :label \"x\"", .codes = &.{.{ .analysis = .not_a_subject }} });
+}
+
+test "Layers: an element has no parts" {
+    const g = "G :: f/#Done g\n";
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { #Done { f :label \"x\" } }", .codes = &.{.{ .analysis = .element_has_no_parts }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { &node { #Done :fill [red] } }", .codes = &.{.{ .analysis = .element_has_no_parts }} });
+    // The owner, described with no context, is fine.
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { #Done { :fill [red], :shape [box] } }" });
+}
+
+test "Layers: what is read is checked against :Style" {
+    const g = "G :: f g\n";
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.f :memo \"x\"", .codes = &.{.{ .analysis = .unknown_attribute }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { f+ :shape [red] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { f :shape [box] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { :style { :fill [red] } }", .codes = &.{.{ .analysis = .does_not_apply }} });
+}
+
 test "Definitions and values: an empty arrow" {
     try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &edge :arrow [//] }", .codes = &.{.{ .analysis = .empty_arrow }} });
     try check(.{ .step = 9, .rule = 24, .source = ":Arrow [nothing] := [//]", .codes = &.{.{ .analysis = .empty_arrow }} });
@@ -1239,11 +1296,11 @@ test "Statements: a signature's subjects are classes" {
 }
 
 test "Proofs: different operators without a group" {
-    try check(.{ .step = 5, .source = "G :prove { :axiom (f == g ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
+    try check(.{ .step = 5, .source = "G :: f\nG :prove { :axiom (f == g ~= h) }", .codes = &.{.{ .analysis = .mixed_operators }} });
 }
 
 test "Proofs: different operators, grouped" {
-    try check(.{ .step = 5, .source = "G :prove { :axiom ((f == g) ~= h, f == g == h) }" });
+    try check(.{ .step = 5, .source = "G :: f\nG :prove { :axiom ((f == g) ~= h, f == g == h) }" });
 }
 
 // ---------------------------------------------------------------------------

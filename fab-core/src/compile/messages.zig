@@ -289,6 +289,26 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Labels and types go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record type holds descriptors, so neither takes any.",
             .hint = "Declare a type of your own: `:Mood :: [calm], [busy]`.",
         },
+        .description_at_undeclared_context => .{
+            .message = "{} is not declared before this description",
+            .explanation = "A description comes after what it talks about: the diagram is declared first, `G :: …`, then described.",
+            .hint = "Move the description below the diagram's declaration, or check the name.",
+        },
+        .another_diagrams_subject => .{
+            .message = "{} belongs to another diagram",
+            .explanation = "Each diagram styles itself. When C refers to A, A is drawn inside C and keeps its own style; C describes only its own parts.",
+            .hint = "Describe it in A's own layer: `A.+f :fill [red]`, or `A :style { … }`.",
+        },
+        .not_a_subject => .{
+            .message = "{} is not a subject",
+            .explanation = "A context names elements: a diagram, an edge or a cell, an end (`f+`, `+f`), a named node (`#Done`, `@`), a class (`&edge`), or a group of them. A chain, a path or a pinch is a structure. At the top level, a part is qualified by its diagram: `G.f`.",
+            .hint = "Name the elements, grouped if several: `(f, g) :label \"x\"`.",
+        },
+        .element_has_no_parts => .{
+            .message = "{} is inside an element's block",
+            .explanation = "Only a diagram has parts. Inside the block of an element or a class, a descriptor with no context describes the owner, and nothing else can be named.",
+            .hint = "Move it to the diagram's block: `G :style { #Done { … }, f :label \"x\" }`.",
+        },
         .empty_arrow => .{
             .message = "An empty arrow",
             .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",

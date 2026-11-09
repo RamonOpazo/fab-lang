@@ -556,6 +556,7 @@ fn isHole(a: *Analyser, side: Ir.Cell.Side) bool {
 pub fn graph(a: *Analyser) error{OutOfMemory}!void {
     const uf = &a.uf;
     const node_of = try a.arena.allocator().alloc(Ir.NodeIndex, uf.len());
+    a.node_of = node_of;
     for (0..uf.len()) |i| {
         const e: Elem = @intCast(i);
         if (uf.find(e) != e) continue;

@@ -146,7 +146,7 @@ fn bundleItems(a: *Analyser, node: Node.Index, b: *Bundle) error{OutOfMemory}!vo
 /// none is expected yet: the record is checked where it is used), at a
 /// subject of these classes or in a bundle, whose classes it narrows; and
 /// the structure it adds to.
-const Use = struct {
+pub const Use = struct {
     record: ?TypeIndex,
     at: union(enum) { subject: Env.Classes, bundle: *Bundle },
     contents: ?*Contents = null,
@@ -154,7 +154,7 @@ const Use = struct {
 
 /// `:fill [red]`, `:hide`, `:hide!`: known, applying where it is written,
 /// and given what its signature asks for.
-fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
+pub fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
     const f = a.env.functions.get(cst.tokenText(name_token)) orelse {

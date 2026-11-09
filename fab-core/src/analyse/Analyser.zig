@@ -35,6 +35,7 @@ const elaborate = @import("elaborate.zig");
 const cells = @import("cells.zig");
 const UnionFind = @import("UnionFind.zig");
 const definitions = @import("definitions.zig");
+const layers = @import("layers.zig");
 const vocabulary = @import("vocabulary.zig");
 pub const Env = @import("Env.zig");
 
@@ -60,11 +61,17 @@ pub const Result = struct {
     errors: []const Error,
     /// The names the program defined: types, values, labels, functions.
     env: Env,
+    /// The layers' descriptions, resolved: what the style pass applies.
+    bindings: []const layers.Binding = &.{},
+    /// The tokens that name a subject, for the language server.
+    references: []const layers.Reference = &.{},
 
     pub fn deinit(result: *Result, gpa: std.mem.Allocator) void {
         result.ir.deinit(gpa);
         result.env.deinit(gpa);
         gpa.free(result.errors);
+        gpa.free(result.bindings);
+        gpa.free(result.references);
         result.* = undefined;
     }
 };
@@ -75,6 +82,12 @@ builder: Ir.Builder,
 errors: std.ArrayList(Error) = .empty,
 /// The names defined so far, in source order (statements.md §21).
 env: Env,
+/// The layers' descriptions read so far, and the tokens naming subjects:
+/// nodes still elements until the graph is built (`layers.finish`).
+bindings: std.ArrayList(layers.PendingBinding) = .empty,
+references: std.ArrayList(layers.PendingReference) = .empty,
+/// Each element's IR node, once the graph is built.
+node_of: []Ir.NodeIndex = &.{},
 /// The zones declared so far, by name: the first declaration of each.
 zones: std.StringHashMapUnmanaged(Zone) = .empty,
 /// The CST nodes of terms with an error. A failed term becomes a hole, so
@@ -147,6 +160,8 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     a.uf = .init(a.arena.allocator());
     defer a.arena.deinit();
     defer a.zones.deinit(gpa);
+    defer a.bindings.deinit(gpa);
+    defer a.references.deinit(gpa);
     defer a.failed.deinit(gpa);
     errdefer a.builder.deinit();
     errdefer a.errors.deinit(gpa);
@@ -169,10 +184,13 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
         }
     }
     try elaborate.graph(&a);
+    const bindings, const references = try layers.finish(&a, a.node_of);
+    errdefer gpa.free(bindings);
+    errdefer gpa.free(references);
 
     const errors = try a.errors.toOwnedSlice(gpa);
     errdefer gpa.free(errors);
-    return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env };
+    return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env, .bindings = bindings, .references = references };
 }
 
 /// The zone of the declaration being elaborated.
@@ -276,12 +294,16 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     try a.markStatement(first, zone_index, head);
 }
 
-/// `G :style { … }`: a layer's description, unsupported once checked.
+/// `G :style { … }`, `G.f :label "x"`: a layer's description, checked for
+/// shape, then read (`layers.zig`). Unsupported until the style pass
+/// applies it (plan step 9d): read, not drawn.
 fn description(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const first = a.errors.items.len;
-    if (try definitions.description(a, node))
+    if (try definitions.description(a, node)) {
+        try layers.description(a, node);
         try a.fail(.unsupported_layer, cst.firstToken(cst.children(node)[1]));
+    }
     try a.markStatement(first, a.namedDiagram(node), node);
 }
 

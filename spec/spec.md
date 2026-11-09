@@ -82,7 +82,7 @@ G.f :label "x"
 
 **Bindings.**
 
-- **Each (context, descriptor) pair is bound once** within a layer, and each (context, descriptor, key) for a table. Binding `G.#Done :shape` twice is an error.
+- **Each (element, descriptor) pair is bound once** within a layer, and each (element, descriptor, key) for a table. Binding `G.#Done :shape` twice is an error. **A layer is open:** every description of it joins one layer, so `G :style { … }` and `G.f :label "x"` add to the same style.
 - **Different contexts may overlap**, such as `&node` and `#Done`. The more specific context wins (see Subjects and classes). Nothing is ever silently overridden.
 - **Before use.** Names are defined before their first use, and a description at a context comes after the context's declaration.
 
@@ -985,6 +985,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Key not taken                       | `:fill.[a] [red]`                        | Only a table's descriptor takes a key; an entry without one has a fresh key          |
 | Key malformed                       | `:legend.[] "x"`, `:legend.[a/b] "x"`   | A key is one name; an entry with no key leaves the slot off                          |
 | Description at an undeclared context | `G :style { … }` before `G ::`         | A description comes after what it talks about                                        |
+| Not a subject                       | `f g :label "x"`, `+(f, g)+ :label "x"` | A context names elements: names, ends, `#X`, `@`, classes, groups of them            |
+| Element has no parts                | `G :style { #Done { f :label "x" } }`   | Inside an element's or a class's block, only the owner is described                  |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
 | Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |
 

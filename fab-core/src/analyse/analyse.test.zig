@@ -131,9 +131,32 @@ test "a broken statement naming no diagram draws a placeholder named by its firs
 // ---------------------------------------------------------------------------
 // Unsupported
 
+/// What the layer tests describe with, since there is no prelude here.
+const styles =
+    \\:Color :: [red]
+    \\:Style :: { (&node, &edge, &zone) :label :: :Text, (&node, &zone) :fill :: :Color, &zone :caption :: :Text }
+    \\&zone :style :: :Style
+    \\
+;
+
 test "every description is reported once as unsupported, after its errors" {
-    try expectTags("G :style { yes, paid :label \"yes\" }", &.{ .bare_term_in_record, .unsupported_layer });
-    try expectTags("G :style { f :label \"x\" }\nG.f :arrow [epi]", &.{ .unsupported_layer, .unsupported_layer });
+    try expectTags(styles ++ "G :: yes, paid\nG :style { yes, paid :label \"yes\" }", &.{ .bare_term_in_record, .unsupported_layer });
+    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\" }\nG.f :label \"y\"", &.{ .unsupported_layer, .unsupported_layer });
+}
+
+test "a layer's contexts resolve to elements, kept as bindings" {
+    var a = try analyse(styles ++ "G :: f g\nG :style { f :label \"x\", f+ :label \"y\", &edge :label \"z\" }\nG :label \"G\"");
+    defer a.deinit();
+    const b = a.result.bindings;
+    try testing.expectEqual(@as(usize, 4), b.len);
+    try testing.expectEqual(@as(u32, 0), @backingInt(b[0].subject.edge));
+    // f+ is the node between f and g: the second one made.
+    try testing.expectEqual(@as(u32, 1), @backingInt(b[1].subject.node));
+    try testing.expect(b[2].subject.class.classes.contains(.edge));
+    try testing.expectEqual(@as(?@TypeOf(b[2].subject.class.zone.?), @fromBackingInt(@as(u32, 0))), b[2].subject.class.zone);
+    try testing.expectEqual(@as(u32, 0), @backingInt(b[3].subject.zone));
+    // Every context's token is a reference: G (twice), f, f+, &edge.
+    try testing.expectEqual(@as(usize, 5), a.result.references.len);
 }
 
 test "a description with an operator, or with no context, is no layer" {
@@ -142,9 +165,9 @@ test "a description with an operator, or with no context, is no layer" {
 }
 
 test "the owner is described first, and warned about once per descriptor" {
-    try expectTags("G :style { f :label \"x\", :fill [red], :caption \"y\" }", &.{ .owner_after_part, .owner_after_part, .unsupported_layer });
+    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\", :fill [red], :caption \"y\" }", &.{ .owner_after_part, .owner_after_part, .unsupported_layer });
     // Each block is its own: a part's block starts afresh.
-    try expectTags("G :style { f { :label \"x\" }, g { :label \"y\" } }", &.{.unsupported_layer});
+    try expectTags(styles ++ "G :: f, g\nG :style { f { :label \"x\" }, g { :label \"y\" } }", &.{.unsupported_layer});
 }
 
 test "a theme's tokens are namings; a bundle holds none" {
@@ -370,14 +393,14 @@ test "a cell declared twice keeps the first, and points back to it" {
 // Operators
 
 test "a mixed run is reported once, at the first different operator" {
-    var a = try analyse("G :prove { :axiom (a == b ~= c == d ~= e) }");
+    var a = try analyse("G :: a\nG :prove { :axiom (a == b ~= c == d ~= e) }");
     defer a.deinit();
     try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .mixed_operators, .unsupported_layer }, a.tags());
     try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[0].token));
 }
 
 test "runs inside groups are checked on their own" {
-    try expectTags("G :prove { :axiom ((a == b ~= c) == d) }", &.{ .mixed_operators, .unsupported_layer });
+    try expectTags("G :: a\nG :prove { :axiom ((a == b ~= c) == d) }", &.{ .mixed_operators, .unsupported_layer });
 }
 
 // ---------------------------------------------------------------------------
