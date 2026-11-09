@@ -635,8 +635,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
         },
         .unsupported_layer => .{
-            .message = "Layers are not supported yet",
-            .explanation = "The program is valid, but this compiler only checks the shape of a layer (`G :style { … }`, `:prove`, `:place`) so far. Its contents are not applied.",
+            .message = "Proofs and places are not supported yet",
+            .explanation = "The program is valid, but this compiler only checks the shape of `:prove` and `:place` so far. Their contents are not applied; `:style` is.",
             .hint = "Nothing to fix in the program.",
         },
     };

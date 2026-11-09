@@ -405,15 +405,11 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
 }
 
 /// `G :style { … }`, `G.f :label "x"`: a layer's description, checked for
-/// shape, then read (`layers.zig`). Unsupported until the style pass
-/// applies it (plan step 9d): read, not drawn.
+/// shape, then read (`layers.zig`), which the style pass applies. `:prove`
+/// and `:place` are unsupported until plan step 11.
 fn description(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
-    const cst = a.cst;
     const first = a.errors.items.len;
-    if (try definitions.description(a, node)) {
-        try layers.description(a, node);
-        try a.fail(.unsupported_layer, cst.firstToken(cst.children(node)[1]));
-    }
+    if (try definitions.description(a, node)) try layers.description(a, node);
     try a.markStatement(first, a.namedDiagram(node), node);
 }
 

@@ -240,7 +240,7 @@ test "a reserved head draws a placeholder too" {
 }
 
 test "unsupported: a violet frame, and the caption above the name" {
-    try expectDot("J :: f\nJ :style { f :label \"x\" }",
+    try expectDot("J :: f\nJ :style { f :label \"x\" }\nJ :prove { :kind [category] }",
         \\  subgraph cluster_0 {
         \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>J>
         \\    pencolor="#8250df"
@@ -254,7 +254,7 @@ test "unsupported: a violet frame, and the caption above the name" {
 }
 
 test "under a red frame, the caption stays violet" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }\nG :prove { :kind [category] }", preview);
     defer c.deinit();
     var o = try render((try c.sheet()).?);
     defer o.deinit();

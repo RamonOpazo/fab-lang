@@ -9,7 +9,8 @@
 //! `@`), a class (`&edge`, `G.&edge`), or a group of them, over which the
 //! descriptor distributes. Inside a block it is relative to the owner, and
 //! only a diagram has parts. A layer is open: every description of it joins
-//! one. Only `:style` is read; `:prove` and `:place` wait for plan step 11.
+//! one. Only `:style` is read; `:prove` and `:place` are unsupported, at
+//! their descriptor, until plan step 11.
 //!
 //! Nodes are union-find elements until the graph is built (`finish`), since
 //! a later diagram can still merge them.
@@ -136,9 +137,12 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     const name_token = cst.mainToken(attr);
     const name = cst.tokenText(name_token);
     const f = a.env.functions.get(name) orelse {
-        // Declared with the proof and place shells (plan step 11); the
-        // description is unsupported already.
-        if (std.mem.eql(u8, name, ":prove") or std.mem.eql(u8, name, ":place")) return;
+        // Declared with the proof and place shells (plan step 11): checked
+        // for shape, not read.
+        if (std.mem.eql(u8, name, ":prove") or std.mem.eql(u8, name, ":place")) {
+            try a.fail(.unsupported_layer, name_token);
+            return;
+        }
         try a.fail(.unknown_attribute, name_token);
         return;
     };

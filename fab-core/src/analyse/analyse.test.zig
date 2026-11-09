@@ -140,8 +140,8 @@ const styles =
 ;
 
 test "every description is reported once as unsupported, after its errors" {
-    try expectTags(styles ++ "G :: yes, paid\nG :style { yes, paid :label \"yes\" }", &.{ .bare_term_in_record, .unsupported_layer });
-    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\" }\nG :label \"y\"", &.{ .unsupported_layer, .unsupported_layer });
+    try expectTags(styles ++ "G :: yes, paid\nG :style { yes, paid :label \"yes\" }", &.{.bare_term_in_record});
+    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\" }\nG :label \"y\"", &.{});
 }
 
 test "a layer's contexts resolve to elements, kept as bindings" {
@@ -266,9 +266,9 @@ test "a description with an operator, or with no context, is no layer" {
 }
 
 test "the owner is described first, and warned about once per descriptor" {
-    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\", :fill [red], :caption \"y\" }", &.{ .owner_after_part, .owner_after_part, .unsupported_layer });
+    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\", :fill [red], :caption \"y\" }", &.{ .owner_after_part, .owner_after_part });
     // Each block is its own: a part's block starts afresh.
-    try expectTags(styles ++ "G :: f, g\nG :style { f { :label \"x\" }, g { :label \"y\" } }", &.{.unsupported_layer});
+    try expectTags(styles ++ "G :: f, g\nG :style { f { :label \"x\" }, g { :label \"y\" } }", &.{});
 }
 
 test "a theme's tokens are namings; a bundle holds none" {

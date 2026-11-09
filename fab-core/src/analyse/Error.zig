@@ -267,7 +267,7 @@ pub const Tag = enum(u8) {
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 
-    /// A layer, `G :style { … }`, until plan steps 9 and 11.
+    /// A `:prove` or `:place` layer, until plan step 11. `:style` is applied.
     unsupported_layer,
 
     pub fn severity(tag: Tag) Severity {
