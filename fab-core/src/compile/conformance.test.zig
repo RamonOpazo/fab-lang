@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 22 };
+const done: Progress = .{ .step = 9, .rule = 23 };
 
 const Progress = struct {
     step: u8,
@@ -1085,6 +1085,34 @@ test "Definitions and values: a descriptor of another record type does not apply
     try check(.{ .step = 9, .rule = 22, .source = ":Style [x] := { :style {} }", .codes = &.{.{ .analysis = .does_not_apply }} });
     // Under a contract, each foreign descriptor where it is written.
     try check(.{ .step = 9, .rule = 22, .source = notes ++ ":Style [x] := { :memo \"y\", &node :fill [red], &node :memo \"x\" }", .codes = &.{ .{ .analysis = .does_not_apply }, .{ .analysis = .does_not_apply } } });
+}
+
+test "Definitions and values: a table is declared by its key slot" {
+    const legend = ":Style :: { &zone :legend.[] :: :Label }\n";
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[done] \"green: shipped\", :legend.[late] \"red: overdue\", :legend \"grey\" }" });
+    // Keys are optional; a flag table takes a key and nothing else.
+    try check(.{ .step = 9, .rule = 23, .source = ":Style :: { &node :seen.[] :: :Flag }\n:Style [x] := { &node { :seen.[a], :seen } }" });
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[a] }", .codes = &.{.{ .analysis = .value_missing }} });
+}
+
+test "Definitions and values: key in a declaration" {
+    try check(.{ .step = 9, .rule = 23, .source = ":Style :: { &zone :legend.[a] :: :Label }", .codes = &.{.{ .analysis = .key_in_declaration }} });
+    try check(.{ .step = 9, .rule = 23, .source = "&zone :legend.[/] :: :Label", .codes = &.{.{ .analysis = .key_in_declaration }} });
+}
+
+test "Definitions and values: key not taken" {
+    try check(.{ .step = 9, .rule = 23, .source = ":Style [x] := { &node :fill.[a] [red] }", .codes = &.{.{ .analysis = .key_not_taken }} });
+    try check(.{ .step = 9, .rule = 23, .source = ":t := { :shape [box] }\n:Style [x] := { &node :t.[a] }", .codes = &.{.{ .analysis = .key_not_taken }} });
+    try check(.{ .step = 9, .rule = 23, .source = ":t := { :fill.[a] [red] }", .codes = &.{.{ .analysis = .key_not_taken }} });
+}
+
+test "Definitions and values: key malformed" {
+    const legend = ":Style :: { &zone :legend.[] :: :Label }\n";
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[] \"x\" }", .codes = &.{.{ .analysis = .key_malformed }} });
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[a/b] \"x\" }", .codes = &.{.{ .analysis = .key_malformed }} });
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[#fff] \"x\" }", .codes = &.{.{ .analysis = .key_malformed }} });
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[a!] \"x\" }", .codes = &.{.{ .analysis = .key_malformed }} });
+    try check(.{ .step = 9, .rule = 23, .source = legend ++ ":Style [x] := { :legend.[Done] \"x\" }", .codes = &.{.{ .analysis = .uppercase_name }} });
 }
 
 test "Definitions and values: a record is checked by its structure where it is used" {

@@ -1116,6 +1116,7 @@ Repo :lemma.[clean]                              // a reference
 - **The declaration looks like its use,** as every other type in this section does, and the value keeps its own type: `&zone :note.[] :: :Text, :Math` is a table of text or maths.
 - **Any record type may hold tables:** `:Style :: { &zone :legend.[] :: :Label }`, then `Board :style { :legend.[done] "green: shipped", :legend.[late] "red: overdue", :legend "grey: not started" }`. A legend is facts under their keys, where `:theme [dark/compact]` is one choice.
 - **Errors read from the slot:** **key not taken** is a key on a descriptor declared without `.[]` (`:kind.[x] [category]`); two entries under one key are a **binding made twice**.
+- **A key in a use is one name** (`.[merge]`), read as a name in a bracket is. A slot left empty, `:legend.[] "x"`, is **key malformed**, as are `.[a/b]` and `.[#fff]`: an entry with no key leaves the slot off, so a fresh key has one spelling (9 November, plan step 9b3).
 - A typed key, `.[:Name]`, would fit this spelling later; nothing asks for it.
 
 **`!` names a value's twin.** The three uses of 3.2 in style.md are one idea: a two-sided value has exactly one partner, its unmarked spelling is the first. The flag's twin is off, a hook's or an angle's is the inner side, a line's is struck. A type with twins is `T × 2`, and `!` swaps the halves; the twin of a twin is the value itself, so `[30!!]` stays an error.

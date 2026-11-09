@@ -121,6 +121,12 @@ pub const Tag = enum(u8) {
     not_invertible,
     /// `[ink] [circle]`.
     key_of_wrong_type,
+    /// `&zone :axiom.[a] :: :Proposition`.
+    key_in_declaration,
+    /// `:fill.[a] [red]`: a key on a descriptor that is no table.
+    key_not_taken,
+    /// `:legend.[] "x"`, `:legend.[a/b] "x"`.
+    key_malformed,
     /// `:t := { &node :fill [red] }`, `:t := { [ink] := [#fff] }`.
     subject_in_bundle,
     /// `:Style [x] := { G.f :pen [thin] }`.

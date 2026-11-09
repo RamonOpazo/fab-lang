@@ -170,13 +170,16 @@ pub fn labelToken(cst: *const Cst, node: Node.Index) union(enum) { label: TokenI
 }
 
 /// `(&node, &zone) :fill :: :Color`, at the top level (`record` null) or in
-/// a record type's declaration.
+/// a record type's declaration. With an empty key slot, `:axiom.[]`, a table.
 pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index, record: ?TypeIndex) error{OutOfMemory}!void {
     const cst = a.cst;
     const parts = cst.children(head);
     var classes: Env.Classes = .empty;
     const known = try readClasses(a, parts[0], &classes);
     const function_token = cst.mainToken(parts[1]);
+    // A declaration names no key: the slot is empty.
+    const key = cst.key(parts[1]);
+    if (key) |k| if (!std.mem.eql(u8, cst.tokenText(k), "[]")) try a.fail(.key_in_declaration, k);
     const t = try typeExpression(a, body) orelse .unknown;
     if (!known) return;
 
@@ -185,7 +188,7 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index, record: ?Type
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
     }
-    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record };
+    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record, .table = key != null };
 }
 
 /// The classes of `&node` or `(&node, &zone)`. Whether all are known.

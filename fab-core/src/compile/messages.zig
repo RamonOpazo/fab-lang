@@ -289,6 +289,21 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Labels and types go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record type holds descriptors, so neither takes any.",
             .hint = "Declare a type of your own: `:Mood :: [calm], [busy]`.",
         },
+        .key_in_declaration => .{
+            .message = "A key in a declaration",
+            .explanation = "A table's declaration says a key goes there, and names none: its slot is empty, `&zone :axiom.[] :: :Proposition`. Keys are written where the table is used.",
+            .hint = "Empty the slot: `:axiom.[]`.",
+        },
+        .key_not_taken => .{
+            .message = "{} takes no key",
+            .explanation = "Only a table takes a key: a descriptor declared with a key slot, `&zone :legend.[] :: :Label`.",
+            .hint = "Remove the key, or declare the descriptor as a table.",
+        },
+        .key_malformed => .{
+            .message = "{} is not a key",
+            .explanation = "A key is one name: `:legend.[done]`. An entry with no key leaves the slot off, `:legend \"grey\"`, and gets a fresh one.",
+            .hint = "Write one lowercase name, or leave the slot off.",
+        },
         .descriptors_on_value_type => .{
             .message = "Descriptors on a type of values",
             .explanation = "A type holds values or descriptors, never both: `:Shape :: [circle]` holds labels, `:Style :: { &node :fill :: :Color }` descriptors.",

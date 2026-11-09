@@ -983,6 +983,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Element in a theme                  | `:Style [x] := { G.f :pen [thin] }`      | A theme applies to any diagram; its contexts are classes                             |
 | Binding made twice in a layer       | `#Done :shape` twice                     | Each (context, descriptor) pair is bound once, and each key of a table               |
 | Key not taken                       | `:fill.[a] [red]`                        | Only a table's descriptor takes a key; an entry without one has a fresh key          |
+| Key malformed                       | `:legend.[] "x"`, `:legend.[a/b] "x"`   | A key is one name; an entry with no key leaves the slot off                          |
 | Description at an undeclared context | `G :style { … }` before `G ::`         | A description comes after what it talks about                                        |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
 | Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |

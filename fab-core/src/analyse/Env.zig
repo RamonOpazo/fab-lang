@@ -115,6 +115,8 @@ pub const Function = struct {
     /// descriptor declared at the top level, `&zone :style :: :Style`, and
     /// for a bundle, which has none (statements.md §22.9).
     record: ?TypeIndex = null,
+    /// A table, `&zone :axiom.[] :: …`: it takes a key, then its value.
+    table: bool = false,
     /// A bundle, `:terminal := { … }`: a flag that is never inverted.
     bundle: bool = false,
     /// A bundle's descriptors, one per record type, the first of each:

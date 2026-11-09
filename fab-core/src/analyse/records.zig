@@ -162,6 +162,7 @@ fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
         return;
     };
     const signature: ?TokenIndex = if (f.prelude) null else f.token;
+    if (cst.key(attr)) |key| try checkKey(a, f, key, signature);
 
     const applies = switch (use.at) {
         .subject => |classes| Env.within(classes).subsetOf(f.classes),
@@ -204,6 +205,22 @@ fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
     const actual = try vocabulary.typeOf(a, value);
     try vocabulary.check(a, actual, f.type, .wrong_type, cst.firstToken(value), signature);
     if (a.env.fits(actual, f.type)) try structure(a, value, f.type, .wrong_type);
+}
+
+/// `:legend.[done]`: one name, on a table's descriptor. An entry with no key
+/// leaves the slot off, so `.[]` is malformed (statements.md §22.8).
+fn checkKey(a: *Analyser, f: Env.Function, key: TokenIndex, signature: ?TokenIndex) error{OutOfMemory}!void {
+    if (!f.table) {
+        try a.errors.append(a.gpa, .{ .tag = .key_not_taken, .token = key, .related = signature });
+        return;
+    }
+    var reader = valueReader(a.cst.tokenText(key));
+    const element = (reader.next() catch {
+        try a.fail(reader.failure, key);
+        return;
+    }) orelse return;
+    const one = (reader.next() catch null) == null;
+    if (element.kind != .name or element.inverted or !one) try a.fail(.key_malformed, key);
 }
 
 /// The structure of a bracket of named records, `[dark/compact]`: their
