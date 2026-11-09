@@ -114,6 +114,8 @@ pub const Parsed = union(enum) {
     command: Command,
     help,
     version,
+    /// `fab lsp`: the language server, over the standard streams.
+    lsp,
     /// A usage error, with a one-line explanation.
     usage: Usage,
 };
@@ -151,12 +153,19 @@ pub fn parse(args: []const []const u8) Parsed {
         c.stage = std.meta.stringToEnum(Command.Stage, args[1]) orelse
             return usage("unknown stage; expected tokens, cst or ir", args[1]);
         i = 2;
+    } else if (std.mem.eql(u8, first, "lsp")) {
+        // Editors may pass `--stdio`, the only transport there is.
+        for (args[1..]) |arg| {
+            if (eql(arg, "-h", "--help")) return .help;
+            if (!std.mem.eql(u8, arg, "--stdio")) return usage("`lsp` takes no arguments", arg);
+        }
+        return .lsp;
     } else if (eql(first, "-h", "--help")) {
         return .help;
     } else if (std.mem.eql(u8, first, "--version")) {
         return .version;
     } else if (first.len > 1 and first[0] == '-') {
-        return usage("expected a command first: render, check or show", first);
+        return usage("expected a command first: render, check, show or lsp", first);
     } else {
         return usageHint("expected a command first", first, "to draw it, run `fab render <file>`");
     }

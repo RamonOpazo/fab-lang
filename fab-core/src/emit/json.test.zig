@@ -7,6 +7,7 @@ const std = @import("std");
 const testing = std.testing;
 const Compilation = @import("../compile/Compilation.zig");
 const json = @import("json.zig");
+const Lines = @import("../compile/Lines.zig");
 
 const strict: Compilation.Tolerance = .{ .warnings = .promote, .ir = .withhold };
 const preview: Compilation.Tolerance = .{ .warnings = .warn, .ir = .keep };
@@ -96,10 +97,10 @@ test "tokens" {
 test "positions: lines, and UTF-16 characters" {
     // bytes: a0 \n1 α2-3 b4 😀5-8 c9 \n10 e11
     const source = "a\nαb😀c\nend";
-    var lines = try json.Lines.init(testing.allocator, source);
+    var lines = try Lines.init(testing.allocator, source);
     defer lines.deinit(testing.allocator);
 
-    const P = json.Lines.Position;
+    const P = Lines.Position;
     try testing.expectEqual(P{ .line = 0, .character = 0 }, lines.position(0));
     try testing.expectEqual(P{ .line = 1, .character = 0 }, lines.position(2));
     try testing.expectEqual(P{ .line = 1, .character = 1 }, lines.position(4)); // after α: one unit

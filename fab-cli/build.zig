@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     // options, so the build system gives them the same instance: one module.
     const fab_core = b.dependency("fab_core", .{ .target = target, .optimize = optimize }).module("fab_core");
     const fab_render = b.dependency("fab_render", .{ .target = target, .optimize = optimize }).module("fab_render");
+    const fab_lsp = b.dependency("fab_lsp", .{ .target = target, .optimize = optimize }).module("fab_lsp");
 
     // The pure part: command line, running, reporting. No I/O.
     const fab_cli = b.createModule(.{
@@ -30,6 +31,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "fab_core", .module = fab_core },
                 .{ .name = "fab_cli", .module = fab_cli },
+                .{ .name = "fab_lsp", .module = fab_lsp },
             },
         }),
     });

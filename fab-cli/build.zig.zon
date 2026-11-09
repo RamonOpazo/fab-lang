@@ -6,6 +6,7 @@
     .dependencies = .{
         .fab_core = .{ .path = "../fab-core" },
         .fab_render = .{ .path = "../fab-render" },
+        .fab_lsp = .{ .path = "../fab-lsp" },
     },
     .paths = .{
         "build.zig",

@@ -13,6 +13,7 @@ pub const Sheet = @import("format/Sheet.zig");
 pub const Formatter = @import("format/Formatter.zig");
 pub const Diagnostic = @import("compile/Diagnostic.zig");
 pub const Compilation = @import("compile/Compilation.zig");
+pub const Lines = @import("compile/Lines.zig");
 pub const json = @import("emit/json.zig");
 
 test {

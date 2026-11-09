@@ -10,6 +10,7 @@ const Io = std.Io;
 const fab_cli = @import("fab_cli");
 const Args = fab_cli.Args;
 const run = fab_cli.run;
+const fab_lsp = @import("fab_lsp");
 
 const version = "0.0.0";
 
@@ -47,6 +48,7 @@ fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, args: []co
             , .{version}) catch {};
             return 0;
         },
+        .lsp => return lsp(gpa, io, out, err),
         .usage => |u| {
             if (u.argument) |a| err.print("fab: {s}: {s}\n", .{ u.message, a }) catch {} else err.print("fab: {s}\n", .{u.message}) catch {};
             if (u.hint) |h| err.print("hint: {s}\n", .{h}) catch {} else err.writeAll("Run `fab --help` for usage.\n") catch {};
@@ -55,6 +57,30 @@ fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, args: []co
     };
     if (!command.watch) return once(gpa, io, arena, command, out, err);
     return watch(gpa, io, arena, command, out, err);
+}
+
+/// The language server: messages from standard input, answers to standard
+/// output, until the editor says `exit` or closes the input. Problems with
+/// the stream go to standard error, which editors log.
+fn lsp(gpa: std.mem.Allocator, io: Io, out: *Io.Writer, err: *Io.Writer) u8 {
+    var buffer: [64 * 1024]u8 = undefined;
+    var stdin = Io.File.stdin().readerStreaming(io, &buffer);
+    var server: fab_lsp.Server = .init(gpa);
+    defer server.deinit();
+    while (server.exit_code == null) {
+        const body = fab_lsp.Transport.read(gpa, &stdin.interface) catch |e| {
+            err.print("fab lsp: {s}\n", .{@errorName(e)}) catch {};
+            return 1;
+        } orelse return 1; // the input closed without `exit`
+        defer gpa.free(body);
+        server.handle(body, out) catch |e| {
+            err.print("fab lsp: {s}\n", .{@errorName(e)}) catch {};
+            return 1;
+        };
+        out.flush() catch return 1;
+        err.flush() catch {};
+    }
+    return server.exit_code.?;
 }
 
 /// Runs the command once, start to finish.

@@ -41,12 +41,13 @@ Zig 0.17. Graphviz only for `-e graphviz` to svg, png or pdf.
 
 ```
 make                # debug build of every package, in dependency order
-make test           # all tests; or test-core, test-render, test-cli
+make test           # all tests; or test-core, test-render, test-lsp, test-cli
 make examples       # check every example, then draw it to SVG (Graphviz); `make test examples` for both
 make fmt            # zig fmt; fmt-check to verify
 fab check x.fab     # diagnostics only
 fab show cst x.fab  # a stage of compilation: tokens, cst or ir
 fab render x.fab -e graphviz
+fab lsp             # the language server, over stdio
 ```
 
 ## Pipeline
@@ -69,7 +70,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     |         |
+| L    | Language server (after 9c, before 9d)     | L1 done |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -207,11 +208,11 @@ Done when every level case passes.
   - **9c1. Contexts and layers** (done). Contexts resolve to subjects in their diagram: a diagram, `G.f`, `G.f+`/`G.+f`, `G.#X`, `G.@`, `&c`/`G.&c`, groups distributing; relative to the owner in a block; top-level descriptors routed to their record type's layer. A layer is open. Errors: *description at an undeclared context*, *undeclared name in diagram*, *another diagram's subject*, *not a subject*, *element has no parts*. Each descriptor is checked once per entry, against its subjects' classes. *unsupported layer* stays on every description until 9d applies it (read, not drawn, as `unsupported_levels` did in 7a).
   - **9c2. Canonical references** (done), inside `graph()` once canonical ends are computed, each error marking its node: *non-canonical reference*, *named node referenced by an end*.
   - **9c3. Per element** (done), with 9c2 in one pass (`layers.check`): *does not apply* for nodes by their kind (`&start`/`&end` by arrivals), the others judged when read; *binding made twice* per (layer, element or class, descriptor, key), a keyless table entry never colliding; a node another diagram made is *another diagram's subject*.
-- **9d. The cascade.** `format/` becomes `style/`, `Formatter` the `Styler`. Values decoded once, by the analyser: records keep decoded bindings. Computed defaults, `[base]`, themes left to right (a theme's `:theme` includes), the program, then marks. Specificity: element, class in a diagram, narrower class, class; at one rank, the order of definition, errors last (`&node` < kinds < `&canonical` < `&hole`). Tokens resolved in core to RGBA, one step. `kindDefault` and `builtin` go. `Style` typed from `:Style`: unknown labels carried by name, unknown descriptors beside the style; the prelude test covers every descriptor and `:Line`. fab-render adapted to draw what it draws today.
+- **9d. The cascade.** The JSON's version 2 puts the resolved style, `"sheet"`, beside `"ir"`, indexed as the IR is: the IR stays descriptive, the Sheet is what renderers read. `format/` becomes `style/`, `Formatter` the `Styler`. Values decoded once, by the analyser: records keep decoded bindings. Computed defaults, `[base]`, themes left to right (a theme's `:theme` includes), the program, then marks. Specificity: element, class in a diagram, narrower class, class; at one rank, the order of definition, errors last (`&node` < kinds < `&canonical` < `&hole`). Tokens resolved in core to RGBA, one step. `kindDefault` and `builtin` go. `Style` typed from `:Style`: unknown labels carried by name, unknown descriptors beside the style; the prelude test covers every descriptor and `:Line`. fab-render adapted to draw what it draws today.
 - **9e. Examples.** Every example's style resolves to a Sheet; corpus rows from the spec's styled examples.
 
 **L. Language server** (`fab-lsp/`), moved before the cascade so styles and renders are iterated with it. Depends on fab-core only, and on no library outside Zig's standard one (the project stays independent): JSON-RPC over stdio with `std.json`, message types written by hand; the whole document recompiled on each change. Positions in UTF-16. In increments:
-- **L1.** The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort.
+- **L1** (done). The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort. fab-lsp is a library without I/O (`Server.handle`: one message in, framed messages out; `Transport` the `Content-Length` framing); `fab lsp` in fab-cli owns the standard streams. Editor first: Helix (`fab-lsp/README.md`); Zed waits, since it needs a WebAssembly extension and a Tree-sitter grammar to start a server.
 - **L2.** Navigation from `Result.references`: go to definition, references, hover (signatures, types, a node's canonical end), rename. The prelude as a read-only document, `fab://prelude.fab`.
 - **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).

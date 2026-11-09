@@ -6,7 +6,8 @@
 #   make install      install `fab` (release) into $(PREFIX)/bin
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
-# each one, in dependency order: fab-core, then fab-render, then fab-cli.
+# each one, in dependency order: fab-core, then fab-render and fab-lsp, then
+# fab-cli.
 #
 # Variables:
 #   ZIG       the Zig 0.17 compiler          (default: zig)
@@ -22,16 +23,16 @@ PREFIX   ?= $(HOME)/.local
 OPTIMIZE ?= ReleaseSafe
 
 # In dependency order.
-PACKAGES := fab-core fab-render fab-cli
+PACKAGES := fab-core fab-render fab-lsp fab-cli
 
-.PHONY: all build test test-core test-render test-cli examples \
+.PHONY: all build test test-core test-render test-lsp test-cli examples \
         release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
-	@echo "Targets: build test test-core test-render test-cli examples release install"
+	@echo "Targets: build test test-core test-render test-lsp test-cli examples release install"
 	@echo "         uninstall fmt fmt-check check-graphviz clean help"
 
 ## Building
@@ -44,7 +45,7 @@ build:
 
 ## Testing
 
-test: test-core test-render test-cli
+test: test-core test-render test-lsp test-cli
 
 test-core:
 	@echo "==> test fab-core"
@@ -53,6 +54,10 @@ test-core:
 test-render:
 	@echo "==> test fab-render"
 	@cd fab-render && $(ZIG) build test --summary all
+
+test-lsp:
+	@echo "==> test fab-lsp"
+	@cd fab-lsp && $(ZIG) build test --summary all
 
 test-cli:
 	@echo "==> test fab-cli"

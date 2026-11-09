@@ -125,6 +125,12 @@ test "help and version" {
     try testing.expect(Args.parse(&.{"--version"}) == .version);
 }
 
+test "lsp takes no input, only `--stdio`" {
+    try testing.expect(Args.parse(&.{"lsp"}) == .lsp);
+    try testing.expect(Args.parse(&.{ "lsp", "--stdio" }) == .lsp);
+    try expectUsage(&.{ "lsp", "x.fab" }, "takes no arguments");
+}
+
 test "every other mistake is reported" {
     try expectUsage(&.{"check"}, "no input file");
     try expectUsage(&.{ "render", "a.fab", "b.fab" }, "only one input");
