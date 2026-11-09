@@ -17,6 +17,7 @@ pub const Diagnostic = @import("compile/Diagnostic.zig");
 pub const Compilation = @import("compile/Compilation.zig");
 pub const Lines = @import("compile/Lines.zig");
 pub const json = @import("emit/json.zig");
+pub const print = @import("print/print.zig");
 
 test {
     std.testing.refAllDecls(@This());
