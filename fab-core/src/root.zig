@@ -8,6 +8,8 @@ pub const Cst = @import("parse/Cst.zig");
 pub const Parser = @import("parse/Parser.zig");
 pub const Ir = @import("analyse/Ir.zig");
 pub const Analyser = @import("analyse/Analyser.zig");
+/// What a bracket holds, element by element.
+pub const value = @import("analyse/value.zig");
 pub const Style = @import("format/Style.zig");
 pub const Sheet = @import("format/Sheet.zig");
 pub const Formatter = @import("format/Formatter.zig");

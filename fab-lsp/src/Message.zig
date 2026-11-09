@@ -27,6 +27,7 @@ pub const DidClose = struct { textDocument: DocumentId };
 pub const SemanticTokensParams = struct { textDocument: DocumentId };
 /// A place in a document: definition, references, highlights.
 pub const PositionParams = struct { textDocument: DocumentId, position: Position };
+pub const RenameParams = struct { textDocument: DocumentId, position: Position, newName: []const u8 };
 pub const ReferenceParams = struct {
     textDocument: DocumentId,
     position: Position,
@@ -79,11 +80,17 @@ pub const InitializeResult = struct {
         referencesProvider: bool = true,
         documentHighlightProvider: bool = true,
         hoverProvider: bool = true,
+        renameProvider: struct { prepareProvider: bool = true } = .{},
     },
     serverInfo: struct { name: []const u8 = "fab", version: []const u8 },
 };
 
 pub const SemanticTokens = struct { data: []const u32 };
+
+pub const TextEdit = struct { range: Range, newText: []const u8 };
+/// Edits by document URI.
+pub const WorkspaceEdit = struct { changes: std.json.ArrayHashMap([]const TextEdit) };
+pub const PrepareRename = struct { range: Range, placeholder: []const u8 };
 
 pub const Hover = struct {
     contents: struct { kind: []const u8 = "markdown", value: []const u8 },
@@ -99,4 +106,6 @@ pub const Code = struct {
     pub const method_not_found: i32 = -32601;
     pub const invalid_params: i32 = -32602;
     pub const server_not_initialized: i32 = -32002;
+    /// A request understood, and refused: a rename that can't be made.
+    pub const request_failed: i32 = -32803;
 };

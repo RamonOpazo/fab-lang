@@ -39,7 +39,7 @@ pub const Context = struct {
     }
 
     /// Whether `r` names what `target` names.
-    fn same(ctx: *const Context, r: Reference, target: Reference) bool {
+    pub fn same(ctx: *const Context, r: Reference, target: Reference) bool {
         if (target.definition) |t| {
             const d = r.definition orelse return false;
             return d.token == t.token and d.prelude == t.prelude;

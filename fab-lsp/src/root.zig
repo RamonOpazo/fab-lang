@@ -9,6 +9,7 @@ pub const diagnostics = @import("diagnostics.zig");
 pub const tokens = @import("tokens.zig");
 pub const navigation = @import("navigation.zig");
 pub const hover = @import("hover.zig");
+pub const rename = @import("rename.zig");
 
 test {
     _ = Server;
@@ -18,4 +19,5 @@ test {
     _ = tokens;
     _ = navigation;
     _ = hover;
+    _ = rename;
 }

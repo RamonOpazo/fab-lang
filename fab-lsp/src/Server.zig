@@ -13,6 +13,7 @@ const diagnostics = @import("diagnostics.zig");
 const tokens = @import("tokens.zig");
 const navigation = @import("navigation.zig");
 const hover = @import("hover.zig");
+const rename = @import("rename.zig");
 
 const Server = @This();
 
@@ -142,6 +143,27 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
             return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
         const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, null);
         return respond(arena, out, i, try hover.of(arena, doc, p.position));
+    }
+
+    if (std.mem.eql(u8, method, "textDocument/prepareRename")) {
+        const i = id orelse return;
+        const p = params(Message.PositionParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, null);
+        return switch (try rename.prepare(arena, doc, p.position)) {
+            .ok => |r| respond(arena, out, i, r),
+            .refused => |why| fail(arena, out, i, Message.Code.request_failed, why),
+        };
+    }
+    if (std.mem.eql(u8, method, "textDocument/rename")) {
+        const i = id orelse return;
+        const p = params(Message.RenameParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument, a position and a newName");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, null);
+        return switch (try rename.rename(arena, doc, p.position, p.newName)) {
+            .ok => |edit| respond(arena, out, i, edit),
+            .refused => |why| fail(arena, out, i, Message.Code.request_failed, why),
+        };
     }
 
     // Requests must be answered; unknown notifications are ignored.

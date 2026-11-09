@@ -72,7 +72,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     | L2c done |
+| L    | Language server (after 9c, before 9d)     | L2 done |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -220,7 +220,7 @@ Done when every level case passes.
   - **L2a** (done). fab-core: `Result.references`, one per name the program uses, its definition included: a span (a token, or a bracket's element: the `solid` in `[/solid/>]`), a sort (zone, node, edge, cell, type, label, value, descriptor), and the definition's site, a token in the program or in the prelude (null for a built-in). In source order, each span once. `Compilation.references()` and `definitionSpan(site)`. A named node keeps its first token as its definition. Classes have no site, and are left out. Layers keep their contexts apart, for the canonical checks.
   - **L2b** (done). Definition, references, document highlight (`navigation.zig`), from the name at the cursor or just before it; uses of one thing share its definition, built-ins their text. The prelude is not a virtual `fab://` document, which editors don't open: `fab lsp` (fab-cli) writes the embedded prelude at every start to `$XDG_CACHE_HOME/fab/prelude-<version>.fab` (or `~/.cache/fab`), and the server points into it (`Server.Options.prelude_uri`), so it always matches the compiler; that file publishes no diagnostics. `Lines.byteOffset` reads positions back.
   - **L2c** (done). Hover (`hover.zig`): one Markdown line by sort, then the defining line. A diagram's size; an edge's ends and a cell's sides, nodes by name, `@`, `*` or canonical end (`+f`, `f+`), with their kind; a descriptor's type, classes and record type; a label's type, a value's; built-ins and the prelude's say so. A reference carries its IR subject (`Reference.subject`), nodes and cells resolved once the graph is built; `Env.writeType` spells types; `Compilation.analysis()` is public.
-  - **L2d.** Rename, of what the program owns; prelude names don't rename.
+  - **L2d** (done). Rename and prepare rename (`rename.zig`), every use in the document, other diagrams' included. Refused, with a reason (error -32803): a built-in, the prelude's names, `@`, a name also written where the analyser couldn't read it, a new name spelled for another sort (lexed, or read as a bracket name; `fab.value` is exported), or one already naming its sort: in the same diagram for edges, cells and nodes, anywhere for the rest, the prelude's included.
 - **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
 

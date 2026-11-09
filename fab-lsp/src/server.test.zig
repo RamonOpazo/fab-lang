@@ -242,3 +242,29 @@ test "hover answers in Markdown, with the name's range" {
     try std.testing.expect(std.mem.startsWith(u8, field(got[0], &.{ "result", "contents", "value" }).?.string, "**edge** `f`"));
     try std.testing.expectEqual(6, field(got[0], &.{ "result", "range", "end", "character" }).?.integer);
 }
+
+test "rename answers with edits, or fails with the reason" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","version":1,"text":"G :: f/g, +f/h"}}}
+    );
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","id":8,"method":"textDocument/prepareRename","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":5}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":9,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":5},"newName":"step"}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":10,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":5},"newName":"g"}}
+    );
+    const got = try s.received(arena.allocator());
+    try std.testing.expectEqualStrings("f", field(got[0], &.{ "result", "placeholder" }).?.string);
+    try std.testing.expectEqual(2, field(got[1], &.{ "result", "changes", "file:///a.fab" }).?.array.items.len);
+    try std.testing.expectEqual(-32803, field(got[2], &.{ "error", "code" }).?.integer);
+}
