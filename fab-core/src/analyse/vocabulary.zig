@@ -380,10 +380,27 @@ fn bracketType(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?TypeIndex {
 /// Reports `tag` at `token` unless a value of type `actual` fits
 /// `expected`; *not invertible* when only its `!`s are in the way.
 pub fn check(a: *Analyser, actual: TypeIndex, expected: TypeIndex, tag: Analyser.Error.Tag, token: TokenIndex, related: ?TokenIndex) error{OutOfMemory}!void {
-    if (a.env.fits(actual, expected)) return;
+    if (a.env.fits(actual, expected)) {
+        if (emptyArrow(a, actual, expected)) try a.fail(.empty_arrow, token);
+        return;
+    }
     const plain = try a.env.untwinned(a.gpa, actual);
     const reported: Analyser.Error.Tag = if (plain != actual and a.env.fits(plain, expected)) .not_invertible else tag;
     try a.errors.append(a.gpa, .{ .tag = reported, .token = token, .related = related });
+}
+
+/// `[//]` where an `:Arrow` goes: it fits the tuple, every slot admitting
+/// nil, but draws nothing (statements.md §22.4). The prelude's `:Arrow`,
+/// which Zig gives its meaning.
+fn emptyArrow(a: *Analyser, actual: TypeIndex, expected: TypeIndex) bool {
+    const arrow = (a.env.type_table.get(":Arrow") orelse return false).index;
+    if (!a.env.includes(expected, arrow)) return false;
+    return switch (a.env.get(actual)) {
+        .tuple => |slots| slots.len == 3 and for (slots) |slot| {
+            if (slot != .nil) break false;
+        } else true,
+        else => false,
+    };
 }
 
 fn notAType(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {

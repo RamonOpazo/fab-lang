@@ -150,7 +150,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** zones.
 | `:fill`             | colour                                                                                                                                                                                          | none                              |
 | `:stroke`           | colour                                                                                                                                                                                          | `[ink]`                           |
 | `:pen`              | `[thin]` `[normal]` `[thick]`                                                                                                                                                                   | `[normal]`                        |
-| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
+| `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[triple]` `[wavy]` `[]`                                                                                                                                  | `[solid]`; `[dashed]` for `&hole` |
 | `:width`, `:height` | length, as minimums                                                                                                                                                                             | fitted to the label               |
 | `:padding`          | length                                                                                                                                                                                          | theme                             |
 | `:align`            | `[start]` `[center]` `[end]`                                                                                                                                                                    | `[center]`                        |
@@ -377,7 +377,7 @@ A token binds a value of its own type: `[ink] := [#dddddd]`. Any label may be bo
 
 - **The base theme is `[base]`,** in the prelude: the kind defaults (section 6), every other default of section 4 that is a value, and the tokens.
 - **It always applies,** first. It is never removed, only overridden.
-- **Computed defaults sit below it.** A node's label (its name, its diagram's name for `@`, else its canonical end), a cell's arrow by its level, one circle diameter per diagram: these depend on the element, so no value states them, and the style pass fills them in. `[base]` binds nothing computed, or it would hide it; the prelude names them in comments.
+- **Computed defaults sit below it.** A node's label (its name, its diagram's name for `@`, else its canonical end), a cell's arrow by its level, one circle diameter per diagram: these depend on the element, so no value states them, and the style pass fills them in. `[base]` binds them to nil, `[]`, which leaves them to the computation (`:label []`, a cell's `:arrow []`); the prelude names them in comments. Nil elsewhere is nothing there: `:fill []`, a zone's `:stroke []`.
 - **Together they bind every attribute for every kind.** So the cascade always ends in a value: mathematically, the style is a **total** function on elements and attributes, and themes and programs only override parts of it. "Missing value" is never a state a renderer has to handle.
 
 ### 7.3 Composition

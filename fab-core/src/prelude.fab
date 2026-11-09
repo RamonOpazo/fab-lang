@@ -98,7 +98,7 @@
 // Text
 :Style :: {
   (&node, &edge, &cell, &zone) :label :: :Label,
-  (&node, &edge, &cell, &zone) :font  :: :Text,
+  (&node, &edge, &cell, &zone) :font  :: (:Text, :Nil),
   (&node, &edge, &cell, &zone) :face  :: :Face,
   (&node, &edge, &cell, &zone) :size  :: :Length,
   (&node, &edge, &cell, &zone) :ink   :: :Color
@@ -106,8 +106,8 @@
 
 // Lines and fills
 :Style :: {
-  (&node, &zone)               :fill   :: :Color,
-  (&node, &edge, &cell, &zone) :stroke :: :Color,
+  (&node, &zone)               :fill   :: (:Color, :Nil),
+  (&node, &edge, &cell, &zone) :stroke :: (:Color, :Nil),
   (&node, &edge, &cell, &zone) :pen    :: :Pen,
   (&node, &zone)               :line   :: (:Line, :Nil)
 }
@@ -119,12 +119,12 @@
   &node          :height  :: :Length,    // a minimum
   (&node, &zone) :padding :: :Length,
   &node          :align   :: :Span,
-  &node          :wrap    :: :Length
+  &node          :wrap    :: (:Length, :Nil)
 }
 
 // Edges and cells
 :Style :: {
-  (&edge, &cell) :arrow       :: :Arrow,
+  (&edge, &cell) :arrow       :: (:Arrow, :Nil),     // nil: by level
   (&edge, &cell) :bend        :: (:Facing, :Angle),
   (&edge, &cell) :label-start :: :Label,
   (&edge, &cell) :label-end   :: :Label,
@@ -149,7 +149,7 @@
   (&node, &edge, &cell)        :hide :: :Flag,
   (&node, &edge, &cell, &zone) :note :: :Text,
   (&node, &edge, &cell, &zone) :link :: :Text,
-  (&node, &edge, &cell)        :step :: :Number
+  (&node, &edge, &cell)        :step :: (:Number, :Nil)
 }
 
 // The layer: a diagram's style, a record applied with the diagram as its
@@ -183,10 +183,13 @@
 //                  longest label
 //   &parallel      as wide as its busier side needs
 //
-// [base] binds a computed descriptor to nil, [], which leaves it to the
-// computation: :label [] is the element's name. Marks bind :label "", empty
-// on purpose: a choice, a parallel, a start or an end is a shape that says
-// what it is; &choice :label [] gives their names back.
+// [base] binds every descriptor for every class it applies to, so the style
+// is total (statements.md §22.2). Nil, [], is nothing there (:fill [], no
+// fill) or, for a computed descriptor, the computation: :label [] is the
+// element's name, a cell's :arrow [] its level's. Text's nothing is "".
+// Marks bind :label "", empty on purpose: a choice, a parallel, a start or
+// an end is a shape that says what it is; &choice :label [] gives their
+// names back.
 
 :Style [base] := {
   [ink] := [#333333],
@@ -198,8 +201,10 @@
   [unsupported] := [#8250df],
 
   &node {
-    :label [], :shape [circle], :stroke [ink], :pen [normal], :line [solid],
-    :align [center], :face [regular], :ink [ink], :size [1]
+    :label [], :font [], :face [regular], :size [1], :ink [ink],
+    :shape [circle], :fill [], :stroke [ink], :pen [normal], :line [solid],
+    :width [0], :height [0], :padding [0.4], :align [center], :wrap [],
+    :hide!, :note "", :link "", :step []
   },
   &choice    { :shape [diamond], :label "" },
   &parallel  { :shape [bar], :label "" },
@@ -210,15 +215,25 @@
 
   &edge {
     :label [], :label-start [], :label-end [],
-    :arrow [/solid/>], :pen [normal], :ink [soft], :size [0.85],
-    :label-at [center], :side [outer]
+    :font [], :face [regular], :size [0.85], :ink [soft],
+    :arrow [/solid/>], :stroke [ink], :pen [normal],
+    :bend [0], :label-at [center], :side [outer], :shorten [0],
+    :hide!, :note "", :link "", :step []
   },
   &cell {
     :label [], :label-start [], :label-end [],
-    :pen [normal], :ink [soft], :size [0.85], :side [outer]
+    :font [], :face [regular], :size [0.85], :ink [soft],
+    :arrow [], :stroke [ink], :pen [normal],
+    :bend [0], :label-at [center], :side [outer], :shorten [0],
+    :hide!, :note "", :link "", :step []
   },
 
-  &zone { :label [], :caption [], :as [cluster], :cross [gap], :marks [all] }
+  &zone {
+    :label [], :caption [], :font [], :face [regular], :size [1], :ink [ink],
+    :fill [], :stroke [], :pen [normal], :line [solid], :padding [1],
+    :as [cluster], :theme [], :marks [all], :cross [gap],
+    :alt "", :note "", :link ""
+  }
 }
 
 // ── 6. Built-in themes ────────────────────────────────────────────────

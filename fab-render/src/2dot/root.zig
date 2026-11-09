@@ -309,7 +309,11 @@ fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, sizes: Sizes, w: *Writer, n
     }
     if (r.rounded) a.flag("rounded");
     try lineFlags(&a, style.line, .{ .node = n }, notes);
-    if (style.line == .double) try a.raw("peripheries", "2");
+    switch (style.line) {
+        .double => try a.raw("peripheries", "2"),
+        .triple => try a.raw("peripheries", "3"),
+        else => {},
+    }
     try a.end();
 }
 
@@ -319,14 +323,18 @@ fn writeEdgeAttrs(style: Style, directed: bool, e: fab.Ir.EdgeIndex, w: *Writer,
     if (!directed) try a.raw("dir", "none");
     if (style.italic) try a.text("fontname", font_italic);
     if (style.ink) |c| try a.color("fontcolor", c);
-    if (style.line == .double) {
-        // Two parallel lines: the colour, a gap, the colour.
+    if (style.line == .double or style.line == .triple) {
+        // Parallel lines: the colour, a gap, the colour (and again).
         const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
         try a.sep();
         try w.writeAll("color=\"");
         try writeColor(w, c);
         try w.writeAll(":invis:");
         try writeColor(w, c);
+        if (style.line == .triple) {
+            try w.writeAll(":invis:");
+            try writeColor(w, c);
+        }
         try w.writeByte('"');
     } else if (style.stroke) |c| {
         try a.color("color", c);
@@ -383,7 +391,7 @@ fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, no
             count += 1;
         },
         .wavy => try notes.add(.{ .tag = .wavy_line_drawn_solid, .subject = .{ .zone = zone } }),
-        .solid, .double, .none => {},
+        .solid, .double, .triple, .none => {},
     }
     if (count > 0) {
         try w.writeAll("    style=\"");
@@ -406,11 +414,11 @@ fn writePlaceholder(style: Style, z: usize, w: *Writer) Writer.Error!void {
     try w.writeAll("\"]\n");
 }
 
-/// The `style` flags a line needs. `double` is handled by the caller, since
-/// nodes and edges draw it differently.
+/// The `style` flags a line needs. `double` and `triple` are handled by the
+/// caller, since nodes and edges draw them differently.
 fn lineFlags(a: *Attrs, line: Style.Line, subject: fab.Ir.Subject, notes: *Note.List) error{OutOfMemory}!void {
     switch (line) {
-        .solid, .double => {},
+        .solid, .double, .triple => {},
         .dashed => a.flag("dashed"),
         .dotted => a.flag("dotted"),
         .none => a.flag("invis"),

@@ -30,7 +30,6 @@ test "the prelude checks with nothing to report" {
 }
 
 test "the prelude's labels are the ones Zig gives meaning to" {
-    // :Line waits for step 9: the prelude has [triple], Style.Line not yet.
     const Style = @import("../format/Style.zig");
     var c = try Compilation.init(testing.allocator, "", strict);
     defer c.deinit();
@@ -38,6 +37,7 @@ test "the prelude's labels are the ones Zig gives meaning to" {
     const env = &c.analysed.?.env;
     try expectLabels(env, ":Shape", Style.Shape, &.{"none"});
     try expectLabels(env, ":As", Style.As, &.{"placeholder"});
+    try expectLabels(env, ":Line", Style.Line, &.{"none"});
 }
 
 /// Every label of `type_name` is a value of `E`, hyphens read as

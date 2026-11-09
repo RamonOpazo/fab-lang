@@ -121,6 +121,8 @@ pub const Tag = enum(u8) {
     not_invertible,
     /// `[ink] [circle]`.
     key_of_wrong_type,
+    /// `[//]`: an arrow that draws nothing.
+    empty_arrow,
     /// `&zone :axiom.[a] :: :Proposition`.
     key_in_declaration,
     /// `:fill.[a] [red]`: a key on a descriptor that is no table.

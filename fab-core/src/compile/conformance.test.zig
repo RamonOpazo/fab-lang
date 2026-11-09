@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 23 };
+const done: Progress = .{ .step = 9, .rule = 24 };
 
 const Progress = struct {
     step: u8,
@@ -1085,6 +1085,20 @@ test "Definitions and values: a descriptor of another record type does not apply
     try check(.{ .step = 9, .rule = 22, .source = ":Style [x] := { :style {} }", .codes = &.{.{ .analysis = .does_not_apply }} });
     // Under a contract, each foreign descriptor where it is written.
     try check(.{ .step = 9, .rule = 22, .source = notes ++ ":Style [x] := { :memo \"y\", &node :fill [red], &node :memo \"x\" }", .codes = &.{ .{ .analysis = .does_not_apply }, .{ .analysis = .does_not_apply } } });
+}
+
+test "Definitions and values: an empty arrow" {
+    try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &edge :arrow [//] }", .codes = &.{.{ .analysis = .empty_arrow }} });
+    try check(.{ .step = 9, .rule = 24, .source = ":Arrow [nothing] := [//]", .codes = &.{.{ .analysis = .empty_arrow }} });
+    try check(.{ .step = 9, .rule = 24, .source = "[nothing] := [//]\n:Style [x] := { &edge :arrow [nothing] }", .codes = &.{.{ .analysis = .empty_arrow }} });
+    // Any field may be empty, and the arrow itself may be nil: computed.
+    try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &edge :arrow [>//>], &cell :arrow [/solid/], &cell :arrow [] }" });
+}
+
+test "Definitions and values: nil takes a value away" {
+    try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &node { :fill [], :stroke [], :font [], :wrap [], :step [], :label [] }, &zone :caption [] }" });
+    try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &node :size [] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 9, .rule = 24, .source = ":Style [x] := { &node :line [triple] }" });
 }
 
 test "Definitions and values: a table is declared by its key slot" {

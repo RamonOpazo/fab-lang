@@ -416,6 +416,31 @@ test "lines and shapes: double, invisible, wavy, approximations" {
     for (o.notes.items.items, tags) |n, t| try testing.expectEqual(t, n.tag);
 }
 
+test "lines: triple, as three parallel lines" {
+    var c = try fab.Compilation.init(testing.allocator, "G :: f", preview);
+    defer c.deinit();
+    var sheet = (try c.sheet()).?.*;
+    const nodes = [_]Style{
+        style(.{ .label = "a", .shape = .circle, .line = .triple }),
+        style(.{ .label = "b", .shape = .circle }),
+    };
+    const edges = [_]Style{style(.{ .label = "f", .line = .triple })};
+    sheet.nodes = &nodes;
+    sheet.edges = &edges;
+    var o = try render(&sheet);
+    defer o.deinit();
+    try expectBody(
+        \\  subgraph cluster_0 {
+        \\    peripheries=0
+        \\    n0 [label="a", shape=circle, width=0.35, height=0.35, fixedsize=true, peripheries=3]
+        \\    n1 [label="b", shape=circle, width=0.35, height=0.35, fixedsize=true]
+        \\  }
+        \\  n0 -> n1 [label="f", color="#333333:invis:#333333:invis:#333333"]
+        \\}
+        \\
+    , o.dot);
+}
+
 // ---------------------------------------------------------------------------
 // The correctness law
 

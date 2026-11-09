@@ -289,6 +289,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Labels and types go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record type holds descriptors, so neither takes any.",
             .hint = "Declare a type of your own: `:Mood :: [calm], [busy]`.",
         },
+        .empty_arrow => .{
+            .message = "An empty arrow",
+            .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",
+            .hint = "To draw no edge, hide it: `f :hide`.",
+        },
         .key_in_declaration => .{
             .message = "A key in a declaration",
             .explanation = "A table's declaration says a key goes there, and names none: its slot is empty, `&zone :axiom.[] :: :Proposition`. Keys are written where the table is used.",

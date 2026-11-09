@@ -80,7 +80,7 @@ pub const Mark = enum(u2) {
 };
 
 /// `:line` values that apply to lines.
-pub const Line = enum { solid, dashed, dotted, double, wavy, none };
+pub const Line = enum { solid, dashed, dotted, double, triple, wavy, none };
 
 /// `:as` values: how a zone appears from outside. (`:layout` is the other
 /// direction: how a zone arranges its own contents.)

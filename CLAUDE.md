@@ -67,7 +67,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | 9b3 done |
+| 9    | Style layer                               | 9b done  |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -198,7 +198,7 @@ Done when every level case passes.
   - **9b1. Nil** (done). A bracket has one element more than its slashes; `[]` is one nil, `[/]` two. `:Nil` built in; nil fits only where a type admits it, and every list. `:None` and `[none]` go; Zig's `none` values stop being labels.
   - **9b2. Record types** (done; `statements.md` §22.9). `:Style :: { … }` declares by descriptors, one descriptor one record type; a type holds values or descriptors, never both (*descriptors on a value type*), and `::` holds no `:=` (*naming in a type*). Records and bundles have no type: each keeps its structure (the record types of its descriptors) and is checked by it where a record type is expected: after a descriptor, under a contract (*does not apply* as written), or where a named record is used (*wrong type*); a bundle's use, *does not apply*. `{}` is a value, fitting any record type. `:Record` goes: themes are `:Style [x] :=`, `:theme :: [:Style]`, `&zone :style :: :Style`. `:Label` admits `:Nil` (the computed name). The prelude's descriptors move into `:Style`.
   - **9b3. Tables** (done). A descriptor declared with a key slot, `&zone :axiom.[] :: :Proposition`, is a table; arity follows the declaration; keys optional; *key not taken*, *key in a declaration*, *key malformed* (a key is one name; `.[]` in a use is an error). Keys in layers wait for 9c, two entries under one key (*binding made twice*) too.
-  - **9b4. Value checks.** *Empty arrow*; `Style.Line` gains `triple` (the prelude test covers `:Line`); `[base]` binds every descriptor, with nil where it means nothing.
+  - **9b4. Value checks** (done). *Empty arrow* (`[//]` where an `:Arrow` goes); `Style.Line` gains `triple`, drawn as three lines (the prelude test covers `:Line`); `[base]` binds every descriptor for every class, nil where the default is nothing or computed, and the signatures admit `:Nil`.
 
   Moved out: values decoded once (9d, where the Styler reads them); `:prove` and `:place` declared in the prelude (step 11, with `:Proof`, `:Proposition`, `:Place`).
 - **9c. Layers read.** Contexts resolved in their diagram: names, canonical ends, classes, groups, blocks. Errors: *description at an undeclared context*, *context in another diagram*, *non-canonical reference*, *named node referenced by an end*, *binding made twice* (per element), *does not apply* per element. `:prove` and `:place` contents stay unsupported.
@@ -222,7 +222,7 @@ Done (8–10) when the styled examples in the spec draw as described.
 
 | Decision                                                        | Needed by          |
 | --------------------------------------------------------------- | ------------------ |
-| The prelude's contents beyond the draft (colours, themes, `[base]`'s sizes) | step 9 |
+| The prelude's contents beyond the draft (colours, themes; `[base]`'s sizes proposed in 9b4: `:padding` [0.4] nodes, [1] zones) | step 9 |
 | The header's syntax, boundary and further descriptors; the CLI's force flag (settled: command line < header < local, `-H name[=value]`, `:strict`, `:warnings`, `:broken`; `statements.md` §22.7) | after fab-core |
 | Restrictions and passes: the proof's `:kind`, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
