@@ -6,25 +6,25 @@ Repo :: {
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
-    &node :shape [point],
+    &node    :shape [point],
     #Head    { :ref, :label "main" },
     #Feature { :ref, :label "feature/auth" },
     #V1      { :ref, :label "v1.0" },
     #Spike   { :ref, :label "spike/cache" },
-    init    :label "a1f3 init",
-    readme  :label "b27c add readme",
-    fix     :label "c90e fix typo",
-    login   :label "d4a1 login form",
-    session :label "e5b2 sessions",
-    merge   :label "f6c3 merge feature/auth",
-    merge'  :arrow [/dashed/>],
-    bump    :label "0a7d bump to 1.0",
-    hotfix  :label "1b8e hotfix",
-    spike   :label "2c9f try cache"
+    init     :label "a1f3 init",
+    readme   :label "b27c add readme",
+    fix      :label "c90e fix typo",
+    login    :label "d4a1 login form",
+    session  :label "e5b2 sessions",
+    merge    :label "f6c3 merge feature/auth",
+    merge'   :arrow [/dashed/>],
+    bump     :label "0a7d bump to 1.0",
+    hotfix   :label "1b8e hotfix",
+    spike    :label "2c9f try cache"
 }
 
 Repo :prove {
     :kind [category],
-    :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
-    :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
+    :axiom (fix merge == login session merge'),  // both paths from the fork reach the same state
+    :lemma.[clean] (#Merged :pushout)            // fAB checks the merge is clean: the least common state
 }

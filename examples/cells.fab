@@ -1,10 +1,10 @@
-Nat :: +(f, g)+ | f/α/g                    // a natural transformation α : f ⇒ g
-Eq  :: +(f, g)+ | f/α/g/β                  // α : f ⇒ g and β : g ⇒ f
-Vc  :: +(f, g, h)+ | f/α/g, g/β/h          // α then β: vertical composition
-Vs  :: +(f, g, h)+ | f/α g/β/h             // the same, with a space
-Mod :: +(f, g)+ | f/(α, β)/g | α/m/β       // two 2-cells and a modification
-Id  :: #A/f/#A | f/α/#A                    // α : f ⇒ 1_A, a side from a lower level
-Ud  :: #A/f/#B/, #B/g/#A | f/α/g           // a cell on an undirected edge
-W   :: +(f h, k, g)+ | k/α/g               // a composite as a source: name it first
+Nat :: +(f, g)+ | f/α/g               // a natural transformation α : f ⇒ g
+Eq  :: +(f, g)+ | f/α/g/β             // α : f ⇒ g and β : g ⇒ f
+Vc  :: +(f, g, h)+ | f/α/g, g/β/h     // α then β: vertical composition
+Vs  :: +(f, g, h)+ | f/α g/β/h        // the same, with a space
+Mod :: +(f, g)+ | f/(α, β)/g | α/m/β  // two 2-cells and a modification
+Id  :: #A/f/#A | f/α/#A               // α : f ⇒ 1_A, a side from a lower level
+Ud  :: #A/f/#B/, #B/g/#A | f/α/g      // a cell on an undirected edge
+W   :: +(f h, k, g)+ | k/α/g          // a composite as a source: name it first
 
 W :prove { :axiom (k == f h) }

@@ -1,10 +1,11 @@
-Sq   :: +(f h, g k)+              // a square: f;h and g;k from A to D
-Tri  :: +(f g, h)+                // a triangle: f;g and h from A to C
-Iso  :: f/g                       // f : A → B, g : B → A
-Endo :: f/f                       // f : A → A
-Und  :: f/                        // f connects A and B, in no direction
-Cyc  :: f/g/h                     // a directed triangle: f, g, then h back to A
-Pair :: +(f, g)+                  // a parallel pair f, g : A ⇉ B
-Nat  :: +(f, g)+ | f/α/g          // a natural transformation α : f ⇒ g
-Eq   :: +(f, g)+ | f/α/g/β        // α : f ⇒ g and β : g ⇒ f
-Pr   :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)   // the universal property of a product
+Sq   :: +(f h, g k)+        // a square: f;h and g;k from A to D
+Tri  :: +(f g, h)+          // a triangle: f;g and h from A to C
+Iso  :: f/g                 // f : A → B, g : B → A
+Endo :: f/f                 // f : A → A
+Und  :: f/                  // f connects A and B, in no direction
+Cyc  :: f/g/h               // a directed triangle: f, g, then h back to A
+Pair :: +(f, g)+            // a parallel pair f, g : A ⇉ B
+Nat  :: +(f, g)+ | f/α/g    // a natural transformation α : f ⇒ g
+Eq   :: +(f, g)+ | f/α/g/β  // α : f ⇒ g and β : g ⇒ f
+
+Pr :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)  // the universal property of a product

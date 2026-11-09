@@ -9,14 +9,14 @@ Order :: {
 }
 
 Order :style {
-    #Received  :label "Order received",
-    validate+  :label "Valid?",
-    charge+    :label "Payment accepted?",
-    #Waiting   :label "Wait 10 min",
-    reserve+   :label "In stock?",
-    #Shipped   :label "Shipped",
-    #Rejected  :label "Rejected",
-    (yes, paid, reserved)  :label "yes",
-    (no, declined, short)  :label "no",
-    (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
+    #Received             :label "Order received",
+    validate+             :label "Valid?",
+    charge+               :label "Payment accepted?",
+    #Waiting              :label "Wait 10 min",
+    reserve+              :label "In stock?",
+    #Shipped              :label "Shipped",
+    #Rejected             :label "Rejected",
+    (yes, paid, reserved) :label "yes",
+    (no, declined, short) :label "no",
+    (retry, restock)      { :arrow [/dashed/>], :bend [inner] }
 }

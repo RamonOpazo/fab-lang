@@ -25,9 +25,9 @@
 // ── 1. Types ──────────────────────────────────────────────────────────
 
 // Numbers with a unit: three types of their own, so units are checked.
-:Length   :: :Number        // in em, relative to the theme's text size
-:Angle    :: :Number!       // in degrees; [30!] is the inner side
-:Fraction :: :Number        // 0 to 1, a position along an edge
+:Length   :: :Number   // in em, relative to the theme's text size
+:Angle    :: :Number!  // in degrees; [30!] is the inner side
+:Fraction :: :Number   // 0 to 1, a position along an edge
 
 // Nil leaves a label to its computed default, the element's name; "" is an
 // empty label, written on purpose.
@@ -52,7 +52,7 @@
 :As    :: [flat], [cluster], [node], [table]
 :Cross :: [gap], [plain]
 
-:Side  :: :Facing, :On
+:Side :: :Facing, :On
 
 // Arrow ends, read as a picture from tail to head. Any end goes at either
 // side. Hooks and harpoons curl to one side, so they have twins: ! puts
@@ -115,8 +115,8 @@
 // Nodes
 :Style :: {
     &node          :shape   :: (:Shape, :Nil),
-    &node          :width   :: :Length,    // a minimum
-    &node          :height  :: :Length,    // a minimum
+    &node          :width   :: :Length,  // a minimum
+    &node          :height  :: :Length,  // a minimum
     (&node, &zone) :padding :: :Length,
     &node          :align   :: :Span,
     &node          :wrap    :: (:Length, :Nil)
@@ -124,7 +124,7 @@
 
 // Edges and cells
 :Style :: {
-    (&edge, &cell) :arrow       :: (:Arrow, :Nil),     // nil: by level
+    (&edge, &cell) :arrow       :: (:Arrow, :Nil),  // nil: by level
     (&edge, &cell) :bend        :: (:Facing, :Angle),
     (&edge, &cell) :label-start :: :Label,
     (&edge, &cell) :label-end   :: :Label,
@@ -137,7 +137,7 @@
 :Style :: {
     &zone :as      :: :As,
     &zone :caption :: :Label,
-    &zone :theme   :: [:Style],            // applied left to right
+    &zone :theme   :: [:Style],  // applied left to right
     &zone :marks   :: (:All, :Nil),
     &zone :cross   :: :Cross,
     &zone :alt     :: :Text
@@ -192,12 +192,12 @@
 // names back.
 
 :Style [base] := {
-    [ink] := [#333333],
-    [soft] := [#555555],
-    [muted] := [#888888],
-    [accent] := [#1f6feb],
-    [error] := [#d1242f],
-    [warning] := [#bf8700],
+    [ink]         := [#333333],
+    [soft]        := [#555555],
+    [muted]       := [#888888],
+    [accent]      := [#1f6feb],
+    [error]       := [#d1242f],
+    [warning]     := [#bf8700],
     [unsupported] := [#8250df],
 
     &node {
@@ -239,16 +239,16 @@
 // ── 6. Built-in themes ────────────────────────────────────────────────
 
 :Style [dark] := {
-    [ink] := [#dddddd],
-    [soft] := [#aaaaaa],
+    [ink]   := [#dddddd],
+    [soft]  := [#aaaaaa],
     [muted] := [#888888],
     &zone :fill [#1e1e1e]
 }
 
 :Style [print] := {
-    [ink] := [#000000],
-    [soft] := [#000000],
-    [muted] := [#555555],
+    [ink]    := [#000000],
+    [soft]   := [#000000],
+    [muted]  := [#555555],
     [accent] := [#000000]
 }
 

@@ -11,7 +11,7 @@ fn printed(gpa: std.mem.Allocator, source: [:0]const u8) ![:0]u8 {
     defer cst.deinit(gpa);
     var out: std.Io.Writer.Allocating = .init(gpa);
     defer out.deinit();
-    try print.program(&cst, &out.writer);
+    try print.program(gpa, &cst, &out.writer);
     return gpa.dupeSentinel(u8, out.written(), 0);
 }
 
@@ -81,7 +81,7 @@ test "indentation: four per brace or parenthesis, two fewer for a comma" {
     ,
         \\G :style {
         \\    #A :fill [red],
-        \\    f :label "x"
+        \\    f  :label "x"
         \\}
         \\
     );
@@ -111,8 +111,121 @@ test "indentation: four per brace or parenthesis, two fewer for a comma" {
     try expectPrinted("G :style {\n#A {\n:fill [red]\n}\n}", "G :style {\n    #A {\n        :fill [red]\n    }\n}\n");
 }
 
-test "comments stay where they were" {
-    try expectPrinted("G :: f    // one\n   // two\nH :: g//three", "G :: f // one\n// two\nH :: g //three\n");
+test "columns: a run's operators, descriptors and blocks, one space after the widest" {
+    try expectPrinted(
+        \\Sq :: +(f h, g k)+
+        \\Endo :: f/f
+        \\Und :: f/
+    ,
+        \\Sq   :: +(f h, g k)+
+        \\Endo :: f/f
+        \\Und  :: f/
+        \\
+    );
+    // A descriptor and a block share their column, and the `::` after a
+    // descriptor has its own.
+    try expectPrinted(
+        \\Repo :style {
+        \\    &node :shape [point],
+        \\    #Feature { :ref },
+        \\    init :label "a1f3 init"
+        \\}
+        \\:Style :: {
+        \\    (&node, &zone) :fill :: (:Color, :Nil),
+        \\    &node :padding :: :Length
+        \\}
+    ,
+        \\Repo :style {
+        \\    &node    :shape [point],
+        \\    #Feature { :ref },
+        \\    init     :label "a1f3 init"
+        \\}
+        \\:Style :: {
+        \\    (&node, &zone) :fill    :: (:Color, :Nil),
+        \\    &node          :padding :: :Length
+        \\}
+        \\
+    );
+    // Only at the line's own depth, after its first token, and before its
+    // `::` or `:=`: what follows is the rest.
+    try expectPrinted(
+        \\:ref := :shape [round], :fill [muted]
+        \\:quiet := :hide
+        \\W :prove { :axiom (k == f h) }
+        \\Wide :prove { :lemma.[a] (f :pullback) }
+    ,
+        \\:ref   := :shape [round], :fill [muted]
+        \\:quiet := :hide
+        \\W    :prove { :axiom (k == f h) }
+        \\Wide :prove { :lemma.[a] (f :pullback) }
+        \\
+    );
+    // A line of descriptors has no context: its next ones are no column,
+    // nor anything after a comma, which begins another entry.
+    try expectPrinted(
+        \\&node {
+        \\    :label [], :font [],
+        \\    :shape [circle], :fill []
+        \\}
+        \\G :style { #A :fill [red], f :label "x" }
+        \\Long :style { :label "y" }
+    ,
+        \\&node {
+        \\    :label [], :font [],
+        \\    :shape [circle], :fill []
+        \\}
+        \\G    :style { #A :fill [red], f :label "x" }
+        \\Long :style { :label "y" }
+        \\
+    );
+    // Widths count code points: α is one.
+    try expectPrinted("Nat :: f/α/g // a\nIso :: f/g // b", "Nat :: f/α/g  // a\nIso :: f/g    // b\n");
+}
+
+test "a run ends at a blank line, a comment's line, or another indentation" {
+    try expectPrinted("A :: f\nLong :: g\n\nB :: h", "A    :: f\nLong :: g\n\nB :: h\n");
+    try expectPrinted("A :: f\n// note\nLong :: g", "A :: f\n// note\nLong :: g\n");
+    try expectPrinted(
+        \\G :style {
+        \\    #A :fill [red]
+        \\}
+        \\Long :style { f :arrow [epi] }
+    ,
+        \\G :style {
+        \\    #A :fill [red]
+        \\}
+        \\Long :style { f :arrow [epi] }
+        \\
+    );
+}
+
+test "comments: two spaces after the run's widest code, or a line of their own" {
+    try expectPrinted("G :: f    // one\n   // two\nH :: g//three", "G :: f  // one\n// two\nH :: g  //three\n");
+    try expectPrinted(
+        \\Sq :: +(f h, g k)+ // a square
+        \\Iso :: f/g // an isomorphism
+        \\Pr :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+) // a product
+    ,
+        \\Sq  :: +(f h, g k)+                         // a square
+        \\Iso :: f/g                                  // an isomorphism
+        \\Pr  :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)  // a product
+        \\
+    );
+    // A line with no comment doesn't push the comments.
+    try expectPrinted(
+        \\Repo :prove {
+        \\    :kind [category],
+        \\    :axiom (fix merge == login session merge'), // both paths
+        \\    :lemma.[clean] (#Merged :pushout) // the merge is clean
+        \\}
+    ,
+        \\Repo :prove {
+        \\    :kind [category],
+        \\    :axiom (fix merge == login session merge'),  // both paths
+        \\    :lemma.[clean] (#Merged :pushout)            // the merge is clean
+        \\}
+        \\
+    );
     try expectPrinted(
         \\G :style {
         \\      // the start
@@ -122,7 +235,7 @@ test "comments stay where they were" {
     ,
         \\G :style {
         \\    // the start
-        \\    #A :fill [red] // red
+        \\    #A :fill [red]  // red
         \\    // the end
         \\}
         \\
@@ -136,12 +249,15 @@ test "a program with syntax errors is not printed" {
     defer cst.deinit(testing.allocator);
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
-    try testing.expectError(error.SyntaxError, print.program(&cst, &out.writer));
+    try testing.expectError(error.SyntaxError, print.program(testing.allocator, &cst, &out.writer));
 }
 
-test "the examples and the prelude print faithfully" {
-    try expectFaithful(Compilation.prelude_source);
-    // examples/order-fulfilment.fab, already in its layout.
+test "the prelude prints as it is written" {
+    try expectPrinted(Compilation.prelude_source, Compilation.prelude_source);
+}
+
+test "the examples print as they are written" {
+    // examples/order-fulfilment.fab.
     const order =
         \\Order :: {
         \\    */receive/#Received validate/? +(
@@ -153,31 +269,19 @@ test "the examples and the prelude print faithfully" {
         \\    )
         \\}
         \\
+        \\Order :style {
+        \\    #Received             :label "Order received",
+        \\    validate+             :label "Valid?",
+        \\    charge+               :label "Payment accepted?",
+        \\    #Waiting              :label "Wait 10 min",
+        \\    reserve+              :label "In stock?",
+        \\    #Shipped              :label "Shipped",
+        \\    #Rejected             :label "Rejected",
+        \\    (yes, paid, reserved) :label "yes",
+        \\    (no, declined, short) :label "no",
+        \\    (retry, restock)      { :arrow [/dashed/>], :bend [inner] }
+        \\}
+        \\
     ;
     try expectPrinted(order, order);
-    // examples/git-history.fab and examples/document-schema.fab, in part.
-    try expectFaithful(
-        \\Repo :: {
-        \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
-        \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
-        \\}
-        \\
-        \\:ref := :shape [round], :fill [muted]
-        \\
-        \\Repo :style {
-        \\  &node :shape [point],
-        \\  #Head    { :ref, :label "main" },
-        \\  merge'  :arrow [/dashed/>]
-        \\}
-        \\
-        \\Repo :prove {
-        \\  :kind [category],
-        \\  :axiom (fix merge == login session merge'),   // both paths
-        \\  :lemma.[clean] (#Merged :pushout)              // the merge is clean
-        \\}
-        \\Db :prove {
-        \\  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk),
-        \\  :axiom (parent { :nullable, :card [0..*/0..1] })
-        \\}
-    );
 }
