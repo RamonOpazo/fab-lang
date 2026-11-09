@@ -54,6 +54,31 @@ pub const Subject = union(enum) {
     zone: u32,
 };
 
+/// A name's use, and what it names (plan step L2a): one per name in the
+/// program, its definition included, so the uses of one thing are those with
+/// its definition. A bracket's elements are names of their own: the `solid`
+/// in `[/solid/>]`.
+pub const Reference = struct {
+    /// Where the name is, in the program's bytes.
+    span: Span,
+    sort: Sort,
+    /// Where it is defined; null for a built-in (`:Text`).
+    definition: ?Site,
+
+    pub const Span = struct { start: u32, end: u32 };
+    pub const Sort = enum { zone, node, edge, cell, type, label, value, descriptor };
+    /// A defining token, in the program or in the prelude.
+    pub const Site = struct {
+        token: TokenIndex,
+        prelude: bool = false,
+
+        /// The site of an environment entry, if it has one.
+        pub fn of(token: ?TokenIndex, prelude: bool) ?Site {
+            return .{ .token = token orelse return null, .prelude = prelude };
+        }
+    };
+};
+
 /// Always an IR, and the errors found while building it. Errors with a
 /// subject appear in the IR's issues table.
 pub const Result = struct {
@@ -63,8 +88,9 @@ pub const Result = struct {
     env: Env,
     /// The layers' descriptions, resolved: what the style pass applies.
     bindings: []const layers.Binding = &.{},
-    /// The tokens that name a subject, for the language server.
-    references: []const layers.Reference = &.{},
+    /// Every name the program uses, with what it names: for the language
+    /// server. In source order.
+    references: []const Reference = &.{},
 
     pub fn deinit(result: *Result, gpa: std.mem.Allocator) void {
         result.ir.deinit(gpa);
@@ -82,10 +108,12 @@ builder: Ir.Builder,
 errors: std.ArrayList(Error) = .empty,
 /// The names defined so far, in source order (statements.md §21).
 env: Env,
-/// The layers' descriptions read so far, and the tokens naming subjects:
+/// The layers' descriptions read so far, and the contexts naming subjects:
 /// nodes still elements until the graph is built (`layers.finish`).
 bindings: std.ArrayList(layers.PendingBinding) = .empty,
-references: std.ArrayList(layers.PendingReference) = .empty,
+contexts: std.ArrayList(layers.PendingReference) = .empty,
+/// The names used so far, with what they name.
+references: std.ArrayList(Reference) = .empty,
 /// Each element's IR node, once the graph is built.
 node_of: []Ir.NodeIndex = &.{},
 /// The zones declared so far, by name: the first declaration of each.
@@ -161,6 +189,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     defer a.arena.deinit();
     defer a.zones.deinit(gpa);
     defer a.bindings.deinit(gpa);
+    defer a.contexts.deinit(gpa);
     defer a.references.deinit(gpa);
     defer a.failed.deinit(gpa);
     errdefer a.builder.deinit();
@@ -184,13 +213,47 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
         }
     }
     try elaborate.graph(&a);
-    const bindings, const references = try layers.finish(&a, a.node_of);
+    const bindings = try layers.finish(&a);
     errdefer gpa.free(bindings);
+    const references = try a.sortedReferences();
     errdefer gpa.free(references);
 
     const errors = try a.errors.toOwnedSlice(gpa);
     errdefer gpa.free(errors);
     return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env, .bindings = bindings, .references = references };
+}
+
+/// Records a use of a name: `text` is a slice of the program, a token or a
+/// bracket's element.
+pub fn refer(a: *Analyser, text: []const u8, sort: Reference.Sort, definition: ?Reference.Site) error{OutOfMemory}!void {
+    const base = @intFromPtr(a.cst.source.ptr);
+    std.debug.assert(@intFromPtr(text.ptr) >= base and @intFromPtr(text.ptr) + text.len <= base + a.cst.source.len);
+    const start: u32 = @intCast(@intFromPtr(text.ptr) - base);
+    try a.references.append(a.gpa, .{ .span = .{ .start = start, .end = start + @as(u32, @intCast(text.len)) }, .sort = sort, .definition = definition });
+}
+
+/// Records a token's use; a definition with no site of its own is itself.
+pub fn referToken(a: *Analyser, token: TokenIndex, sort: Reference.Sort, definition: ?Reference.Site) error{OutOfMemory}!void {
+    try a.refer(a.cst.tokenText(token), sort, definition);
+}
+
+/// The references in source order, each span once: a name checked twice
+/// (a value read for its type, then for its structure) is one use.
+fn sortedReferences(a: *Analyser) error{OutOfMemory}![]Reference {
+    const items = a.references.items;
+    std.mem.sort(Reference, items, {}, struct {
+        fn lessThan(_: void, x: Reference, y: Reference) bool {
+            return x.span.start < y.span.start;
+        }
+    }.lessThan);
+    var n: usize = 0;
+    for (items) |r| {
+        if (n > 0 and items[n - 1].span.start == r.span.start and items[n - 1].span.end == r.span.end) continue;
+        items[n] = r;
+        n += 1;
+    }
+    a.references.shrinkRetainingCapacity(n);
+    return a.references.toOwnedSlice(a.gpa);
 }
 
 /// The zone of the declaration being elaborated.
@@ -402,6 +465,7 @@ fn declareZone(a: *Analyser, name: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
     } else {
         gop.value_ptr.* = .{ .index = index, .token = name };
     }
+    try a.referToken(name, .zone, .{ .token = gop.value_ptr.token });
     return index;
 }
 

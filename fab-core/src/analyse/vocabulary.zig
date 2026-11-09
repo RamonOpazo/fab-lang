@@ -40,10 +40,14 @@ pub fn declareType(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOf
     const type_token = cst.mainToken(head);
     const type_name = cst.tokenText(type_token);
 
-    const t: TypeIndex = if (env.type_table.get(type_name)) |named| named.index else blk: {
+    const t: TypeIndex = if (env.type_table.get(type_name)) |named| blk: {
+        try a.referToken(type_token, .type, .of(named.token, named.prelude));
+        break :blk named.index;
+    } else blk: {
         const t = try env.newDeclared(a.gpa);
         try env.type_table.put(a.gpa, type_name, .{ .index = t, .token = type_token });
         env.name(t, type_name);
+        try a.referToken(type_token, .type, .{ .token = type_token });
         break :blk t;
     };
 
@@ -185,10 +189,12 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index, record: ?Type
 
     const gop = try a.env.functions.getOrPut(a.gpa, cst.tokenText(function_token));
     if (gop.found_existing) {
+        try a.referToken(function_token, .descriptor, .{ .token = gop.value_ptr.token, .prelude = gop.value_ptr.prelude });
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
     }
     gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record, .table = key != null };
+    try a.referToken(function_token, .descriptor, .{ .token = function_token });
 }
 
 /// The classes of `&node` or `(&node, &zone)`. Whether all are known.
@@ -256,7 +262,9 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
 
 /// Defines a bracket name, once.
 pub fn define(a: *Analyser, text: []const u8, entry: Env.Value) error{OutOfMemory}!void {
+    const sort: Analyser.Reference.Sort = if (entry.body == null) .label else .value;
     const gop = try a.env.values.getOrPut(a.gpa, text);
+    try a.refer(text, sort, if (gop.found_existing) .of(gop.value_ptr.token, gop.value_ptr.prelude) else .of(entry.token, false));
     if (gop.found_existing) {
         const first = gop.value_ptr.*;
         // A label of another type: one label, one type.
@@ -284,6 +292,7 @@ pub fn typeExpression(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIn
         .leaf => switch (cst.tokenTag(token)) {
             .type_id => {
                 const named = a.env.type_table.get(cst.tokenText(token)) orelse return notAType(a, node);
+                try a.referToken(token, .type, .of(named.token, named.prelude));
                 return named.index;
             },
             .val => return bracketType(a, token),
@@ -361,6 +370,7 @@ fn bracketType(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?TypeIndex {
             failed = true;
             continue;
         };
+        try a.refer(element.text, .type, .of(named.token, named.prelude));
         const t = if (element.inverted) try a.env.twin(a.gpa, named.index) orelse {
             try a.fail(.not_invertible, token);
             failed = true;
@@ -443,7 +453,10 @@ pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
                 types = true;
                 continue;
             },
-            .name, .symbol => if (a.env.values.get(element.text)) |v| v.type else blk: {
+            .name, .symbol => if (a.env.values.get(element.text)) |v| blk: {
+                try a.refer(element.text, if (v.body == null) .label else .value, .of(v.token, v.prelude));
+                break :blk v.type;
+            } else blk: {
                 try a.fail(.undefined_name, token);
                 break :blk .unknown;
             },

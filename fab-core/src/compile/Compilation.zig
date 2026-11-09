@@ -167,6 +167,21 @@ pub fn diagnostics(c: *Compilation) error{OutOfMemory}![]const Diagnostic {
     return c.diags.items;
 }
 
+/// Every name the program uses, with what it names, in source order: what
+/// the language server navigates by (plan step L2a).
+pub fn references(c: *Compilation) error{OutOfMemory}![]const Analyser.Reference {
+    return (try c.analysis()).references;
+}
+
+/// Where a reference's definition is: a span of the program, or of the
+/// prelude (`prelude_source`) when `site.prelude`.
+pub fn definitionSpan(c: *Compilation, site: Analyser.Reference.Site) error{OutOfMemory}!Diagnostic.Span {
+    const tree = if (site.prelude) &c.prelude_cst.? else try c.cst();
+    const text = tree.tokenText(site.token);
+    const start: u32 = @intCast(@intFromPtr(text.ptr) - @intFromPtr(tree.source.ptr));
+    return .{ .start = start, .end = start + @as(u32, @intCast(text.len)) };
+}
+
 /// The worst severity among the program's diagnostics.
 pub fn status(c: *Compilation) error{OutOfMemory}!Status {
     var s: Status = .ok;
@@ -220,8 +235,11 @@ fn preludeEnv(c: *Compilation) error{OutOfMemory}!Env {
     var tree = try Parser.parse(c.gpa, prelude_source);
     errdefer tree.deinit(c.gpa);
     var result = try Analyser.analyse(c.gpa, &tree, null);
+    // All but the environment, which the program starts from.
     result.ir.deinit(c.gpa);
     c.gpa.free(result.errors);
+    c.gpa.free(result.bindings);
+    c.gpa.free(result.references);
     c.prelude_cst = tree;
     result.env.adopt();
     return result.env;

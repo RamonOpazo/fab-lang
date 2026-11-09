@@ -85,6 +85,7 @@ pub fn bundle(a: *Analyser, name: Node.Index, body: Node.Index) error{OutOfMemor
     } else try bundleItems(a, body, &b);
 
     const gop = try a.env.functions.getOrPut(a.gpa, cst.tokenText(name_token));
+    try a.referToken(name_token, .descriptor, if (gop.found_existing) .{ .token = gop.value_ptr.token, .prelude = gop.value_ptr.prelude } else .{ .token = name_token });
     if (gop.found_existing) {
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = name_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
@@ -161,6 +162,7 @@ pub fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!voi
         try a.fail(.unknown_attribute, name_token);
         return;
     };
+    try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
     const signature: ?TokenIndex = if (f.prelude) null else f.token;
     if (cst.key(attr)) |key| try checkKey(a, f, key, signature);
 
@@ -241,6 +243,7 @@ fn gather(a: *Analyser, value: Node.Index, contents: *Contents) error{OutOfMemor
         const element = (reader.next() catch continue) orelse break;
         if (element.kind != .name) continue;
         const v = a.env.values.get(element.text) orelse continue;
+        try a.refer(element.text, if (v.body == null) .label else .value, .of(v.token, v.prelude));
         for (v.contents) |c| try contents.add(a.gpa, c);
     }
 }
@@ -313,6 +316,7 @@ fn token(a: *Analyser, naming: Node.Index) error{OutOfMemory}!void {
         try a.fail(.undefined_name, key_token);
         return;
     };
+    try a.refer(text[1 .. text.len - 1], if (label.body == null) .label else .value, .of(label.token, label.prelude));
     // A named value is no label: it has a value already.
     if (label.body != null) {
         try a.fail(.not_a_label, key_token);

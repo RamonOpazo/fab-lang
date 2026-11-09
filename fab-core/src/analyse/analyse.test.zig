@@ -155,8 +155,106 @@ test "a layer's contexts resolve to elements, kept as bindings" {
     try testing.expect(b[2].subject.class.classes.contains(.edge));
     try testing.expectEqual(@as(?@TypeOf(b[2].subject.class.zone.?), @fromBackingInt(@as(u32, 0))), b[2].subject.class.zone);
     try testing.expectEqual(@as(u32, 0), @backingInt(b[3].subject.zone));
-    // Every context's token is a reference: G (twice), f, f+, &edge.
-    try testing.expectEqual(@as(usize, 5), a.result.references.len);
+}
+
+// ---------------------------------------------------------------------------
+// References (plan step L2a)
+
+/// One line per reference: its text at its offset, its sort, and where its
+/// definition is, by offset (`@4`), `prelude`, or `built-in`.
+fn dumpReferences(source: [:0]const u8) ![]u8 {
+    var a = try analyse(source);
+    defer a.deinit();
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    errdefer out.deinit();
+    for (a.result.references) |r| {
+        try out.writer.print("{s}@{d} {s}", .{ source[r.span.start..r.span.end], r.span.start, @tagName(r.sort) });
+        if (r.definition) |d| {
+            if (d.prelude) try out.writer.writeAll(" prelude") else try out.writer.print(" @{d}", .{@intFromPtr(a.cst.tokenText(d.token).ptr) - @intFromPtr(source.ptr)});
+        } else try out.writer.writeAll(" built-in");
+        try out.writer.writeByte('\n');
+    }
+    return out.toOwnedSlice();
+}
+
+fn expectReferences(source: [:0]const u8, want: []const u8) !void {
+    const got = try dumpReferences(source);
+    defer testing.allocator.free(got);
+    try testing.expectEqualStrings(want, got);
+}
+
+test "references: every name in a declaration, and what it names" {
+    // A's names, then B's uses of them: an end (`A.f+`), a named node
+    // (`A.#X`), the diagram as its own node (`A`), its own edge (`+h`).
+    try expectReferences("A :: @/f/#X g\nB :: A.f+/h, A.#X/k, A/m, +h/n",
+        \\A@0 zone @0
+        \\@@5 node @5
+        \\f@7 edge @7
+        \\#X@9 node @9
+        \\g@12 edge @12
+        \\B@14 zone @14
+        \\A@19 zone @0
+        \\f@21 edge @7
+        \\h@24 edge @24
+        \\A@27 zone @0
+        \\#X@29 node @9
+        \\k@32 edge @32
+        \\A@35 zone @0
+        \\m@37 edge @37
+        \\h@41 edge @24
+        \\n@43 edge @43
+        \\
+    );
+}
+
+test "references: sides above level 1, and a diagram declared twice" {
+    // The second G is drawn apart: its name points to the first, its `f`
+    // is its own.
+    try expectReferences("G :: f/g | f/α/g\nG :: f",
+        \\G@0 zone @0
+        \\f@5 edge @5
+        \\g@7 edge @7
+        \\f@11 edge @5
+        \\α@13 cell @13
+        \\g@16 edge @7
+        \\G@18 zone @0
+        \\f@23 edge @23
+        \\
+    );
+}
+
+test "references: types, labels, values and descriptors, once each" {
+    // A label's use is its name inside the bracket (`red`); its definition
+    // is the bracket that declares it. Built-in types have no site.
+    try expectReferences(styles ++ "[warn] := [red]\nG :: f\nG :style { f :fill [warn], +f :fill [red] }\nG.f :label \"x\"",
+        \\:Color@0 type built-in
+        \\red@11 label @10
+        \\:Style@16 type @16
+        \\:label@50 descriptor @50
+        \\:Text@60 type built-in
+        \\:fill@82 descriptor @82
+        \\:Color@91 type built-in
+        \\:caption@105 descriptor @105
+        \\:Text@117 type built-in
+        \\:style@131 descriptor @131
+        \\:Style@141 type @16
+        \\warn@149 value @148
+        \\red@159 label @10
+        \\G@164 zone @164
+        \\f@169 edge @169
+        \\G@171 zone @164
+        \\:style@173 descriptor @131
+        \\f@182 edge @169
+        \\:fill@184 descriptor @82
+        \\warn@191 value @148
+        \\f@199 edge @169
+        \\:fill@201 descriptor @82
+        \\red@208 label @10
+        \\G@215 zone @164
+        \\f@217 edge @169
+        \\:label@219 descriptor @50
+        \\
+    );
 }
 
 test "a description with an operator, or with no context, is no layer" {

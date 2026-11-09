@@ -44,8 +44,6 @@ pub const Subject = union(enum) {
 pub const Binding = struct { subject: Subject, attr: Node.Index, layer: Layer };
 
 /// A token naming a subject, for the language server.
-pub const Reference = struct { token: TokenIndex, subject: Subject };
-
 /// A subject before the graph is built: a node is still an element, with
 /// the end that reached it, if one did.
 pub const Pending = union(enum) {
@@ -119,6 +117,7 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
         try a.fail(.unknown_attribute, name_token);
         return;
     };
+    try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
     const style = if (a.env.type_table.get(":Style")) |named| named.index else null;
     const classes = classesOf(subjects);
 
@@ -208,6 +207,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                     .hole => return,
                     .node => unreachable, // nodes are named with `#`
                 };
+                try a.referToken(main, if (name.level == 1) .edge else .cell, .{ .token = name.is.generator.token });
                 try add(a, out, .{ .subject = .{ .subject = subject }, .zone = null }, main);
             },
             .node_id, .at => {
@@ -219,10 +219,12 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                     .hole => return,
                     .generator => unreachable,
                 };
+                try a.referToken(main, .node, .{ .token = name.token });
                 try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = null, .token = main, .zone = zone.index } }, .zone = null }, main);
             },
             .class_id => try class(a, main, zone.index, out),
             .zone_id => if (std.mem.eql(u8, cst.tokenText(main), a.cst.tokenText(zone.token))) {
+                try a.referToken(main, .zone, .{ .token = zone.token });
                 try add(a, out, .{ .subject = .{ .subject = .{ .zone = zone.index } }, .zone = zone }, main);
             } else try a.fail(.another_diagrams_subject, main),
             else => try notASubject(a, node),
@@ -240,6 +242,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                 .hole => return,
                 .node => unreachable,
             };
+            try a.referToken(edge_token, .edge, .{ .token = g.token });
             const side: Ir.End.Side = if (cst.tag(node) == .prefix) .dom else .cod;
             const elem = if (side == .dom) g.left else g.right;
             const end: Ir.End = .{ .edge = @fromBackingInt(g.index), .side = side };
@@ -252,6 +255,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
             const left_token = cst.mainToken(left);
             if (!std.mem.eql(u8, cst.tokenText(left_token), cst.tokenText(zone.token)))
                 return a.fail(.another_diagrams_subject, left_token);
+            try a.referToken(left_token, .zone, .{ .token = zone.token });
             try part(a, zone, right, out);
         },
         else => try notASubject(a, node),
@@ -273,6 +277,7 @@ fn diagram(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?Analyser.Zone {
         try a.fail(.description_at_undeclared_context, token);
         return null;
     };
+    try a.referToken(token, .zone, .{ .token = zone.token });
     return if (zone.broken) null else zone;
 }
 
@@ -284,11 +289,11 @@ fn class(a: *Analyser, token: TokenIndex, zone: ?Ir.ZoneIndex, out: *std.ArrayLi
 
 fn add(a: *Analyser, out: *std.ArrayList(Owner), owner: Owner, token: TokenIndex) error{OutOfMemory}!void {
     try out.append(a.gpa, owner);
-    try a.references.append(a.gpa, .{ .token = token, .subject = owner.subject });
+    try a.contexts.append(a.gpa, .{ .token = token, .subject = owner.subject });
 }
 
 fn reference(a: *Analyser, token: TokenIndex, subject: Pending) error{OutOfMemory}!void {
-    try a.references.append(a.gpa, .{ .token = token, .subject = subject });
+    try a.contexts.append(a.gpa, .{ .token = token, .subject = subject });
 }
 
 /// A chain, a path or a pinch addresses a structure, not one element.
@@ -310,7 +315,7 @@ fn notASubject(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
 pub fn check(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
     const zones = a.builder.nodes.items(.zone);
     const ends = a.builder.nodes.items(.canonical);
-    for (a.references.items) |r| switch (r.subject) {
+    for (a.contexts.items) |r| switch (r.subject) {
         .node => |n| {
             const node = node_of[a.uf.find(n.elem)];
             if (zones[@backingInt(node)] != n.zone) {
@@ -449,13 +454,10 @@ fn errorSubject(p: Pending) ?Analyser.Subject {
 }
 
 /// Nodes, once the graph is built: each element's class is an IR node.
-pub fn finish(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!struct { []Binding, []Reference } {
+pub fn finish(a: *Analyser) error{OutOfMemory}![]Binding {
     const bindings = try a.gpa.alloc(Binding, a.bindings.items.len);
-    errdefer a.gpa.free(bindings);
-    for (a.bindings.items, bindings) |p, *b| b.* = .{ .subject = resolve(a, p.subject, node_of), .attr = p.attr, .layer = p.layer };
-    const references = try a.gpa.alloc(Reference, a.references.items.len);
-    for (a.references.items, references) |p, *r| r.* = .{ .token = p.token, .subject = resolve(a, p.subject, node_of) };
-    return .{ bindings, references };
+    for (a.bindings.items, bindings) |p, *b| b.* = .{ .subject = resolve(a, p.subject, a.node_of), .attr = p.attr, .layer = p.layer };
+    return bindings;
 }
 
 fn resolve(a: *Analyser, p: Pending, node_of: []const Ir.NodeIndex) Subject {

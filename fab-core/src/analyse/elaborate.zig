@@ -33,6 +33,9 @@ const Ports = struct {
 /// What a name stands for in a declaration, at its level.
 pub const Name = struct {
     level: u32,
+    /// A named node's or `@`'s first token in the declaration: where it is
+    /// defined. A generator keeps its own; a hole has none.
+    token: TokenIndex = 0,
     is: union(enum) {
         /// A named node or `@`, at level 0.
         node: Elem,
@@ -108,10 +111,10 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
     return switch (cst.tokenTag(token)) {
         .edge_id => declareEdge(a, token),
         // A named node is plain: it meets no kind.
-        .node_id => one(a, try named(a, text, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
+        .node_id => one(a, try named(a, text, token, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
         // A diagram name as a node: its own node.
         .zone_id => one(a, try own(a, token)),
-        .at => one(a, try named(a, "@", .{ .own = true, .name_token = token, .kind = .plain, .kind_token = token })),
+        .at => one(a, try named(a, "@", token, .{ .own = true, .name_token = token, .kind = .plain, .kind_token = token })),
         .star => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .null_node })),
         .quid => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .choice, .kind_token = token })),
         .bang => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .parallel, .kind_token = token })),
@@ -130,6 +133,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
         const h = try hole(a);
         switch (gop.value_ptr.is) {
             .generator => |first| {
+                try a.referToken(token, .edge, .{ .token = first.token });
                 const in_chain = if (a.scope.chain) |c| first.token >= c[0] and first.token <= c[1] else false;
                 try a.errors.append(a.gpa, .{
                     .subject = .{ .elem = h },
@@ -159,6 +163,7 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
     const cod = try a.uf.add(@backingInt(a.zone()), .{ .edge = index, .side = .cod }, .{});
     try a.edge_ends.append(a.arena.allocator(), .{ dom, cod });
     gop.value_ptr.* = .{ .level = 1, .is = .{ .generator = .{ .index = @backingInt(index), .left = dom, .right = cod, .token = token } } };
+    try a.referToken(token, .edge, .{ .token = token });
 
     const ends = try a.arena.allocator().alloc(Elem, 2);
     ends[0] = dom;
@@ -179,6 +184,7 @@ fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
 /// `A` as a node: A's own node. A broken diagram's error is said already.
 fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
+    try a.referToken(token, .zone, .{ .token = zone.token });
     if (zone.broken) return hole(a);
     const at = zone.table.get("@") orelse return failHole(a, .diagram_without_own_node, token);
     return nodeOf(a, at);
@@ -191,13 +197,20 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     const left, const right_ = cst.data(node).nodes;
     const right = sort.ofOne(cst, right_);
     const zone_token = cst.mainToken(left);
-    if (sort.isLeaf(cst, right, .at)) return own(a, zone_token);
+    if (sort.isLeaf(cst, right, .at)) {
+        const elem = try own(a, zone_token);
+        if (diagram(a, zone_token)) |zone| if (zone.table.get("@")) |at| if (at.is == .node)
+            try a.referToken(cst.mainToken(right), .node, .{ .token = at.token });
+        return elem;
+    }
     const zone = diagram(a, zone_token) orelse return failHole(a, .diagram_not_declared, zone_token);
+    try a.referToken(zone_token, .zone, .{ .token = zone.token });
     if (zone.broken) return hole(a);
 
     if (sort.isLeaf(cst, right, .node_id)) {
         const token = cst.mainToken(right);
         const name = zone.table.get(cst.tokenText(token)) orelse return failHole(a, .undeclared_name_in_diagram, token);
+        if (name.is == .node) try a.referToken(token, .node, .{ .token = name.token });
         return nodeOf(a, name);
     }
     // Another shape was reported by rule 1, or by the kind after it.
@@ -210,9 +223,10 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
 /// A named node, `@`, or a diagram name: one element per name in a
 /// declaration, made on first use. A name only a failed term held is made
 /// here, as if first used.
-fn named(a: *Analyser, key: []const u8, class: @import("UnionFind.zig").Class) error{OutOfMemory}!Elem {
+fn named(a: *Analyser, key: []const u8, token: TokenIndex, class: @import("UnionFind.zig").Class) error{OutOfMemory}!Elem {
     const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
-    if (!gop.found_existing or gop.value_ptr.is == .hole) gop.value_ptr.* = .{ .level = 0, .is = .{ .node = try a.uf.add(@backingInt(a.zone()), null, class) } };
+    if (!gop.found_existing or gop.value_ptr.is == .hole) gop.value_ptr.* = .{ .level = 0, .token = token, .is = .{ .node = try a.uf.add(@backingInt(a.zone()), null, class) } };
+    try a.referToken(token, .node, .{ .token = gop.value_ptr.token });
     return gop.value_ptr.is.node;
 }
 
@@ -377,6 +391,7 @@ fn reference(a: *Analyser, node: Node.Index, side: Ir.End.Side) error{OutOfMemor
 /// (rule 5), so a reference to it is an error at the edge's name. A cell has
 /// no ends at level 1.
 fn endOf(a: *Analyser, edge: Name, side: Ir.End.Side, name: TokenIndex) error{OutOfMemory}!Elem {
+    if (edge.is == .generator) try a.referToken(name, if (edge.level == 1) .edge else .cell, .{ .token = edge.is.generator.token });
     if (edge.level != 1) return failHole(a, .undeclared_name_in_diagram, name);
     const elem = switch (edge.is) {
         .generator => |e| if (side == .dom) e.left else e.right,

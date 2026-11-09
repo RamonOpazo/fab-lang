@@ -172,6 +172,11 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     };
     if (cst.tokenTag(token) != .edge_id or sort.isSide(a, token)) {
         const name = a.scope.table.get(text).?;
+        switch (name.is) {
+            .node => try a.referToken(token, .node, .{ .token = name.token }),
+            .generator => |g| try a.referToken(token, if (name.level == 1) .edge else .cell, .{ .token = g.token }),
+            .hole => {},
+        }
         return one(l, switch (name.is) {
             .node => |e| .{ .side = .{ .node = @fromBackingInt(e) } },
             .generator => |g| .{ .side = if (name.level == 1) .{ .edge = @fromBackingInt(g.index) } else .{ .cell = @fromBackingInt(g.index) } },
@@ -182,7 +187,10 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const gop = try a.scope.table.getOrPut(l.arena(), text);
     if (gop.found_existing) {
         switch (gop.value_ptr.is) {
-            .generator => |first| try a.errors.append(a.gpa, .{ .tag = .edge_declared_twice, .token = token, .related = first.token }),
+            .generator => |first| {
+                try a.referToken(token, .cell, .{ .token = first.token });
+                try a.errors.append(a.gpa, .{ .tag = .edge_declared_twice, .token = token, .related = first.token });
+            },
             .hole, .node => {},
         }
         return one(l, .failed);
@@ -190,6 +198,7 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const i: u32 = @intCast(l.cells.items.len);
     try l.cells.append(l.arena(), .{ .token = token });
     gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .generator = .{ .index = i, .token = token } } };
+    try a.referToken(token, .cell, .{ .token = token });
 
     const ports = try l.arena().alloc(Port, 2);
     ports[0] = .{ .slot = .{ .cell = i, .end = .left } };

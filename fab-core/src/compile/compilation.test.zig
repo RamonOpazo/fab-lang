@@ -60,6 +60,22 @@ fn expectLabels(env: *const @import("../analyse/Env.zig"), type_name: []const u8
     try testing.expectEqual(std.enums.values(E).len - internal.len, count);
 }
 
+test "references reach into the prelude" {
+    var c = try Compilation.init(testing.allocator, "G :: f\nG.f :label \"x\"", preview);
+    defer c.deinit();
+    const refs = try c.references();
+    const label = refs[refs.len - 1];
+    try testing.expectEqualStrings(":label", c.source[label.span.start..label.span.end]);
+    const site = label.definition.?;
+    try testing.expect(site.prelude);
+    const span = try c.definitionSpan(site);
+    try testing.expectEqualStrings(":label", Compilation.prelude_source[span.start..span.end]);
+    // A name of the program's own is the program's.
+    const f = try c.definitionSpan(refs[refs.len - 2].definition.?);
+    try testing.expectEqualStrings("f", c.source[f.start..f.end]);
+    try testing.expectEqual(@as(u32, 5), f.start);
+}
+
 test "a valid program: an IR under any tolerance, and status ok" {
     for ([_]Compilation.Tolerance{ strict, preview }) |tolerance| {
         var c = try Compilation.init(testing.allocator, "G :: f g", tolerance);
