@@ -55,10 +55,18 @@ pub fn naming(a: *Analyser, node: Node.Index, head: Node.Index, body: Node.Index
     try brackets(a, body);
 
     // `[warn] := [red]`, `:Color [warn] := [red]`: a named value; with a
-    // record, `:Record [dark] := { … }`, a theme.
+    // record, `:Style [dark] := { … }`, a theme.
     if (isLeafOf(cst, head, .val) or (cst.tag(head) == .o_chain and isPair(cst, head, .type_id))) {
-        try vocabulary.namedValue(a, head, body);
-        if (cst.tag(body) == .block) try records.theme(a, body);
+        const named = try vocabulary.namedValue(a, head, body);
+        if (cst.tag(body) == .block) {
+            const record = if (named.contract) |t| (if (a.env.isRecord(t)) t else null) else null;
+            const contents = try records.theme(a, body, record);
+            // Its structure, for where it is used. Defined once: a name
+            // defined twice keeps the first.
+            if (named.name) |n| if (a.env.values.getPtr(n)) |v| {
+                if (v.body == body) v.contents = contents;
+            };
+        }
         return;
     }
     // `:terminal := { … }`: a bundle, the only head left.

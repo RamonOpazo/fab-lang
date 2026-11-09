@@ -46,6 +46,8 @@ pub const TypeIndex = enum(u32) {
     number,
     range,
     flag,
+    /// A record, `{ … }`. It has no type of its own: it fits every record
+    /// type, and its structure is checked where one is expected.
     record,
     /// Nil, nothing written: `[]`, `[/solid/>]`'s tail. It fits only where
     /// a type admits it, and every list, as its "no elements".
@@ -83,6 +85,9 @@ pub const Type = union(enum) {
 /// declaration of it.
 pub const Declared = struct {
     members: std.ArrayList(TypeIndex) = .empty,
+    /// Values or descriptors, never both (statements.md §22.9); open until
+    /// the first item says.
+    holds: enum { open, values, descriptors } = .open,
 };
 
 pub const Named = struct { index: TypeIndex, token: ?TokenIndex, prelude: bool = false };
@@ -93,6 +98,10 @@ pub const Value = struct {
     token: ?TokenIndex,
     /// The value it is bound to; null for a label, which has no definition.
     body: ?Node.Index,
+    /// A record's structure, which has no type (statements.md §22.9): its
+    /// descriptors, one per record type, the first of each. For a bracket of
+    /// named records, theirs.
+    contents: []Content = &.{},
     /// Defined in the prelude: `token` and `body` are the prelude's.
     prelude: bool = false,
 };
@@ -102,8 +111,23 @@ pub const Function = struct {
     classes: Classes,
     type: TypeIndex,
     token: TokenIndex,
+    /// The record type it is declared in, `:Style :: { … }`; null for a
+    /// descriptor declared at the top level, `&zone :style :: :Style`, and
+    /// for a bundle, which has none (statements.md §22.9).
+    record: ?TypeIndex = null,
     /// A bundle, `:terminal := { … }`: a flag that is never inverted.
     bundle: bool = false,
+    /// A bundle's descriptors, one per record type, the first of each:
+    /// what it is checked by where it is used.
+    contents: []Content = &.{},
+    prelude: bool = false,
+};
+
+/// A descriptor in a bundle or a record, standing for the record type it
+/// belongs to (null: none, a top-level descriptor).
+pub const Content = struct {
+    record: ?TypeIndex,
+    token: TokenIndex,
     prelude: bool = false,
 };
 
@@ -125,13 +149,14 @@ pub fn init(gpa: std.mem.Allocator) error{OutOfMemory}!Env {
     // The scalars first, in TypeIndex's order, so their indices are fixed.
     for ([_]Type{ .text, .math, .color, .number, .range, .flag, .record, .nil, .unknown }) |t| _ = try env.intern(gpa, t);
     const builtins = [_]struct { []const u8, TypeIndex }{
-        .{ ":Text", .text },   .{ ":Math", .math }, .{ ":Color", .color },   .{ ":Number", .number },
-        .{ ":Range", .range }, .{ ":Flag", .flag }, .{ ":Record", .record }, .{ ":Nil", .nil },
+        .{ ":Text", .text },   .{ ":Math", .math }, .{ ":Color", .color }, .{ ":Number", .number },
+        .{ ":Range", .range }, .{ ":Flag", .flag }, .{ ":Nil", .nil },
     };
     for (builtins) |b| {
         try env.type_table.put(gpa, b[0], .{ .index = b[1], .token = null });
         env.type_names.items[@backingInt(b[1])] = b[0];
     }
+    env.type_names.items[@backingInt(TypeIndex.record)] = "{}";
     return env;
 }
 
@@ -153,9 +178,15 @@ pub fn adopt(env: *Env) void {
     var types = env.type_table.valueIterator();
     while (types.next()) |named| named.prelude = true;
     var values = env.values.valueIterator();
-    while (values.next()) |v| v.prelude = true;
+    while (values.next()) |v| {
+        v.prelude = true;
+        for (v.contents) |*c| c.prelude = true;
+    }
     var functions = env.functions.valueIterator();
-    while (functions.next()) |f| f.prelude = true;
+    while (functions.next()) |f| {
+        f.prelude = true;
+        for (f.contents) |*c| c.prelude = true;
+    }
 }
 
 pub fn get(env: *const Env, index: TypeIndex) Type {
@@ -189,11 +220,12 @@ pub fn newDeclared(env: *Env, gpa: std.mem.Allocator) error{OutOfMemory}!TypeInd
 
 /// `T!`. A twin of a twin is the twin; on a union `!` distributes; a flag
 /// has twins by nature. Null for a type with no twins to give: a tuple, a
-/// list, a record.
+/// list, a record, nil.
 pub fn twin(env: *Env, gpa: std.mem.Allocator, t: TypeIndex) error{OutOfMemory}!?TypeIndex {
     switch (env.get(t)) {
         .twin, .flag, .unknown => return t,
         .tuple, .list, .record, .nil => return null,
+        .declared => if (env.isRecord(t)) return null else return try env.intern(gpa, .{ .twin = t }),
         .@"union" => |members| {
             var twins: std.ArrayList(TypeIndex) = .empty;
             defer twins.deinit(gpa);
@@ -234,6 +266,14 @@ pub fn includes(env: *const Env, outer: TypeIndex, inner: TypeIndex) bool {
     };
 }
 
+/// Whether `t` is a record type: one declared by its descriptors.
+pub fn isRecord(env: *const Env, t: TypeIndex) bool {
+    return switch (env.get(t)) {
+        .declared => |id| env.declared.items[id].holds == .descriptors,
+        else => false,
+    };
+}
+
 /// Gives a type a name for messages, unless it has one.
 pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
     const slot = &env.type_names.items[@backingInt(index)];
@@ -243,6 +283,8 @@ pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
 /// Whether a value of type `actual` can stand where `expected` is.
 pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
     if (actual == expected or actual == .unknown or expected == .unknown) return true;
+    // A record fits by its structure, checked where it is used.
+    if (actual == .record and env.isRecord(expected)) return true;
     return switch (env.get(expected)) {
         // A declared type holds its members' values; a value typed by
         // another declared type is never unwrapped, so units stay apart.
@@ -278,10 +320,11 @@ pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
 }
 
 /// Whether labels can be added to a type: a single value's, not a
-/// structure's.
+/// structure's, nor a record type's.
 pub fn takesLabels(env: *const Env, index: TypeIndex) bool {
     return switch (env.get(index)) {
-        .text, .math, .color, .number, .range, .declared => true,
+        .text, .math, .color, .number, .range => true,
+        .declared => |id| env.declared.items[id].holds != .descriptors,
         else => false,
     };
 }

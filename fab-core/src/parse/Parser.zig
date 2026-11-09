@@ -138,7 +138,7 @@ fn parseStatement(p: *Parser) Error!Node.Index {
         else => return if (p.nodes.items(.tag)[@backingInt(head)] == .entry) head else p.fail(.expected_token, .decl),
     }
     const op = p.next();
-    const body = try p.parseLevels();
+    const body = if (p.emptyRecordAhead(op)) try p.parseBlock(true) else try p.parseLevels();
     return p.addNode(.statement, op, .{ .nodes = .{ head, body } });
 }
 
@@ -236,7 +236,7 @@ fn parseItem(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
         .decl, .defn => {
             const op = p.next();
-            const body = try p.parsePart();
+            const body = if (p.emptyRecordAhead(op)) try p.parseBlock(true) else try p.parsePart();
             return p.addNode(.statement, op, .{ .nodes = .{ head, body } });
         },
         else => return head,
@@ -249,7 +249,7 @@ fn parsePart(p: *Parser) Error!Node.Index {
     const start = p.tok_i;
     switch (p.cur()) {
         .attr_id => return p.parseEntry(.root, start),
-        .l_cur => return p.parseBlock(),
+        .l_cur => return p.parseBlock(false),
         else => {},
     }
     const chain = try p.parseChain();
@@ -267,7 +267,7 @@ fn parseEntry(p: *Parser, subject: Node.Index, start: TokenIndex) Error!Node.Ind
     const top = p.scratch.items.len;
     try p.scratch.append(p.gpa, subject);
     if (p.cur() == .l_cur) {
-        try p.scratch.append(p.gpa, try p.parseBlock());
+        try p.scratch.append(p.gpa, try p.parseBlock(false));
     } else {
         try p.scratch.append(p.gpa, try p.parseAttr());
         if (p.cur() == .attr_id) try p.warnAt(.attributes_side_by_side, p.tok_i);
@@ -292,7 +292,7 @@ fn parseAttr(p: *Parser) Error!Node.Index {
         // A proposition, the fifth shape of a value: `:axiom (f == g)`.
         .l_par => try p.parseGroup(),
         // A record: `G :style { … }`.
-        .l_cur => try p.parseBlock(),
+        .l_cur => try p.parseBlock(true),
         else => .root,
     };
     return p.addNode(.attr, name, .{ .node = value });
@@ -314,13 +314,18 @@ fn parseOperation(p: *Parser, first: Node.Index) Error!Node.Index {
     return p.addNode(.operation, op, .{ .range = try p.listFrom(top) });
 }
 
-/// block = L_CUR levels R_CUR
-fn parseBlock(p: *Parser) Error!Node.Index {
+/// block = L_CUR levels R_CUR. `{}`, the empty record, is a value: after a
+/// descriptor, or a naming's body (`empty`); it holds an empty `items`.
+fn parseBlock(p: *Parser, empty: bool) Error!Node.Index {
     const open = p.next();
     p.braces += 1;
     defer p.braces -= 1;
 
-    if (p.cur() == .r_cur) return p.failAt(.empty_braces, open);
+    if (p.cur() == .r_cur) {
+        if (!empty) return p.failAt(.empty_braces, open);
+        const nothing = try p.addNode(.items, open, .{ .range = try p.listFrom(p.scratch.items.len) });
+        return p.addNode(.block, open, .{ .node_token = .{ nothing, p.next() } });
+    }
     const body = try p.parseLevels();
     const close = try p.expect(.r_cur);
     return p.addNode(.block, open, .{ .node_token = .{ body, close } });
@@ -448,6 +453,15 @@ fn cur(p: *Parser) Token.Tag {
         while (p.tags[p.tok_i] == .eol) p.tok_i += 1;
     }
     return p.tags[p.tok_i];
+}
+
+/// After `:=`, `{` and `}` with only line ends between: the empty record,
+/// a naming's body.
+fn emptyRecordAhead(p: *Parser, op: TokenIndex) bool {
+    if (p.tags[op] != .defn or p.cur() != .l_cur) return false;
+    var i = p.tok_i + 1;
+    while (p.tags[i] == .eol) i += 1;
+    return p.tags[i] == .r_cur;
 }
 
 /// Consumes the current token and returns its index.

@@ -31,7 +31,7 @@ Each package is a plain Zig project that depends only on the ones above it.
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 
 ## Commands
@@ -67,7 +67,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | 9b1 done |
+| 9    | Style layer                               | 9b2 done |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -196,7 +196,7 @@ Done when every level case passes.
 - **9b. Types** (`statements.md` §22.2–22.3, §22.8). In increments:
   - **9b0. Declared types** (done). `::` introduces a type; aliases go (*type named with `:=`*). Declared types are distinct, literals fit by shape, a typed value fits its type and those including it; repeating a declaration adds to the type. Types spelled like values: a comma is a union (a group inside expressions), `[:A/:B]` a tuple, `[:T]` a list, brackets of type names only (*types and values mixed*, *expression in a bracket*); `:Union`, `:Tuple`, `:List` and `:Table` go: no type takes parameters (*type with parameters*). The lexer: no `(`, `)` or `,` in a bracket. Twins: `T!`, `T` fits `T!`, `!` distributes over a union; *not invertible* replaces *only a flag inverts*. The prelude: `:Length`, `:Angle :: :Number!`, `:Fraction`, `:Head` and `:Hook`, `:Tip`, `:Stroke :: :Line!, :Nil`, `:Arrow :: [:Tip/:Stroke/:Tip]`.
   - **9b1. Nil** (done). A bracket has one element more than its slashes; `[]` is one nil, `[/]` two. `:Nil` built in; nil fits only where a type admits it, and every list. `:None` and `[none]` go; Zig's `none` values stop being labels.
-  - **9b2. Record types.** `:Style :: { … }` declares by descriptors, one descriptor one record type, a record's type read from its descriptors (*does not apply* for another's); `{}` is a value, fitting any record type. `:Record` goes: themes are `:Style`, `:theme :: [:Style]`, `&zone :style :: :Style`, a bundle joins its contents' type. The prelude's descriptors move into `:Style`.
+  - **9b2. Record types** (done; `statements.md` §22.9). `:Style :: { … }` declares by descriptors, one descriptor one record type; a type holds values or descriptors, never both (*descriptors on a value type*), and `::` holds no `:=` (*naming in a type*). Records and bundles have no type: each keeps its structure (the record types of its descriptors) and is checked by it where a record type is expected: after a descriptor, under a contract (*does not apply* as written), or where a named record is used (*wrong type*); a bundle's use, *does not apply*. `{}` is a value, fitting any record type. `:Record` goes: themes are `:Style [x] :=`, `:theme :: [:Style]`, `&zone :style :: :Style`. `:Label` admits `:Nil` (the computed name). The prelude's descriptors move into `:Style`.
   - **9b3. Tables.** A descriptor declared with a key slot, `&zone :axiom.[] :: :Proposition`, is a table; arity follows the declaration; keys optional; *key not taken*, *key in a declaration*.
   - **9b4. Value checks.** *Empty arrow*; `Style.Line` gains `triple` (the prelude test covers `:Line`); `[base]` binds every descriptor, with nil where it means nothing.
 

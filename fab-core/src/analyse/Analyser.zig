@@ -319,7 +319,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
     const cst = a.cst;
     if (definitions.isVocabulary(cst, head)) {
         try definitions.brackets(a, body);
-        if (cst.tag(head) == .leaf) try vocabulary.declareType(a, head, body) else try vocabulary.signature(a, head, body);
+        if (cst.tag(head) == .leaf) try vocabulary.declareType(a, head, body) else try vocabulary.signature(a, head, body, null);
         return null;
     }
     const name = cst.mainToken(head);

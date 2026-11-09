@@ -641,7 +641,8 @@ test "statement errors" {
     try expectFirstError("G :: (f, g,)", .trailing_comma, ",");
     try expectFirstError("G :style { a :x, }", .trailing_comma, ",");
     try expectFirstError("G :: {}", .empty_braces, "{");
-    try expectFirstError("G :style { :x {} }", .empty_braces, "{"); // until step 9b makes `{}` a value
+    try expectFirstError("G :style { f {} }", .empty_braces, "{");
+    try expectFirstError(":Style :: {}", .empty_braces, "{");
     try expectFirstError("Db :: (f,\n  g)", .statement_spans_lines, "\n");
     try expectFirstError("G :: f | | m", .empty_level, "|");
     try expectFirstError(") f", .expected_statement, ")");

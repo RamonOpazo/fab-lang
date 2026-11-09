@@ -43,6 +43,8 @@ pub const Tag = enum(u8) {
     context_missing,
     /// `:Style [x] := { [ink] :: :Color }`: `::` in a record.
     declaration_in_record,
+    /// `:Style :: { [ink] := [#fff] }`: `:=` in a type's declaration.
+    naming_in_type,
     /// Warning. `G :style { &node :fill [red], :caption "x" }`.
     owner_after_part,
     /// `f == g ~= h`.
@@ -95,8 +97,10 @@ pub const Tag = enum(u8) {
     contract_broken,
     /// `:Shape :: [#f00]`, `[a/b]`, `[x!]`, `f`.
     not_a_label,
-    /// `:Flag :: [x]`, `:Record :: [x]`.
+    /// `:Flag :: [x]`, `:Style :: [x]` once a record type.
     labels_on_structure,
+    /// `:Shape :: { &node :x :: :Color }` once a value type.
+    descriptors_on_value_type,
     /// `(&nodes) :fill :: :Color`.
     unknown_class,
 
@@ -119,7 +123,7 @@ pub const Tag = enum(u8) {
     key_of_wrong_type,
     /// `:t := { &node :fill [red] }`, `:t := { [ink] := [#fff] }`.
     subject_in_bundle,
-    /// `:Record [x] := { G.f :pen [thin] }`.
+    /// `:Style [x] := { G.f :pen [thin] }`.
     element_in_theme,
 
     // -- sorts (rule 1) ------------------------------------------------------

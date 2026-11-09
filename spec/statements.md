@@ -907,8 +907,8 @@ Revises 1.1–1.3, 12 (the comma after `:=`), 17 (the proof's shape), 19, and 21
 ```
 
 - **One descriptor, one record type,** as one label has one type. A descriptor declared at the top level, outside any record type (`&zone :style :: :Style`), describes at the top level only.
-- **A record's type is read from its shape:** the type its descriptors belong to. `{ :fill [red] }` is a `:Style`; nothing is inferred from use. A descriptor of another record type in it **does not apply**. `{}` fits any record type.
-- **`:Record` goes.** Themes are styles, `:Style [dark] := { … }`, and `:theme` takes `:List.(:Style)`, so `:theme [some-proof]` is a wrong type. A bundle's record has the type of its contents, and the bundle joins that record type.
+- **A record has no type of its own; it is checked by its structure where a record type is expected** (22.9). A descriptor of another record type in it **does not apply**. `{}` fits any record type.
+- **`:Record` goes.** Themes are styles, `:Style [dark] := { … }`, and `:theme` takes `:List.(:Style)`, so `:theme [some-proof]` is a wrong type. A bundle has no record type of its own: it is checked where it is used (22.9).
 - **The layers are descriptors of their record type:** `&zone :style :: :Style`, `&zone :prove :: :Proof`, `&zone :place :: :Place`. Zig gives `:style` its meaning: apply the record, with the diagram as its owner.
 - **Tokens are namings:** `[ink] := [#dddddd]` inside a record binds the label in that record, to a value of its type (**key of the wrong type** otherwise).
 
@@ -1132,3 +1132,56 @@ Repo :lemma.[clean]                              // a reference
 - **`:Union.(…)` beside the comma:** two spellings of one choice. **`[:Style..]` for a list:** `..` would mean two things inside brackets.
 - **`:Table.(T)` and `:{ :A, :B }` for tables:** both spell as a type what no value has; a table is the descriptor's arity, so it is declared on the descriptor.
 - **Expressions inside brackets:** the token holds no spaces, so they would depend on whitespace; naming first keeps a type readable.
+
+### 22.9 Record types and bundles, 2026-11-09
+
+Amends 22.3 (plan step 9b2). Settles what a record type's declaration may hold, and how records and bundles are typed: by their structure, where they are used.
+
+**A type holds values or descriptors, never both.** A body of labels and types declares a value type; a body of signatures, a record type. Repeating a declaration keeps its side:
+
+```
+:Style :: { &node :glow :: :Color }       // a record type, extended
+:Style :: [x]                             // error: labels on structure
+:Shape :: { &node :x :: :Color }          // error: descriptors on a value type
+```
+
+**`::` and `:=` never nest inside each other.** A declaration declares, a naming names, all the way down:
+
+```
+:Style :: { &node :fill :: :Color }       // a declaration in a declaration
+:Style :: { [ink] := [#fff] }             // error: naming in a type
+:Style [x] := { [ink] :: :Color }         // error: declaration in a record (22.1)
+```
+
+**A bundle has no record type; it is checked where it is used.** A bundle is a flag whose record is applied where it is written, as if its contents were written there (21). So it is checked there: against the classes of its context, as before, and now against the record type expected there. A descriptor of its contents outside that type **does not apply**.
+
+```
+:key := { :pk, :fill [gold] }             // fine on its own
+
+Db :style { User.id :key }                // error: :pk does not apply in a :Style
+Db :prove { :axiom (User.id :key) }       // error: :fill does not apply in a :Proposition
+```
+
+- **The error is at the use,** where it fails, with `related` at the first foreign descriptor in the bundle; one error per use. Bundles in bundles are checked through: `:a := { :key }` used in a style reports `:pk`, reached through `:key`.
+- **A record with a type in its head** says what it is: `:Style [x] := { :pk }` reports `:pk` where it is written. A record after a descriptor has that descriptor's type: `G :style { :pk }` likewise.
+- **`{}` holds nothing,** so it fits any record type.
+- **A bundle that fits nowhere is no error** until it is used, as nothing in fAB is an error for being unused.
+
+So one rule covers classes and record types: a bundle applies where all its contents apply.
+
+**A record has no type either: it is checked by its structure where a record type is expected.** A record is a set of descriptors with values; whether it is a style is whether its descriptors are `:Style`'s, asked where a `:Style` is expected:
+
+```
+[x] := { &node :fill [red] }              // a record: no type assigned
+:Style [y] := { :theme [x] }              // fine: :fill is a :Style descriptor
+
+[n] := { &node :memo "x" }                // :memo of :Notes
+:Style [y] := { :theme [n] }              // error: wrong type, at [n], related at :memo
+```
+
+- **Where a record type is expected,** the record's descriptors are checked against it: after a descriptor (`G :style { … }`), under a contract (`:Style [x] := { … }`, reported at each foreign descriptor, as written there), and where a named record is used (`:theme [x]`, a **wrong type** at the use, related at the first foreign descriptor).
+- **A named record keeps its structure, not a type:** what its descriptors belong to, read once at its definition. A name for named records (`[both] := [x/y]`) keeps theirs.
+- **A contract checks, and names no type:** `:Style [x] := { … }` checks the record against `:Style` where it is written, rather than at each use.
+- **Inside a record with no expected type,** each descriptor is still checked where it is written for its classes and its value; only belonging waits for the use.
+
+**Rejected.** A record's type read from its first descriptor: a record is its structure, and two records with the same descriptors are the same whatever came first. A bundle joining the record type of its first descriptor: arbitrary, and it reports the second descriptor of `:key` though neither is more wrong than the other. A bundle checked at its definition: a mixed bundle is wrong only where it is used, and the use is what the user must change.

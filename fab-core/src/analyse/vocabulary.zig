@@ -4,11 +4,13 @@
 //!   :Shape :: [circle], [box]         a declared type and its labels
 //!   :Side :: :Facing, :On             a declared type and its members
 //!   :Angle :: :Number!                one member: the numbers and twins
+//!   :Style :: { &node :x :: :Color }  a record type and its descriptors
 //!   (&edge, &cell) :side :: :Side     a function's signature
 //!   :Color [warn] := [red]            a named value, its type a contract
 //!
 //! Types are declared, never named (statements.md §22.8); a declaration
-//! repeated adds to its type.
+//! repeated adds to its type. A type holds values or descriptors, never both
+//! (§22.9).
 //!
 //! Names are defined once, before use, in source order. Bundles are
 //! functions too, defined by records (`records.zig`).
@@ -18,6 +20,8 @@ const Cst = @import("../parse/Cst.zig");
 const Analyser = @import("Analyser.zig");
 const Env = @import("Env.zig");
 const value = @import("value.zig");
+const definitions = @import("definitions.zig");
+const records = @import("records.zig");
 
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
@@ -27,8 +31,9 @@ const TypeIndex = Env.TypeIndex;
 // Declarations
 
 /// `:T :: …`: a new declared type, or what a declaration adds to one. Each
-/// item is a label (`[circle]`) or a member, a type whose values the type
-/// holds (`:Number!`, `:Facing`, `[:Tip/:Stroke/:Tip]`).
+/// item is a label (`[circle]`), a member, a type whose values the type
+/// holds (`:Number!`, `:Facing`, `[:Tip/:Stroke/:Tip]`), or a signature,
+/// which makes it a record type (`&node :fill :: :Color`).
 pub fn declareType(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     const env = &a.env;
@@ -44,6 +49,10 @@ pub fn declareType(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOf
 
     var one: [1]Node.Index = undefined;
     for (itemsOf(cst, body, &one)) |item| {
+        if (cst.tag(item) == .statement) {
+            try descriptor(a, t, item);
+            continue;
+        }
         if (isTypeItem(cst, item)) {
             try member(a, t, type_token, item);
             continue;
@@ -61,6 +70,10 @@ pub fn declareType(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOf
                 continue;
             },
         };
+        switch (a.env.get(t)) {
+            .declared => |id| a.env.declared.items[id].holds = .values,
+            else => {},
+        }
         const text = cst.tokenText(token);
         try define(a, text[1 .. text.len - 1], .{ .type = t, .token = token, .body = null });
     }
@@ -87,6 +100,32 @@ fn isTypeItem(cst: *const Cst, item: Node.Index) bool {
     };
 }
 
+/// `&node :fill :: :Color` in `:Style :: { … }`: a descriptor of the record
+/// type `t`. Inside a type, `::` declares only signatures, and nothing is
+/// named.
+fn descriptor(a: *Analyser, t: TypeIndex, item: Node.Index) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const head, const body = cst.data(item).nodes;
+    if (cst.tokenTag(cst.mainToken(item)) == .defn) {
+        try a.fail(.naming_in_type, cst.mainToken(item));
+        return;
+    }
+    if (cst.tag(head) != .entry or !definitions.isVocabulary(cst, head)) {
+        try a.fail(.bad_declaration_head, cst.firstToken(head));
+        return;
+    }
+    const holds = switch (a.env.get(t)) {
+        .declared => |id| &a.env.declared.items[id].holds,
+        else => null,
+    };
+    if (holds == null or holds.?.* == .values) {
+        try a.fail(.descriptors_on_value_type, cst.firstToken(item));
+        return;
+    }
+    holds.?.* = .descriptors;
+    try signature(a, head, body, t);
+}
+
 /// Adds the values of `item`'s type to the declared type `t`.
 fn member(a: *Analyser, t: TypeIndex, type_token: TokenIndex, item: Node.Index) error{OutOfMemory}!void {
     const m = try typeExpression(a, item) orelse return;
@@ -98,6 +137,14 @@ fn member(a: *Analyser, t: TypeIndex, type_token: TokenIndex, item: Node.Index) 
             return;
         },
     };
+    // A record type holds descriptors only.
+    switch (a.env.declared.items[id].holds) {
+        .descriptors => {
+            try a.fail(.labels_on_structure, type_token);
+            return;
+        },
+        else => a.env.declared.items[id].holds = .values,
+    }
     if (a.env.includes(m, t)) {
         try a.fail(.type_includes_itself, a.cst.firstToken(item));
         return;
@@ -122,8 +169,9 @@ pub fn labelToken(cst: *const Cst, node: Node.Index) union(enum) { label: TokenI
     };
 }
 
-/// `(&node, &zone) :fill :: :Color`.
-pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
+/// `(&node, &zone) :fill :: :Color`, at the top level (`record` null) or in
+/// a record type's declaration.
+pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index, record: ?TypeIndex) error{OutOfMemory}!void {
     const cst = a.cst;
     const parts = cst.children(head);
     var classes: Env.Classes = .empty;
@@ -137,7 +185,7 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMe
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;
     }
-    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token };
+    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record };
 }
 
 /// The classes of `&node` or `(&node, &zone)`. Whether all are known.
@@ -160,10 +208,14 @@ pub fn readClasses(a: *Analyser, node: Node.Index, classes: *Env.Classes) error{
 // ---------------------------------------------------------------------------
 // Definitions
 
-/// `[warn] := [red]`, `:Color [warn] := [red]`, `:Record [dark] := { … }`.
+pub const NamedValue = struct { contract: ?TypeIndex, name: ?[]const u8 };
+
+/// `[warn] := [red]`, `:Color [warn] := [red]`, `:Style [dark] := { … }`.
 /// The name takes the type written before it, a contract the value must
-/// fit, or else the value's own type.
-pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!void {
+/// fit, or else the value's own type. Returns the contract, and the name
+/// defined, if any. A record's structure is checked against a record type's
+/// contract descriptor by descriptor (`records.theme`), not here.
+pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemory}!NamedValue {
     const cst = a.cst;
     const name_node, const contract_node: ?Node.Index = if (cst.tag(head) == .o_chain)
         .{ cst.children(head)[1], cst.children(head)[0] }
@@ -173,20 +225,30 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
 
     const contract: ?TypeIndex = if (contract_node) |node| try typeExpression(a, node) else null;
     const actual = try typeOf(a, body);
-    if (contract) |expected|
-        try check(a, actual, expected, .contract_broken, cst.firstToken(body), cst.firstToken(contract_node.?));
+    if (contract) |expected| {
+        const at = cst.firstToken(body);
+        try check(a, actual, expected, .contract_broken, at, cst.firstToken(contract_node.?));
+        // `:Style [both] := [x/y]`: named records, by their structure.
+        if (cst.tag(body) == .leaf and a.env.fits(actual, expected)) try records.structure(a, body, expected, .contract_broken);
+    }
+    const none: NamedValue = .{ .contract = contract, .name = null };
 
     // The name: one name, alone in its bracket.
     var reader = value.read(cst.tokenText(name_token));
-    const element = (reader.next() catch return) orelse {
+    const element = (reader.next() catch return none) orelse {
         try a.fail(.bad_naming_head, name_token);
-        return;
+        return none;
     };
-    if (element.kind != .name or element.inverted or (reader.next() catch return) != null) {
+    if (element.kind != .name or element.inverted or (reader.next() catch return none) != null) {
         try a.fail(.bad_naming_head, name_token);
-        return;
+        return none;
     }
-    try define(a, element.text, .{ .type = contract orelse actual, .token = name_token, .body = body });
+    // A name for named records keeps their structure.
+    const contents: []Env.Content = if (cst.tag(body) == .leaf) try records.named(a, body) else &.{};
+    // A contract names no record type: a record keeps its structure only.
+    const t = if (cst.tag(body) == .block) actual else contract orelse actual;
+    try define(a, element.text, .{ .type = t, .token = name_token, .body = body, .contents = contents });
+    return .{ .contract = contract, .name = element.text };
 }
 
 /// Defines a bracket name, once.
@@ -327,8 +389,9 @@ fn notAType(a: *Analyser, node: Node.Index) error{OutOfMemory}!?TypeIndex {
 }
 
 /// A value's type, read from its shape: `"…"` text, `$…$` math, `{ … }` a
-/// record, a bracket its elements' (one, or a tuple of several; `[]` nil).
-/// A name not yet defined is reported, and is unknown.
+/// record (checked by its structure where used), a bracket its elements' (one, or a tuple
+/// of several; `[]` nil). A name not yet defined is reported, and is
+/// unknown.
 pub fn typeOf(a: *Analyser, node: Node.Index) error{OutOfMemory}!TypeIndex {
     const cst = a.cst;
     if (cst.tag(node) == .block) return .record;

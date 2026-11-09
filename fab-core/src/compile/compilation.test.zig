@@ -192,7 +192,7 @@ test "running out of memory at any allocation leaks nothing" {
         \\review :: a b
         \\G :style { f :label "x" | g, :fill [red] }
         \\G :prove { :axiom.[a] (f == g ~= h), :lemma (#M :pushout) }
-        \\:Record [x] := { [ink] := [#fff], [ink] :: :Color, &edge :fill [red] }
+        \\:Style [x] := { [ink] := [#fff], [ink] :: :Color, &edge :fill [red] }
         \\J :: +(f, g)+ | f/α/g, f/β/g | α/m/β, f/γ
         \\
     ;

@@ -179,6 +179,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Inside braces, `::` declares in the type being declared (`:Style :: { &node :fill :: :Color }`). A record binds values; it declares nothing.",
             .hint = "Name it with `:=`, as a token: `[ink] := [#dddddd]`.",
         },
+        .naming_in_type => .{
+            .message = "A naming in a type",
+            .explanation = "`::` declares and `:=` names, and neither holds the other: a type's declaration holds signatures (`:Style :: { &node :fill :: :Color }`), never values.",
+            .hint = "Name it in a record of that type instead: `:Style [x] := { [ink] := [#fff] }`.",
+        },
         .owner_after_part => .{
             .message = "{} describes the owner after a part",
             .explanation = "A descriptor with no context describes the block's owner. Written after the parts' descriptions, it is easy to read as one of theirs.",
@@ -241,7 +246,7 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .not_a_type => .{
             .message = "{} is not a type",
-            .explanation = "A type is `:Text`, `:Math`, `:Color`, `:Number`, `:Range`, `:Flag`, `:Record` or a type declared before, and is written like its values: `:A, :B` a choice, `[:A/:B]` a tuple, `[:A]` a list, `:A!` with its twins.",
+            .explanation = "A type is `:Text`, `:Math`, `:Color`, `:Number`, `:Range`, `:Flag`, `:Nil` or a type declared before, and is written like its values: `:A, :B` a choice, `[:A/:B]` a tuple, `[:A]` a list, `:A!` with its twins.",
             .hint = "Check the spelling, or declare the type first: `:Shape :: [circle]`.",
         },
         .type_with_parameters => .{
@@ -281,8 +286,13 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .labels_on_structure => .{
             .message = "{} cannot take labels",
-            .explanation = "Labels go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record holds descriptors, so neither takes any.",
+            .explanation = "Labels and types go on declared types and on single values (`:Color :: [ink]`). A flag is on or off, and a record type holds descriptors, so neither takes any.",
             .hint = "Declare a type of your own: `:Mood :: [calm], [busy]`.",
+        },
+        .descriptors_on_value_type => .{
+            .message = "Descriptors on a type of values",
+            .explanation = "A type holds values or descriptors, never both: `:Shape :: [circle]` holds labels, `:Style :: { &node :fill :: :Color }` descriptors.",
+            .hint = "Declare the descriptor in a record type: `:Style :: { &node :x :: :Color }`.",
         },
         .unknown_class => .{
             .message = "{} is not a class",
@@ -296,12 +306,12 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
         },
         .does_not_apply => .{
             .message = "{} does not apply here",
-            .explanation = "An attribute applies to the classes its signature names, and to the classes inside them: what applies to `&node` applies to `&choice`. A bundle applies where all its contents apply.",
+            .explanation = "An attribute applies to the classes its signature names, and to the classes inside them: what applies to `&node` applies to `&choice`; and in records of its own record type: `:pk` in a `:Proposition`, not a `:Style`. A bundle applies where all its contents apply.",
             .hint = "Move it to a subject it applies to, or split the bundle.",
         },
         .wrong_type => .{
             .message = "{} is not of the type this attribute takes",
-            .explanation = "Every attribute takes values of one type, stated by its signature: `:shape` takes a `:Shape`, `:theme` a list of records. A bundle takes no value: it is defined by a record.",
+            .explanation = "Every attribute takes values of one type, stated by its signature: `:shape` takes a `:Shape`, `:theme` a list of styles. A bundle takes no value: it is defined by a record.",
             .hint = "Give a value of the attribute's type.",
         },
         .value_given_to_flag => .{

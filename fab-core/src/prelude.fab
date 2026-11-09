@@ -9,13 +9,13 @@
 //
 // Four sorts of name:
 //   :Type        types, UpperCamel
-//   :function    functions (attributes), lowercase-kebab
+//   :descriptor  descriptors (attributes), lowercase-kebab
 //   [value]      named values and labels, lowercase-kebab
 //   [>] [X]      symbols: glyphs, with at most one capital letter
 //
 // The built-in types are the language, not written here:
 //   :Text "…"   :Math $…$   :Color [#…]   :Number [2] [0.5]
-//   :Range [0..*]   :Flag (written or not)   :Record { … }
+//   :Range [0..*]   :Flag (written or not)   :Nil []
 //
 // The rest are declared, and spelled like their values (statements.md
 // §22.8): :A, :B a choice, [:A/:B] a tuple, [:A] a list, :A! the values of
@@ -29,7 +29,9 @@
 :Angle    :: :Number!       // in degrees; [30!] is the inner side
 :Fraction :: :Number        // 0 to 1, a position along an edge
 
-:Label :: :Text, :Math
+// Nil leaves a label to its computed default, the element's name; "" is an
+// empty label, written on purpose.
+:Label :: :Text, :Math, :Nil
 
 // Labels: each is declared in exactly one type. Words two types share get
 // a type of their own, which both include (:Facing). Nothing is written
@@ -86,56 +88,73 @@
 :Color [purple] := [#8250df]
 :Color [pink]   := [#bf3989]
 
-// ── 3. Functions ──────────────────────────────────────────────────────
+// ── 3. Descriptors ────────────────────────────────────────────────────
 
-// subject :function :: type. The subjects are the classes it applies to;
-// anywhere else it is "does not apply". Zig gives each its meaning, and a
-// renderer reports a function or a label it cannot draw.
+// :Style is a record type, declared by its descriptors: context :name ::
+// type. The context is the classes it applies to; anywhere else it is
+// "does not apply". Zig gives each its meaning, and a renderer reports a
+// descriptor or a label it cannot draw. Each group adds to :Style.
 
 // Text
-(&node, &edge, &cell, &zone) :label :: :Label
-(&node, &edge, &cell, &zone) :font  :: :Text
-(&node, &edge, &cell, &zone) :face  :: :Face
-(&node, &edge, &cell, &zone) :size  :: :Length
-(&node, &edge, &cell, &zone) :ink   :: :Color
+:Style :: {
+  (&node, &edge, &cell, &zone) :label :: :Label,
+  (&node, &edge, &cell, &zone) :font  :: :Text,
+  (&node, &edge, &cell, &zone) :face  :: :Face,
+  (&node, &edge, &cell, &zone) :size  :: :Length,
+  (&node, &edge, &cell, &zone) :ink   :: :Color
+}
 
 // Lines and fills
-(&node, &zone)               :fill   :: :Color
-(&node, &edge, &cell, &zone) :stroke :: :Color
-(&node, &edge, &cell, &zone) :pen    :: :Pen
-(&node, &zone)               :line   :: :Line, :Nil
+:Style :: {
+  (&node, &zone)               :fill   :: :Color,
+  (&node, &edge, &cell, &zone) :stroke :: :Color,
+  (&node, &edge, &cell, &zone) :pen    :: :Pen,
+  (&node, &zone)               :line   :: (:Line, :Nil)
+}
 
 // Nodes
-&node          :shape   :: :Shape, :Nil
-&node          :width   :: :Length    // a minimum
-&node          :height  :: :Length    // a minimum
-(&node, &zone) :padding :: :Length
-&node          :align   :: :Span
-&node          :wrap    :: :Length
+:Style :: {
+  &node          :shape   :: (:Shape, :Nil),
+  &node          :width   :: :Length,    // a minimum
+  &node          :height  :: :Length,    // a minimum
+  (&node, &zone) :padding :: :Length,
+  &node          :align   :: :Span,
+  &node          :wrap    :: :Length
+}
 
 // Edges and cells
-(&edge, &cell) :arrow       :: :Arrow
-(&edge, &cell) :bend        :: :Facing, :Angle
-(&edge, &cell) :label-start :: :Label
-(&edge, &cell) :label-end   :: :Label
-(&edge, &cell) :label-at    :: :Span, :Fraction
-(&edge, &cell) :side        :: :Side
-(&edge, &cell) :shorten     :: :Length
+:Style :: {
+  (&edge, &cell) :arrow       :: :Arrow,
+  (&edge, &cell) :bend        :: (:Facing, :Angle),
+  (&edge, &cell) :label-start :: :Label,
+  (&edge, &cell) :label-end   :: :Label,
+  (&edge, &cell) :label-at    :: (:Span, :Fraction),
+  (&edge, &cell) :side        :: :Side,
+  (&edge, &cell) :shorten     :: :Length
+}
 
 // Zones
-&zone :as      :: :As
-&zone :caption :: :Label
-&zone :theme   :: [:Record]            // applied left to right
-&zone :marks   :: :All, :Nil
-&zone :cross   :: :Cross
-&zone :alt     :: :Text
+:Style :: {
+  &zone :as      :: :As,
+  &zone :caption :: :Label,
+  &zone :theme   :: [:Style],            // applied left to right
+  &zone :marks   :: (:All, :Nil),
+  &zone :cross   :: :Cross,
+  &zone :alt     :: :Text
+}
 
 // Behaviour. A flag is true when written, false otherwise; :hide! turns
 // it back off in a later layer.
-(&node, &edge, &cell)        :hide :: :Flag
-(&node, &edge, &cell, &zone) :note :: :Text
-(&node, &edge, &cell, &zone) :link :: :Text
-(&node, &edge, &cell)        :step :: :Number
+:Style :: {
+  (&node, &edge, &cell)        :hide :: :Flag,
+  (&node, &edge, &cell, &zone) :note :: :Text,
+  (&node, &edge, &cell, &zone) :link :: :Text,
+  (&node, &edge, &cell)        :step :: :Number
+}
+
+// The layer: a diagram's style, a record applied with the diagram as its
+// owner. Declared outside :Style, so it describes at the top level only.
+&zone :style :: :Style
 
 // ── 4. Named arrows ───────────────────────────────────────────────────
 
@@ -164,11 +183,12 @@
 //                  longest label
 //   &parallel      as wide as its busier side needs
 //
-// [base] binds nothing computed, or it would hide it. Marks bind :label ""
+// [base] binds a computed descriptor to nil, [], which leaves it to the
+// computation: :label [] is the element's name. Marks bind :label "", empty
 // on purpose: a choice, a parallel, a start or an end is a shape that says
-// what it is.
+// what it is; &choice :label [] gives their names back.
 
-:Record [base] := {
+:Style [base] := {
   [ink] := [#333333],
   [soft] := [#555555],
   [muted] := [#888888],
@@ -178,7 +198,7 @@
   [unsupported] := [#8250df],
 
   &node {
-    :shape [circle], :stroke [ink], :pen [normal], :line [solid],
+    :label [], :shape [circle], :stroke [ink], :pen [normal], :line [solid],
     :align [center], :face [regular], :ink [ink], :size [1]
   },
   &choice    { :shape [diamond], :label "" },
@@ -189,31 +209,35 @@
   &canonical { :face [italic], :ink [muted] },
 
   &edge {
+    :label [], :label-start [], :label-end [],
     :arrow [/solid/>], :pen [normal], :ink [soft], :size [0.85],
     :label-at [center], :side [outer]
   },
-  &cell { :pen [normal], :ink [soft], :size [0.85], :side [outer] },
+  &cell {
+    :label [], :label-start [], :label-end [],
+    :pen [normal], :ink [soft], :size [0.85], :side [outer]
+  },
 
-  &zone { :as [cluster], :cross [gap], :marks [all] }
+  &zone { :label [], :caption [], :as [cluster], :cross [gap], :marks [all] }
 }
 
 // ── 6. Built-in themes ────────────────────────────────────────────────
 
-:Record [dark] := {
+:Style [dark] := {
   [ink] := [#dddddd],
   [soft] := [#aaaaaa],
   [muted] := [#888888],
   &zone :fill [#1e1e1e]
 }
 
-:Record [print] := {
+:Style [print] := {
   [ink] := [#000000],
   [soft] := [#000000],
   [muted] := [#555555],
   [accent] := [#000000]
 }
 
-:Record [compact] := {
+:Style [compact] := {
   &node :padding [0.2],
   &zone :padding [0.5]
 }

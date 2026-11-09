@@ -28,8 +28,11 @@ statement
     | part
     ;
 
+# {}, the empty record, is a value only: after a descriptor (G :style {})
+# or as a naming's body (:Style [x] := {}). Elsewhere empty braces are a
+# syntax error (G :: {}, :Style :: {}).
 block
-    = L_CUR levels R_CUR
+    = L_CUR [ levels ] R_CUR
     ;
 
 levels
