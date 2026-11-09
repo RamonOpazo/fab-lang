@@ -20,9 +20,9 @@ const Cst = @import("../parse/Cst.zig");
 const Parser = @import("../parse/Parser.zig");
 const Ir = @import("../analyse/Ir.zig");
 const Analyser = @import("../analyse/Analyser.zig");
-const Sheet = @import("../format/Sheet.zig");
-const Style = @import("../format/Style.zig");
-const Formatter = @import("../format/Formatter.zig");
+const Sheet = @import("../style/Sheet.zig");
+const Style = @import("../style/Style.zig");
+const Styler = @import("../style/Styler.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Env = @import("../analyse/Env.zig");
 
@@ -45,7 +45,7 @@ prelude_cst: ?Cst = null,
 lexed: ?std.MultiArrayList(Token) = null,
 parsed: ?Cst = null,
 analysed: ?Analyser.Result = null,
-formatted: ?Sheet = null,
+styled: ?Sheet = null,
 /// The severity each IR issue is drawn with, for the style pass.
 issue_marks: ?[]Style.Mark = null,
 /// Syntax diagnostics first, then analysis diagnostics, each in the order
@@ -99,7 +99,7 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8, tolerance: Tolerance) er
 pub fn deinit(c: *Compilation) void {
     if (c.lexed) |*list| list.deinit(c.gpa);
     if (c.parsed) |*tree| tree.deinit(c.gpa);
-    if (c.formatted) |*s| s.deinit();
+    if (c.styled) |*s| s.deinit();
     if (c.issue_marks) |m| c.gpa.free(m);
     if (c.analysed) |*result| result.deinit(c.gpa);
     if (c.prelude_cst) |*tree| tree.deinit(c.gpa);
@@ -140,8 +140,8 @@ pub fn ir(c: *Compilation) error{OutOfMemory}!?*const Ir {
 /// null when `ir` is.
 pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
     const graph = try c.ir() orelse return null;
-    if (c.formatted == null) c.formatted = try Formatter.format(c.gpa, graph, try c.marks());
-    return &c.formatted.?;
+    if (c.styled == null) c.styled = try Styler.style(c.gpa, graph, try c.marks());
+    return &c.styled.?;
 }
 
 /// The severity each issue of the analysed IR is drawn with: its
@@ -192,12 +192,12 @@ pub fn status(c: *Compilation) error{OutOfMemory}!Status {
 /// How a diagram is drawn for its diagnostics (spec, Errors): a border in the
 /// colour of the most severe one, and a label while any is unsupported
 /// (spec/statements.md §15.3).
-pub const ZoneMark = Formatter.ZoneMark;
+pub const ZoneMark = Styler.ZoneMark;
 
 /// The mark of a zone, as the style pass draws it, whether or not the IR is
 /// withheld.
 pub fn zoneMark(c: *Compilation, zone: Ir.ZoneIndex) error{OutOfMemory}!ZoneMark {
-    return Formatter.zoneMark(&(try c.analysis()).ir, try c.marks(), zone);
+    return Styler.zoneMark(&(try c.analysis()).ir, try c.marks(), zone);
 }
 
 /// The diagnostic an IR issue comes from.

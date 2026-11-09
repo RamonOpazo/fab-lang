@@ -1,4 +1,4 @@
-//! Tests for the format pass: Style.zig, Formatter.zig and Sheet.zig.
+//! Tests for the style pass: Style.zig, Styler.zig and Sheet.zig.
 
 const std = @import("std");
 const testing = std.testing;
@@ -172,7 +172,7 @@ test "a placeholder is drawn as one, framed by its error" {
 test "a marked edge takes the colour; a solid shape's fill follows its line" {
     // No analysis error marks an edge yet, so the IR is made by hand.
     const Ir = @import("../analyse/Ir.zig");
-    const Formatter = @import("Formatter.zig");
+    const Styler = @import("Styler.zig");
     var b: Ir.Builder = .init(testing.allocator);
     errdefer b.deinit();
     const z = try b.addZone(.{ .name = try b.addString("G"), .own = null });
@@ -185,7 +185,7 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     var ir = try b.finish();
     defer ir.deinit(testing.allocator);
 
-    var s = try Formatter.format(testing.allocator, &ir, &.{ .warning, .unsupported, .@"error" });
+    var s = try Styler.style(testing.allocator, &ir, &.{ .warning, .unsupported, .@"error" });
     defer s.deinit();
     try testing.expectEqual(amber, s.edges[0].stroke);
     // The start is a dot: its fill is its line.

@@ -1,7 +1,7 @@
-//! The product of the format pass: a resolved Style for every node, edge and
+//! The product of the style pass: a resolved Style for every node, edge and
 //! zone of an IR, the way a style sheet maps elements to styles.
 //!
-//! Made by Formatter.zig. A Sheet borrows the IR, which must outlive it, and
+//! Made by Styler.zig. A Sheet borrows the IR, which must outlive it, and
 //! owns its tables and the labels that aren't in the IR's strings.
 
 const std = @import("std");

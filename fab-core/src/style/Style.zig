@@ -19,7 +19,7 @@
 //! Marks come last, so no program can paint over an issue (statements.md
 //! §18).
 //!
-//! Field names follow the spec's format methods, where they exist.
+//! Field names follow the spec's descriptors, where they exist.
 
 const std = @import("std");
 

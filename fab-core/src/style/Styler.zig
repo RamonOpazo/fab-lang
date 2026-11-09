@@ -1,10 +1,10 @@
-//! The format pass: Ir → Sheet, the IR with every entity's look resolved.
+//! The style pass: Ir → Sheet, the IR with every entity's look resolved.
 //!
 //! For each node, edge and zone, the cascade is folded once, in order:
 //!
 //!   kind defaults ⊕ built-in classes ⊕ named classes ⊕ direct attributes ⊕ marks
 //!
-//! The format layer (`:format`) isn't analysed yet, so today only the first
+//! The style layer (`:style`) isn't read here yet, so today only the first
 //! two layers have content: kind defaults, and the built-in classes `.node`,
 //! `.edge`, `.zone` and `.canonical`. Named classes and direct attributes
 //! will be folded in later without changing the fold.
@@ -32,7 +32,7 @@
 //! its name while any is unsupported. A placeholder is drawn as one.
 //!
 //! As with Parser and Analyser, the fields are the pass's working state, and
-//! `format` is the entry point.
+//! `style` is the entry point.
 
 const std = @import("std");
 const Ir = @import("../analyse/Ir.zig");
@@ -41,7 +41,7 @@ const Sheet = @import("Sheet.zig");
 const Attrs = Style.Attrs;
 const Mark = Style.Mark;
 
-const Formatter = @This();
+const Styler = @This();
 
 gpa: std.mem.Allocator,
 ir: *const Ir,
@@ -55,9 +55,9 @@ const Span = struct { node: usize, start: usize, end: usize };
 
 /// Resolves every node, edge and zone of `ir`, with `marks[i]` the severity
 /// of issue i. The Sheet borrows `ir`.
-pub fn format(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{OutOfMemory}!Sheet {
+pub fn style(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{OutOfMemory}!Sheet {
     std.debug.assert(marks.len == ir.issues.len);
-    var f: Formatter = .{ .gpa = gpa, .ir = ir };
+    var f: Styler = .{ .gpa = gpa, .ir = ir };
     defer f.labels.deinit(gpa);
     defer f.spans.deinit(gpa);
 
@@ -82,27 +82,27 @@ pub fn format(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{
 
     const nodes = try gpa.alloc(Style, ir.nodes.len);
     errdefer gpa.free(nodes);
-    for (nodes, reached, node_marks, 0..) |*style, arrived, m, i| {
+    for (nodes, reached, node_marks, 0..) |*resolved, arrived, m, i| {
         const attrs = try f.node(i, arrived);
-        style.* = attrs.over(markLayer(m, attrs.shape)).resolve();
+        resolved.* = attrs.over(markLayer(m, attrs.shape)).resolve();
     }
 
     const edges = try gpa.alloc(Style, ir.edges.len);
     errdefer gpa.free(edges);
-    for (edges, ir.edges.items(.name), edge_marks) |*style, name, m| {
-        style.* = builtin.edge.over(.{ .label = ir.string(name) }).over(markLayer(m, null)).resolve();
+    for (edges, ir.edges.items(.name), edge_marks) |*resolved, name, m| {
+        resolved.* = builtin.edge.over(.{ .label = ir.string(name) }).over(markLayer(m, null)).resolve();
     }
 
     const zones = try gpa.alloc(Style, ir.zones.len);
     errdefer gpa.free(zones);
-    for (zones, ir.zones.items(.name), ir.zones.items(.placeholder), 0..) |*style, name, placeholder, z| {
+    for (zones, ir.zones.items(.name), ir.zones.items(.placeholder), 0..) |*resolved, name, placeholder, z| {
         var attrs = builtin.zone.over(.{ .label = ir.string(name) });
         if (placeholder) attrs = attrs.over(.{ .as = .placeholder });
         const mark = zoneMark(ir, marks, @fromBackingInt(@as(u32, @intCast(z))));
         if (mark.border) |b| attrs = attrs.over(.{ .stroke = b.color() });
         // In its own colour, even under a red frame (statements.md §15.3).
         if (mark.unsupported) attrs = attrs.over(.{ .caption = .{ .text = "unsupported", .ink = Mark.unsupported.color() } });
-        style.* = attrs.resolve();
+        resolved.* = attrs.resolve();
     }
 
     const owned = try f.labels.toOwnedSlice(gpa);
@@ -149,8 +149,8 @@ fn markLayer(mark: ?Mark, shape: ?Style.Shape) Attrs {
 
 /// The cascade for node `i`, before marks; `arrived` says whether some edge
 /// ends at it. A canonical label is recorded in `labels` and filled in by
-/// `format` at the end.
-fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Attrs {
+/// `style` at the end.
+fn node(f: *Styler, i: usize, arrived: bool) error{OutOfMemory}!Attrs {
     const n = f.ir.nodes.get(i);
     var attrs = kindDefault(n.kind, arrived).over(builtin.node);
     if (isMark(n.kind)) {
@@ -170,7 +170,7 @@ fn node(f: *Formatter, i: usize, arrived: bool) error{OutOfMemory}!Attrs {
 }
 
 /// `+f` for a domain, `f+` for a codomain.
-fn writeCanonical(f: *Formatter, end: Ir.End) error{OutOfMemory}!void {
+fn writeCanonical(f: *Styler, end: Ir.End) error{OutOfMemory}!void {
     const name = f.ir.string(f.ir.edges.items(.name)[@backingInt(end.edge)]);
     if (end.side == .dom) try f.labels.append(f.gpa, '+');
     try f.labels.appendSlice(f.gpa, name);
@@ -202,7 +202,7 @@ fn isMark(kind: Ir.Node.Kind) bool {
     };
 }
 
-/// The built-in classes. The format layer will let a program override them.
+/// The built-in classes. The style layer will let a program override them.
 pub const builtin = struct {
     pub const node: Attrs = .empty;
     pub const edge: Attrs = .empty;
@@ -213,5 +213,5 @@ pub const builtin = struct {
 };
 
 test {
-    _ = @import("format.test.zig");
+    _ = @import("style.test.zig");
 }
