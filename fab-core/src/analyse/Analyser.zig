@@ -104,6 +104,8 @@ pub const Result = struct {
     env: Env,
     /// The layers' descriptions, resolved: what the style pass applies.
     bindings: []const layers.Binding = &.{},
+    /// The tokens diagrams' own layers bind, after their themes.
+    tokens: []const layers.Token = &.{},
     /// Every name the program uses, with what it names: for the language
     /// server. In source order.
     references: []const Reference = &.{},
@@ -113,6 +115,7 @@ pub const Result = struct {
         result.env.deinit(gpa);
         gpa.free(result.errors);
         gpa.free(result.bindings);
+        gpa.free(result.tokens);
         gpa.free(result.references);
         result.* = undefined;
     }
@@ -127,6 +130,7 @@ env: Env,
 /// The layers' descriptions read so far, and the contexts naming subjects:
 /// nodes still elements until the graph is built (`layers.finish`).
 bindings: std.ArrayList(layers.PendingBinding) = .empty,
+tokens: std.ArrayList(layers.Token) = .empty,
 contexts: std.ArrayList(layers.PendingReference) = .empty,
 /// The names used so far, with what they name: nodes still elements, and
 /// cells still tokens, until the graph is built.
@@ -206,6 +210,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     defer a.arena.deinit();
     defer a.zones.deinit(gpa);
     defer a.bindings.deinit(gpa);
+    defer a.tokens.deinit(gpa);
     defer a.contexts.deinit(gpa);
     defer a.references.deinit(gpa);
     defer a.failed.deinit(gpa);
@@ -234,10 +239,12 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     errdefer gpa.free(bindings);
     const references = try a.sortedReferences();
     errdefer gpa.free(references);
+    const tokens = try a.tokens.toOwnedSlice(gpa);
+    errdefer gpa.free(tokens);
 
     const errors = try a.errors.toOwnedSlice(gpa);
     errdefer gpa.free(errors);
-    return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env, .bindings = bindings, .references = references };
+    return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env, .bindings = bindings, .tokens = tokens, .references = references };
 }
 
 /// Records a use of a name: `text` is a slice of the program, a token or a

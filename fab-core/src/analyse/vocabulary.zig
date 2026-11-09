@@ -18,6 +18,7 @@
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
 const Analyser = @import("Analyser.zig");
+const decode = @import("decode.zig");
 const Env = @import("Env.zig");
 const value = @import("value.zig");
 const definitions = @import("definitions.zig");
@@ -257,6 +258,10 @@ pub fn namedValue(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfM
     // A contract names no record type: a record keeps its structure only.
     const t = if (cst.tag(body) == .block) actual else contract orelse actual;
     try define(a, element.text, .{ .type = t, .token = name_token, .body = body, .contents = contents });
+    // Decoded once checked, if this definition is the one kept.
+    if (a.env.values.getPtr(element.text)) |v| if (v.body == body) {
+        v.decoded = try decode.of(a, body, t);
+    };
     return .{ .contract = contract, .name = element.text };
 }
 

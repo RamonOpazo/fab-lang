@@ -242,6 +242,7 @@ fn preludeEnv(c: *Compilation) error{OutOfMemory}!Env {
     result.ir.deinit(c.gpa);
     c.gpa.free(result.errors);
     c.gpa.free(result.bindings);
+    c.gpa.free(result.tokens);
     c.gpa.free(result.references);
     c.prelude_cst = tree;
     result.env.adopt();

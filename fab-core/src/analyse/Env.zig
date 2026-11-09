@@ -18,6 +18,7 @@
 
 const std = @import("std");
 const Cst = @import("../parse/Cst.zig");
+const decoded = @import("decoded.zig");
 
 const Env = @This();
 const TokenIndex = Cst.TokenIndex;
@@ -38,6 +39,9 @@ values: std.StringHashMapUnmanaged(Value) = .empty,
 functions: std.StringHashMapUnmanaged(Function) = .empty,
 /// The declared types, by identity: what each holds besides its labels.
 declared: std.ArrayList(Declared) = .empty,
+/// Named records and bundles' bodies, decoded (plan step 9d2): what
+/// `decoded.Value.record` and `Function.body` index.
+records: std.ArrayList(decoded.Record) = .empty,
 
 pub const TypeIndex = enum(u32) {
     text,
@@ -104,6 +108,8 @@ pub const Value = struct {
     contents: []Content = &.{},
     /// Defined in the prelude: `token` and `body` are the prelude's.
     prelude: bool = false,
+    /// The value it names, decoded once it is checked; null for a label.
+    decoded: ?decoded.Value = null,
 };
 
 pub const Function = struct {
@@ -123,6 +129,8 @@ pub const Function = struct {
     /// what it is checked by where it is used.
     contents: []Content = &.{},
     prelude: bool = false,
+    /// A bundle's body, decoded: what it binds where it is used.
+    body: ?decoded.RecordIndex = null,
 };
 
 /// A descriptor in a bundle or a record, standing for the record type it
@@ -166,6 +174,7 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.types.deinit(gpa);
     for (env.declared.items) |*d| d.members.deinit(gpa);
     env.declared.deinit(gpa);
+    env.records.deinit(gpa);
     env.type_names.deinit(gpa);
     env.interned.deinit(gpa);
     env.type_table.deinit(gpa);

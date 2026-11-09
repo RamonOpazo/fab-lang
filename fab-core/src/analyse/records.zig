@@ -20,6 +20,7 @@ const Analyser = @import("Analyser.zig");
 const Env = @import("Env.zig");
 const definitions = @import("definitions.zig");
 const vocabulary = @import("vocabulary.zig");
+const decode = @import("decode.zig");
 const valueReader = @import("value.zig").read;
 
 const Node = Cst.Node;
@@ -95,6 +96,9 @@ pub fn bundle(a: *Analyser, name: Node.Index, body: Node.Index) error{OutOfMemor
         return err;
     };
     gop.value_ptr.* = .{ .classes = b.classes, .type = .flag, .token = name_token, .bundle = true, .contents = contents };
+    if (!isLiteral(cst, body)) {
+        gop.value_ptr.body = try decode.record(a, body, null);
+    }
 }
 
 /// A structure: the record types some descriptors belong to, one content
