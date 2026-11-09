@@ -4,6 +4,7 @@
 #   make test         run every package's tests, in dependency order
 #   make examples     check every example, then draw it to SVG (Graphviz)
 #   make install      install `fab` (release) into $(PREFIX)/bin
+#   make test-tree-sitter   the editors' grammar (needs Node; not in `test`)
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
 # each one, in dependency order: fab-core, then fab-render and fab-lsp, then
@@ -26,14 +27,14 @@ OPTIMIZE ?= ReleaseSafe
 PACKAGES := fab-core fab-render fab-lsp fab-cli
 
 .PHONY: all build test test-core test-render test-lsp test-cli examples \
-        release install uninstall fmt fmt-check check-graphviz clean help
+        tree-sitter test-tree-sitter release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
 	@echo "Targets: build test test-core test-render test-lsp test-cli examples release install"
-	@echo "         uninstall fmt fmt-check check-graphviz clean help"
+	@echo "         tree-sitter test-tree-sitter uninstall fmt fmt-check check-graphviz clean help"
 
 ## Building
 
@@ -83,6 +84,25 @@ examples: build
 		$(FAB) render "$$f" -e graphviz -f svg --verbosity quiet || exit 1; \
 		echo "    $${f%.fab}.svg"; \
 	done
+
+## The editors' grammar
+
+# tree-sitter-fab is outside fAB: it needs Node and the Tree-sitter CLI, so
+# `make test` never runs it, and without npm these targets only say so.
+# npm no longer runs install scripts, so the CLI's binary is fetched by hand.
+TS_DIR := tree-sitter-fab
+TS     := node_modules/.bin/tree-sitter
+
+tree-sitter:
+	@command -v npm >/dev/null 2>&1 || { echo "skip: tree-sitter-fab needs Node (npm)"; exit 0; }; \
+	cd $(TS_DIR) && { [ -x node_modules/tree-sitter-cli/tree-sitter ] \
+		|| { npm ci --no-audit --no-fund --silent && node node_modules/tree-sitter-cli/install.js; }; } \
+	&& $(TS) generate && echo "==> generated $(TS_DIR)/src"
+
+test-tree-sitter: tree-sitter
+	@command -v npm >/dev/null 2>&1 || exit 0; \
+	echo "==> test tree-sitter-fab"; \
+	cd $(TS_DIR) && $(TS) test && $(TS) parse -q -s $(addprefix ../,$(EXAMPLES)) ../fab-core/src/prelude.fab
 
 ## Installing fab
 

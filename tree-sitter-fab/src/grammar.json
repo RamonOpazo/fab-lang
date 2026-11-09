@@ -1,0 +1,484 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
+  "name": "fab",
+  "word": "edge_id",
+  "rules": {
+    "program": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "statement"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_eol"
+              },
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "statement"
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "_eol": {
+      "type": "STRING",
+      "value": "\n"
+    },
+    "statement": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "head",
+          "content": {
+            "type": "REPEAT1",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_element"
+            }
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "FIELD",
+                  "name": "operator",
+                  "content": {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "decl"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "defn"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "FIELD",
+                  "name": "body",
+                  "content": {
+                    "type": "REPEAT",
+                    "content": {
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "_element"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "bar"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "comma"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "group": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_element"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "comma"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "decl"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "defn"
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")"
+        }
+      ]
+    },
+    "_wide_group": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_wide_element"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "comma"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "decl"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "defn"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_eol"
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")"
+        }
+      ]
+    },
+    "block": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "{"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_wide_element"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "comma"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "bar"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "decl"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "defn"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_eol"
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "}"
+        }
+      ]
+    },
+    "_element": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_token"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "group"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "block"
+        }
+      ]
+    },
+    "_wide_element": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_token"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_wide_group"
+          },
+          "named": true,
+          "value": "group"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "block"
+        }
+      ]
+    },
+    "_token": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "zone_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "node_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "edge_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "attr_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "type_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "class_id"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "at"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "star"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "math"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "value"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "slash"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "marker"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "dot"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "iden"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "cong"
+        }
+      ]
+    },
+    "zone_id": {
+      "type": "PATTERN",
+      "value": "[A-Z][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "node_id": {
+      "type": "PATTERN",
+      "value": "#[A-Z][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "edge_id": {
+      "type": "PATTERN",
+      "value": "[a-z_\\u0080-\\u{10FFFF}][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "attr_id": {
+      "type": "PATTERN",
+      "value": ":[a-z][A-Za-z0-9_'\\-\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "type_id": {
+      "type": "PATTERN",
+      "value": ":[A-Z][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "class_id": {
+      "type": "PATTERN",
+      "value": "&[a-z][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "flags": "u"
+    },
+    "string": {
+      "type": "PATTERN",
+      "value": "\"([^\"\\\\\\n]|\\\\.)*\""
+    },
+    "math": {
+      "type": "PATTERN",
+      "value": "\\$([^$\\\\\\n]|\\\\.)*\\$"
+    },
+    "value": {
+      "type": "PATTERN",
+      "value": "\\[[^\\s\\[\\]\\(\\),]*\\]"
+    },
+    "at": {
+      "type": "STRING",
+      "value": "@"
+    },
+    "star": {
+      "type": "STRING",
+      "value": "*"
+    },
+    "slash": {
+      "type": "STRING",
+      "value": "/"
+    },
+    "marker": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "+"
+        },
+        {
+          "type": "STRING",
+          "value": "?"
+        },
+        {
+          "type": "STRING",
+          "value": "!"
+        }
+      ]
+    },
+    "dot": {
+      "type": "STRING",
+      "value": "."
+    },
+    "iden": {
+      "type": "STRING",
+      "value": "=="
+    },
+    "cong": {
+      "type": "STRING",
+      "value": "~="
+    },
+    "decl": {
+      "type": "STRING",
+      "value": "::"
+    },
+    "defn": {
+      "type": "STRING",
+      "value": ":="
+    },
+    "bar": {
+      "type": "STRING",
+      "value": "|"
+    },
+    "comma": {
+      "type": "STRING",
+      "value": ","
+    },
+    "comment": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "//"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[^\\n]*"
+          }
+        ]
+      }
+    }
+  },
+  "extras": [
+    {
+      "type": "PATTERN",
+      "value": "[ \\t\\r]"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "comment"
+    }
+  ],
+  "conflicts": [],
+  "precedences": [],
+  "externals": [],
+  "inline": [],
+  "supertypes": [],
+  "reserved": {}
+}

@@ -1,0 +1,15 @@
+{
+  "name": "tree-sitter-fab",
+  "version": "0.0.0",
+  "description": "fAB grammar for Tree-sitter: a language for diagrams",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "main": "bindings/node",
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "0.25.10"
+  }
+}

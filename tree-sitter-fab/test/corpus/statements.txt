@@ -1,0 +1,80 @@
+==================
+The three forms
+==================
+
+G :: f/g
+[x] := [red]
+G.f :arrow [epi]
+
+---
+
+(program
+  (statement
+    head: (zone_id)
+    operator: (decl)
+    body: (edge_id) body: (slash) body: (edge_id))
+  (statement
+    head: (value)
+    operator: (defn)
+    body: (value))
+  (statement
+    head: (zone_id) head: (dot) head: (edge_id) head: (attr_id) head: (value)))
+
+==================
+A line end ends a statement, even inside a group: recovered in the group
+==================
+
+G :: (f,
+g)
+
+---
+
+(program
+  (statement
+    head: (zone_id)
+    operator: (decl)
+    body: (group (edge_id) (comma) (ERROR) (edge_id))))
+
+==================
+Inside braces a line end is whitespace, at any depth
+==================
+
+:Style :: {
+  &node :fill :: :Color,
+  (&node,
+   &zone) :label :: :Label
+}
+
+---
+
+(program
+  (statement
+    head: (type_id)
+    operator: (decl)
+    body: (block
+      (class_id) (attr_id) (decl) (type_id) (comma)
+      (group (class_id) (comma) (class_id)) (attr_id) (decl) (type_id))))
+
+==================
+Names, markers, values and comments
+==================
+
+H :: #A/f+ g? ¬h' | α/β // a level up
+[base] := :Style { :arrow [/solid/>] }
+
+---
+
+(program
+  (statement
+    head: (zone_id)
+    operator: (decl)
+    body: (node_id) body: (slash) body: (edge_id) body: (marker)
+    body: (edge_id) body: (marker) body: (edge_id)
+    body: (bar)
+    body: (edge_id) body: (slash) body: (edge_id))
+  (comment)
+  (statement
+    head: (value)
+    operator: (defn)
+    body: (type_id)
+    body: (block (attr_id) (value))))

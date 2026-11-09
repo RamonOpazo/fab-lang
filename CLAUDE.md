@@ -18,10 +18,12 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 | `fab-cli/`    | The `fab` command, the only package that does I/O                             |
 | `fab-lsp/`    | The language server, over fab-core only (step L)                              |
 | `docs/`       | Empty, for later                                                              |
+| `tree-sitter-fab/` | The Tree-sitter grammar, for editors' highlighting: shallow, checked against `examples/` (step T) |
+| `editors/`    | Each editor's glue: `helix/`, `zed/`, later `vscode/`, `neovim/`              |
 | `examples/`   | `.fab` programs: the spec's Examples section, in the new syntax               |
 | `spec/`       | The language: spec, grammar and decision notes                                |
 
-Each package is a plain Zig project that depends only on the ones above it.
+Each package is a plain Zig project that depends only on the ones above it. fAB itself (fab-core, fab-render, fab-lsp, fab-cli) uses nothing but Zig and its standard library. Only `tree-sitter-fab/` and `editors/` may depend on other toolchains (Node, Rust, the Tree-sitter CLI), since editors need them; nothing in fAB builds or tests through them.
 
 **Tests** are separate from the code, beside it: `Lexer.zig` is tested by `lexer.test.zig` (the source's name, snake_case), which the source pulls in with a trailing `test { _ = @import("lexer.test.zig"); }`. Tests go file by file. Files with a logical dependency share one test file, named after their stage (its folder): a file built only by another is tested with it, so `lex.test.zig` covers Lexer and Token, `parse.test.zig` Parser and Cst, `analyse.test.zig` the analyser, `format.test.zig` the style pass. A behaviour can have its own file, as `recovery.test.zig` does. A test file sees only `pub` declarations.
 
@@ -71,6 +73,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
 | L    | Language server (after 9c, before 9d)     | L1 done |
+| T    | Tree-sitter grammar (after L1, before L2) | to try in the editors |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -216,6 +219,8 @@ Done when every level case passes.
 - **L2.** Navigation from `Result.references`: go to definition, references, hover (signatures, types, a node's canonical end), rename. The prelude as a read-only document, `fab://prelude.fab`.
 - **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
+
+**T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension pointing at this repository's subdirectory; if Zed can't take a subdirectory, the grammar moves to its own repository.
 
 **10. Renderer.** fab-render realises the new Style: arrows, ends, `:bend`, `:side`, theme tokens.
 

@@ -1,0 +1,13 @@
+G :: #A/f+ g
+// <- namespace
+//   ^ constant
+//      ^ function
+//       ^ operator
+G.f :label "x" { &node :fill [red] }
+//  ^ attribute
+//         ^ string
+//               ^ type.enum
+//                           ^ string.special
+:Color :: [red], [blue]
+// <- type
+//     ^ keyword.operator

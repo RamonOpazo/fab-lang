@@ -1,0 +1,15 @@
+id = "fab"
+name = "fAB"
+version = "0.0.1"
+schema_version = 1
+authors = ["Ramón Opazo"]
+description = "fAB, a language for diagrams: highlighting"
+repository = "https://github.com/RamonOpazo/fab-lang"
+
+# The grammar is a subdirectory of the fAB repository, at a commit. While
+# developing, `repository` may be a file:// URL to the local clone; `rev`
+# must still be a commit in it that holds tree-sitter-fab.
+[grammars.fab]
+repository = "https://github.com/RamonOpazo/fab-lang"
+rev = "COMMIT"
+path = "tree-sitter-fab"

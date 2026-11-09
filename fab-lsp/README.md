@@ -13,27 +13,6 @@ zig build test
 
 ## Editors
 
-Install `fab` (`make install` at the root), then point the editor at
-`fab lsp`.
-
-**Helix**, in `~/.config/helix/languages.toml`:
-
-```toml
-[language-server.fab]
-command = "fab"
-args = ["lsp"]
-
-[[language]]
-name = "fab"
-scope = "source.fab"
-file-types = ["fab"]
-comment-token = "//"
-indent = { tab-width = 2, unit = "  " }
-language-servers = ["fab"]
-```
-
-`hx --health fab` checks it. Helix shows the diagnostics (`space d`), but
-not semantic tokens: it colours only through Tree-sitter, which fAB has not
-got yet.
+`fab lsp` serves any editor; each one's setup is in [`../editors`](../editors).
 
 Part of [fAB](../README.md). Pre-alpha. Licensed under AGPL-3.0-or-later.

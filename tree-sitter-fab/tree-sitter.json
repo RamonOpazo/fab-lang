@@ -1,0 +1,22 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "fab",
+      "camelcase": "Fab",
+      "title": "fAB",
+      "scope": "source.fab",
+      "file-types": ["fab"],
+      "injection-regex": "^fab$",
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "AGPL-3.0-or-later",
+    "description": "fAB grammar for Tree-sitter: a language for diagrams",
+    "authors": [{ "name": "Ramón Opazo" }],
+    "links": { "repository": "https://github.com/RamonOpazo/fab-lang" }
+  },
+  "bindings": { "c": false, "go": false, "node": false, "python": false, "rust": false, "swift": false, "zig": false }
+}

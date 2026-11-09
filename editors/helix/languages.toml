@@ -1,0 +1,18 @@
+# fAB for Helix: append to ~/.config/helix/languages.toml, with the path set
+# to this repository's tree-sitter-fab.
+
+[language-server.fab]
+command = "fab"
+args = ["lsp"]
+
+[[language]]
+name = "fab"
+scope = "source.fab"
+file-types = ["fab"]
+comment-token = "//"
+indent = { tab-width = 2, unit = "  " }
+language-servers = ["fab"]
+
+[[grammar]]
+name = "fab"
+source = { path = "/path/to/fab-lang/tree-sitter-fab" }
