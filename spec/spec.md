@@ -635,11 +635,25 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** diagrams.
 
 | Attribute | Applies to | Values                                           | Default                                                                                                                                                  |
 | --------- | ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:label`  | N E C Z    | text, math                                       | node: its name without `#`, the own node `@` its diagram's name, else its canonical end; edge, cell, diagram: its name. Choices, parallels, starts and ends have no label unless one is given |
+| `:label`  | N E C Z    | text, math, `[]`                                 | `[]`, computed: a node's name without `#`, the own node `@` its diagram's name, else its canonical end; an edge's, a cell's or a diagram's name. `""` for choices, parallels, starts and ends |
 | `:font`   | N E C Z    | text (a font name)                               | theme                                                                                                                                                    |
 | `:face`   | N E C Z    | `[regular]` `[italic]` `[bold]` `[bold-italic]`  | `[regular]`; `[italic]` for `&canonical`                                                                                                                 |
 | `:size`   | N E C Z    | length: the size of the lettering, and only that | theme; edge and cell labels smaller                                                                                                                      |
 | `:ink`    | N E C Z    | colour                                           | `[ink]`; `[soft]` for edge and cell labels; `[muted]` for `&canonical`                                                                                   |
+
+**A label resolves in three ways.**
+
+```
+f :label []        // its computed name: f
+f :label "Lorem"   // the text Lorem; math the same, $\sigma$
+f :label ""        // no text
+```
+
+- **`[]`, nil, is the computed name.** The name is computed below `[base]` (see Themes), wherever the cascade leaves `:label` nil: a named node is its name without `#` (`#Valid` is Valid), `@` is its diagram's name, any other node is its canonical end (`f+`, `+f`), and an edge, a cell or a diagram is its name.
+- **`""` is no text,** written on purpose. `[base]` gives choices, parallels, starts and ends `:label ""`, since each is a shape that says what it is; `&choice :label []` gives their computed names back.
+- **Text or math is drawn as written.**
+- **A label is drawn whenever it holds text,** whatever else is drawn: a diagram shows its name framed or not (`:label ""` hides it), and a node, its label, whatever its shape.
+- **`&canonical`** is a node whose label is its canonical end: unnamed, not `@`, and with its label nil once every layer but `&canonical`'s own is applied. So `validate+ :label "Valid?"` is not canonical, and drawn upright.
 
 ### Nodes
 
@@ -683,7 +697,7 @@ An edge has no `:line`: its line is part of `:arrow`.
 | `:marks`                    | `[all]` `[]`                                     | `[all]`: draw marks from the proof layer, such as ⌟ |
 | `:cross`                    | `[gap]` `[plain]`                                    | `[gap]`                                             |
 
-A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit. `table` draws the edges leaving `@` as rows inside the frame, each showing the edge's label and its target.
+A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit. Its name is drawn either way, as its `:label`; `:label ""` hides it. `table` draws the edges leaving `@` as rows inside the frame, each showing the edge's label and its target.
 
 **Foreign-key rows.** In a schema, each foreign key leaving a table drawn `[table]` is a row of that table too. Its default label is the edge's name, `_`, and the name of the key it references: `parent` referencing `Comment.id` is drawn `parent_id`. Its type is the type of the target's key. Its arrow leaves the row and ends at the target's key row. The label is the column's name; `:label` overrides it: `writer :label "author_id"`.
 
@@ -758,10 +772,10 @@ The prelude names the common arrows: `[mono]`, `[epi]`, `[incl]`, `[mapsto]`, `[
 | Class        | Default                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------ |
 | `&plain`     | `[circle]`, label inside; every circle in a diagram drawn at one diameter, fitted to the longest label |
-| `&choice`    | `[diamond]`, no label                                                                                  |
-| `&parallel`  | `[bar]`, no label; as wide as its busier side needs                                                    |
-| `&start`     | `[point]` (a filled dot), no label                                                                     |
-| `&end`       | `[bullseye]`, no label                                                                                 |
+| `&choice`    | `[diamond]`, `:label ""`                                                                               |
+| `&parallel`  | `[bar]`, `:label ""`; as wide as its busier side needs                                                 |
+| `&start`     | `[point]` (a filled dot), `:label ""`                                                                  |
+| `&end`       | `[bullseye]`, `:label ""`                                                                              |
 | `&hole`      | `[circle]`, `:line [dashed]`, labelled by its canonical end if it has one                              |
 | `&canonical` | `:face [italic]`, `:ink [muted]`                                                                       |
 | `&edge`      | `:arrow [/solid/>]`, `:ink [soft]`, smaller `:size`                                                    |
@@ -776,7 +790,7 @@ A theme is a named style, of contexts and tokens (see Values and definitions): `
 computed  <  [base]  <  themes, left to right  <  the program's own bindings
 ```
 
-- **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it. What can be nothing admits nil, so a later layer can take a value away: `G :fill []`.
+- **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it. What can be nothing admits nil, so a later layer can take a value away: `G :fill []`. For a computed attribute, nil is the computation: `:label []` gives back the name, and `""` is a label's nothing.
 - **"Each binding once" holds within a layer;** across layers, the later one wins, deliberately and in order. A flag set by one layer is turned off by a later one with `!`: `f :hide!`.
 - **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme [dark/compact]`. A theme may include others, applied before its own bindings: `:Style [night] := { :theme [dark], [accent] := [#58a6ff] }`.
 - **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some, `[ink] := [#dddddd]`, and so does a diagram's own style, after its themes: `G :style { [ink] := [#000000] }`. Any label may be rebound so, one step: `[circle] := [box]` draws circles as boxes.

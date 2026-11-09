@@ -1265,3 +1265,15 @@ Amends §22.12 and §22.13 (plan step 9d5d). A rule per diagram and set of class
 **Read the same.** `sheet.style(element)` merges an element's own entries over its rule's, and those over its parent's. In JSON a rule is `{zone, classes, parent, style}`: a base rule has `"zone": null, "parent": null`, and a parent comes before the rules that name it. SVG writes a class per base rule and one per diagram rule, stacked (`class="node-plain G-node-plain"`), each with its own entries.
 
 **Rejected.** Sharing in JSON only, a diff written by the emitter: the Sheet, and so SVG, would still repeat it. A parent per class (`&node` under `&plain`): above. Dropping a diagram rule's entries equal to its parent's whatever their layer: what a theme binds and a renderer cannot draw would go unreported.
+
+### 22.15 A label's three values, stated, 2026-11-10
+
+States in the spec what the prelude already said (`prelude.fab`, `:Label` and `[base]`'s comment) and the style pass does (plan step 9d4).
+
+**Three values.** `:label []` is the computed name, `:label "…"` (or math) the text as written, `:label ""` no text. Nil is not "no label": for a computed descriptor nil is the computation, as a cell's `:arrow []` is its level's arrow. `[base]` binds `:label []` everywhere but on choices, parallels, starts and ends, which it binds `""`.
+
+**A label holding text is drawn.** A diagram's name is its label, so it is drawn framed or not; the frame is explicit (`:stroke`, `:fill`), the name is not. Graphviz drew a diagram's name only when it framed the diagram, so an unstyled diagram lost its name once marks stopped framing styled ones (step 9d5c); the spec said nothing either way. It is now a renderer's bug.
+
+Nil means one thing everywhere: no layer binds a value, so what lies below shows through, the computation where there is one (`:label`, a cell's `:arrow`), else nothing (`:fill []`).
+
+**Rejected.** `[]` as no text: `[]` and `""` would say the same, and a later layer would have no way back to the computed name; `""` says no text in text's own terms. An unframed diagram nameless: a label left to its default would be dropped by the renderer, against the Sheet, which holds it.
