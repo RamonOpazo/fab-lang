@@ -268,3 +268,27 @@ test "rename answers with edits, or fails with the reason" {
     try std.testing.expectEqual(2, field(got[1], &.{ "result", "changes", "file:///a.fab" }).?.array.items.len);
     try std.testing.expectEqual(-32803, field(got[2], &.{ "error", "code" }).?.integer);
 }
+
+test "completion keeps the names of the last text with no syntax errors" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","version":1,"text":"G :: f g"}}}
+    );
+    // Broken while typing: G's statement no longer reads.
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///a.fab","version":2},"contentChanges":[{"text":"G :: f g /\nG."}]}}
+    );
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","id":11,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":1,"character":2}}}
+    );
+    const got = try s.received(arena.allocator());
+    const items = field(got[0], &.{"result"}).?.array.items;
+    try std.testing.expectEqualStrings("f", items[0].object.get("label").?.string);
+    try std.testing.expectEqualStrings("g", items[1].object.get("label").?.string);
+}

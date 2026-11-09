@@ -72,7 +72,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     | L2 done |
+| L    | Language server (after 9c, before 9d)     | L3a done |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -221,7 +221,10 @@ Done when every level case passes.
   - **L2b** (done). Definition, references, document highlight (`navigation.zig`), from the name at the cursor or just before it; uses of one thing share its definition, built-ins their text. The prelude is not a virtual `fab://` document, which editors don't open: `fab lsp` (fab-cli) writes the embedded prelude at every start to `$XDG_CACHE_HOME/fab/prelude-<version>.fab` (or `~/.cache/fab`), and the server points into it (`Server.Options.prelude_uri`), so it always matches the compiler; that file publishes no diagnostics. `Lines.byteOffset` reads positions back.
   - **L2c** (done). Hover (`hover.zig`): one Markdown line by sort, then the defining line. A diagram's size; an edge's ends and a cell's sides, nodes by name, `@`, `*` or canonical end (`+f`, `f+`), with their kind; a descriptor's type, classes and record type; a label's type, a value's; built-ins and the prelude's say so. A reference carries its IR subject (`Reference.subject`), nodes and cells resolved once the graph is built; `Env.writeType` spells types; `Compilation.analysis()` is public.
   - **L2d** (done). Rename and prepare rename (`rename.zig`), every use in the document, other diagrams' included. Refused, with a reason (error -32803): a built-in, the prelude's names, `@`, a name also written where the analyser couldn't read it, a new name spelled for another sort (lexed, or read as a bracket name; `fab.value` is exported), or one already naming its sort: in the same diagram for edges, cells and nodes, anywhere for the rest, the prelude's included.
-- **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.
+- **L3.** Completion (`completion.zig`). The context is read from the tokens before the cursor, since a line being typed doesn't parse; the names come from the document's last text with no syntax errors (`Document.last_good`), so a broken line doesn't hide what is declared above it. Each item replaces the name typed, sigil included. In increments:
+  - **L3a** (done). The machinery, and names: `G.` a diagram's parts (edges, cells, named nodes, `@`, classes); `#` and edge names, the statement's diagram's; capitals, the diagrams; `&`, the classes; `:T`, and `:` after `::` or `:=`, the types.
+  - **L3b.** Descriptors applying at a context (`G.f :`, an owner's block), by the subject's classes.
+  - **L3c.** Labels and named values fitting the descriptor before `[`; completion inside a record's block.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
 
 **T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension reading this repository's subdirectory at a commit (`path`, accepted by Zed 1.27).

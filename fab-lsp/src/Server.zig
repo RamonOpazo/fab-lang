@@ -14,6 +14,8 @@ const tokens = @import("tokens.zig");
 const navigation = @import("navigation.zig");
 const hover = @import("hover.zig");
 const rename = @import("rename.zig");
+const completion = @import("completion.zig");
+const fab = @import("fab_core");
 
 const Server = @This();
 
@@ -29,7 +31,18 @@ state: enum { waiting, running, shutting_down } = .waiting,
 /// Set by `exit`: 0 after `shutdown`, 1 otherwise. The loop stops then.
 exit_code: ?u8 = null,
 
-pub const Document = struct { text: []u8, version: i64 };
+pub const Document = struct {
+    text: []u8,
+    version: i64,
+    /// The last text with no syntax errors: what completion takes its names
+    /// from while a line is being typed. Null until there is one.
+    last_good: ?[]u8 = null,
+
+    fn free(doc: Document, gpa: std.mem.Allocator) void {
+        gpa.free(doc.text);
+        if (doc.last_good) |g| gpa.free(g);
+    }
+};
 
 pub const Options = struct {
     /// A file holding the prelude, as a URI: definitions in the prelude land
@@ -45,7 +58,7 @@ pub fn deinit(s: *Server) void {
     var it = s.documents.iterator();
     while (it.next()) |entry| {
         s.gpa.free(entry.key_ptr.*);
-        s.gpa.free(entry.value_ptr.text);
+        entry.value_ptr.free(s.gpa);
     }
     s.documents.deinit(s.gpa);
     s.* = undefined;
@@ -102,7 +115,7 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
         const p = params(Message.DidClose, arena, envelope.params) orelse return;
         if (s.documents.fetchRemove(p.textDocument.uri)) |entry| {
             s.gpa.free(entry.key);
-            s.gpa.free(entry.value.text);
+            entry.value.free(s.gpa);
         }
         // Closed, its problems leave the editor's list.
         return notify(arena, out, "textDocument/publishDiagnostics", Message.PublishDiagnostics{ .uri = p.textDocument.uri, .diagnostics = &.{} });
@@ -166,6 +179,14 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
         };
     }
 
+    if (std.mem.eql(u8, method, "textDocument/completion")) {
+        const i = id orelse return;
+        const p = params(Message.PositionParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.documents.get(p.textDocument.uri) orelse return respond(arena, out, i, &[_]Message.CompletionItem{});
+        return respond(arena, out, i, try completion.of(arena, doc.text, doc.last_good orelse doc.text, p.position));
+    }
+
     // Requests must be answered; unknown notifications are ignored.
     if (id) |i| return fail(arena, out, i, Message.Code.method_not_found, method);
 }
@@ -174,16 +195,29 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
 fn store(s: *Server, uri: []const u8, text: []const u8, version_: i64) error{OutOfMemory}!void {
     const owned_text = try s.gpa.dupe(u8, text);
     errdefer s.gpa.free(owned_text);
+    const good: ?[]u8 = if (try readable(s.gpa, text)) try s.gpa.dupe(u8, text) else null;
+    errdefer if (good) |g| s.gpa.free(g);
     const gop = try s.documents.getOrPut(s.gpa, uri);
+    var last_good = good;
     if (gop.found_existing) {
-        s.gpa.free(gop.value_ptr.text);
+        const old = gop.value_ptr.*;
+        s.gpa.free(old.text);
+        if (good == null) last_good = old.last_good else if (old.last_good) |o| s.gpa.free(o);
     } else {
         gop.key_ptr.* = s.gpa.dupe(u8, uri) catch |err| {
             s.documents.removeByPtr(gop.key_ptr);
             return err;
         };
     }
-    gop.value_ptr.* = .{ .text = owned_text, .version = version_ };
+    gop.value_ptr.* = .{ .text = owned_text, .version = version_, .last_good = last_good };
+}
+
+/// Whether `text` has no syntax errors.
+fn readable(gpa: std.mem.Allocator, text: []const u8) error{OutOfMemory}!bool {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var c = try fab.Compilation.init(arena.allocator(), text, .{ .warnings = .warn, .ir = .keep });
+    return (try c.cst()).errors.len == 0;
 }
 
 /// An open document, for navigation.

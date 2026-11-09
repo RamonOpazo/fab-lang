@@ -10,6 +10,7 @@ pub const tokens = @import("tokens.zig");
 pub const navigation = @import("navigation.zig");
 pub const hover = @import("hover.zig");
 pub const rename = @import("rename.zig");
+pub const completion = @import("completion.zig");
 
 test {
     _ = Server;
@@ -20,4 +21,5 @@ test {
     _ = navigation;
     _ = hover;
     _ = rename;
+    _ = completion;
 }

@@ -81,6 +81,7 @@ pub const InitializeResult = struct {
         documentHighlightProvider: bool = true,
         hoverProvider: bool = true,
         renameProvider: struct { prepareProvider: bool = true } = .{},
+        completionProvider: struct { triggerCharacters: []const []const u8 = &.{ ".", "#", "&", ":" } } = .{},
     },
     serverInfo: struct { name: []const u8 = "fab", version: []const u8 },
 };
@@ -88,6 +89,27 @@ pub const InitializeResult = struct {
 pub const SemanticTokens = struct { data: []const u32 };
 
 pub const TextEdit = struct { range: Range, newText: []const u8 };
+
+/// A completion: what is offered, and the text it replaces (the name being
+/// typed, its sigil included, so `#`, `&` and `:` are replaced too).
+pub const CompletionItem = struct {
+    label: []const u8,
+    kind: u8,
+    detail: ?[]const u8 = null,
+    textEdit: TextEdit,
+
+    /// The protocol's kinds used here.
+    pub const Kind = struct {
+        pub const function: u8 = 3;
+        pub const variable: u8 = 6;
+        pub const class: u8 = 7;
+        pub const module: u8 = 9;
+        pub const property: u8 = 10;
+        pub const value: u8 = 12;
+        pub const @"enum": u8 = 13;
+        pub const enum_member: u8 = 20;
+    };
+};
 /// Edits by document URI.
 pub const WorkspaceEdit = struct { changes: std.json.ArrayHashMap([]const TextEdit) };
 pub const PrepareRename = struct { range: Range, placeholder: []const u8 };

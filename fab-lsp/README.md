@@ -6,7 +6,7 @@ fab-core and on Zig's standard library only.
 
 Today (plan steps L1–L2): diagnostics on open and change (whole-document
 sync), semantic tokens by sort, go to definition, references, document
-highlights, hover and rename. Positions are UTF-16. A definition in the prelude opens a copy of
+highlights, hover, rename, and completion of names (`G.`, `#`, `&`, types). Positions are UTF-16. A definition in the prelude opens a copy of
 it that `fab lsp` writes to `$XDG_CACHE_HOME/fab` (or `~/.cache/fab`).
 
 ```
