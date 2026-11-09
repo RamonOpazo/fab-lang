@@ -21,7 +21,6 @@ const Parser = @import("../parse/Parser.zig");
 const Ir = @import("../analyse/Ir.zig");
 const Analyser = @import("../analyse/Analyser.zig");
 const Sheet = @import("../style/Sheet.zig");
-const Style = @import("../style/Style.zig");
 const Styler = @import("../style/Styler.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Env = @import("../analyse/Env.zig");
@@ -47,7 +46,7 @@ parsed: ?Cst = null,
 analysed: ?Analyser.Result = null,
 styled: ?Sheet = null,
 /// The severity each IR issue is drawn with, for the style pass.
-issue_marks: ?[]Style.Mark = null,
+issue_marks: ?[]Sheet.Mark = null,
 /// Syntax diagnostics first, then analysis diagnostics, each in the order
 /// found: by statement, then what only the final graph shows (cells that are
 /// not parallel). Complete once analysis has run.
@@ -150,10 +149,10 @@ pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
 /// The severity each issue of the analysed IR is drawn with: its
 /// diagnostic's, under this tolerance. A promoted warning is drawn as an
 /// error (statements.md §18).
-fn marks(c: *Compilation) error{OutOfMemory}![]const Style.Mark {
+fn marks(c: *Compilation) error{OutOfMemory}![]const Sheet.Mark {
     if (c.issue_marks) |m| return m;
     const graph = &(try c.analysis()).ir;
-    const list = try c.gpa.alloc(Style.Mark, graph.issues.len);
+    const list = try c.gpa.alloc(Sheet.Mark, graph.issues.len);
     errdefer c.gpa.free(list);
     for (list, 0..) |*m, i| m.* = switch ((try c.diagnosticOf(graph.issues.get(i))).severity) {
         .unsupported => .unsupported,

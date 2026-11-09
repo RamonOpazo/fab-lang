@@ -143,12 +143,16 @@ fn writeSummary(w: *Writer, diagnostics: []const Diagnostic, o: Options) Writer.
 //   note: cells are not drawn by the graphviz engine (×2)     brief
 //   note: cells are not drawn by the graphviz engine (cell 0)  full, one each
 
+fn same(a: Note, b: Note) bool {
+    return a.tag == b.tag and std.mem.eql(u8, a.name, b.name);
+}
+
 pub fn writeNotes(w: *Writer, notes: []const Note, o: Options) Writer.Error!void {
     if (o.verbosity == .quiet) return;
     if (o.verbosity == .full) {
         for (notes) |n| {
             try noteLabel(w, o);
-            try w.writeAll(n.message());
+            try n.write(w);
             if (n.subject) |subject| {
                 const kind, const index = switch (subject) {
                     inline else => |i, tag| .{ @tagName(tag), @backingInt(i) },
@@ -159,15 +163,16 @@ pub fn writeNotes(w: *Writer, notes: []const Note, o: Options) Writer.Error!void
         }
         return;
     }
-    // Brief: one line per kind of note, in order of first appearance.
+    // Brief: one line per kind of note (and per descriptor or label it
+    // names), in order of first appearance.
     for (notes, 0..) |n, i| {
         var seen = false;
-        for (notes[0..i]) |earlier| seen = seen or earlier.tag == n.tag;
+        for (notes[0..i]) |earlier| seen = seen or same(earlier, n);
         if (seen) continue;
         var count: usize = 0;
-        for (notes[i..]) |later| count += @intFromBool(later.tag == n.tag);
+        for (notes[i..]) |later| count += @intFromBool(same(later, n));
         try noteLabel(w, o);
-        try w.writeAll(n.message());
+        try n.write(w);
         if (count > 1) try w.print(" (×{d})", .{count});
         try w.writeByte('\n');
     }

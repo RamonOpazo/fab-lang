@@ -14,6 +14,9 @@ const Note = @This();
 tag: Tag,
 /// The element concerned, if any.
 subject: ?fab.Ir.Subject = null,
+/// The descriptor or label concerned, for the tags that name one: `:bend`,
+/// `star`. Borrows the Sheet.
+name: []const u8 = "",
 
 pub const Tag = enum {
     /// DOT has no edges between edges.
@@ -25,16 +28,28 @@ pub const Tag = enum {
     /// `:as node` and `:as table` arrive with zone contraction; drawn as a
     /// cluster meanwhile.
     zone_drawn_as_cluster,
+    /// A descriptor the author bound that this engine doesn't draw: one
+    /// note per descriptor per diagram.
+    descriptor_not_drawn,
+    /// A label this engine has no meaning for (`:shape [star]`, an unbound
+    /// token); drawn with a fallback.
+    label_not_drawn,
+    /// An arrow's tail or head other than `>`: graphviz draws the line only,
+    /// for now.
+    arrow_ends_not_drawn,
 };
 
 /// One line, for the terminal or a tooltip.
-pub fn message(n: Note) []const u8 {
-    return switch (n.tag) {
-        .cell_not_drawn => "cells are not drawn by the graphviz engine",
-        .wavy_line_drawn_solid => "graphviz has no wavy lines; drawn solid",
-        .shape_approximated => "graphviz has no exact match for this shape; the nearest is used",
-        .zone_drawn_as_cluster => "this zone's `:as` is not supported yet; drawn as a cluster",
-    };
+pub fn write(n: Note, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    switch (n.tag) {
+        .cell_not_drawn => try w.writeAll("cells are not drawn by the graphviz engine"),
+        .wavy_line_drawn_solid => try w.writeAll("graphviz has no wavy lines; drawn solid"),
+        .shape_approximated => try w.writeAll("graphviz has no exact match for this shape; the nearest is used"),
+        .zone_drawn_as_cluster => try w.writeAll("this zone's `:as` is not supported yet; drawn as a cluster"),
+        .descriptor_not_drawn => try w.print("graphviz does not draw `{s}` yet", .{n.name}),
+        .label_not_drawn => try w.print("graphviz has no meaning for `[{s}]`; drawn with a fallback", .{n.name}),
+        .arrow_ends_not_drawn => try w.writeAll("graphviz draws an arrow's line, and its head as `>`, for now"),
+    }
 }
 
 /// The notes a backend produces while writing.

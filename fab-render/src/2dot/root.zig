@@ -30,9 +30,13 @@
 //!     one place DOT needs two kinds of text in one label.
 //!
 //! The Sheet decides every look; this file only realizes it in DOT's terms.
+//! It reads the descriptors it draws (`drawn`), each element's once, into a
+//! `Look`, the labels as its own enums; what else the author binds, a label
+//! it has no meaning for, an arrow's ends, it notes (statements.md §22.12).
 //! What DOT needs and the Sheet doesn't say, such as fonts, sizes and
 //! spacing, is decided here once, in the header:
-//!   - One sans-serif font; edge labels smaller, in the theme's soft grey.
+//!   - One sans-serif font; edge labels smaller. The header's colours are
+//!     `[base]`'s ink and soft, and no element repeats them.
 //!   - Every circle in a diagram has the same size, big enough for its
 //!     longest label, so the label fits inside.
 //!   - A bar is as wide as its busier side needs: one unit per branch.
@@ -43,7 +47,7 @@ const Note = @import("../shared/Note.zig");
 const Theme = @import("../shared/Theme.zig");
 
 const Sheet = fab.Sheet;
-const Style = fab.Style;
+const Rgba = fab.value.Rgba;
 const Writer = std.Io.Writer;
 
 pub const Error = Writer.Error || error{OutOfMemory};
@@ -52,56 +56,73 @@ pub const Error = Writer.Error || error{OutOfMemory};
 /// `notes`.
 pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
     const ir = sheet.ir;
+    const gpa = notes.gpa;
     const node_zone = ir.nodes.items(.zone);
+
+    var reader: Reader = try .init(sheet, notes);
+    defer reader.deinit();
+    const nodes = try gpa.alloc(Look, ir.nodes.len);
+    defer gpa.free(nodes);
+    for (nodes, node_zone, 0..) |*l, z, n| l.* = try reader.read(.{ .node = @fromBackingInt(@as(u32, @intCast(n))) }, z);
+    const edges = try gpa.alloc(Look, ir.edges.len);
+    defer gpa.free(edges);
+    for (edges, ir.edges.items(.zone), 0..) |*l, z, e| l.* = try reader.read(.{ .edge = @fromBackingInt(@as(u32, @intCast(e))) }, z);
+    const zones = try gpa.alloc(Look, ir.zones.len);
+    defer gpa.free(zones);
+    for (zones, 0..) |*l, z| {
+        const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
+        l.* = try reader.read(.{ .zone = zone }, zone);
+    }
+
+    const defaults = reader.defaults;
     try w.writeAll("digraph {\n");
-    try writeHeader(w);
-    const circle = circleSize(sheet);
+    try writeHeader(defaults, w);
+    const circle = circleSize(nodes);
 
     // 1. Nodes, zone by zone, each inside its owner's cluster.
-    for (0..ir.zones.len) |z| {
+    for (zones, ir.zones.items(.placeholder), 0..) |look, placeholder, z| {
         const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
-        const as = sheet.drawnAs(zone);
-        if (as == .placeholder) {
+        if (placeholder) {
             try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(sheet, zone, w, notes);
-            try writePlaceholder(sheet.zone(zone), z, w);
+            try writeClusterAttrs(look, zone, defaults, w, notes);
+            try writePlaceholder(look, z, defaults, w);
             try w.writeAll("  }\n");
             continue;
         }
         var owns_nodes = false;
         for (node_zone) |owner| owns_nodes = owns_nodes or owner == zone;
         if (!owns_nodes) {
-            if (!sheet.isFramed(zone) or as == .flat) continue;
+            if (!look.framed() or look.as == .flat) continue;
             try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(sheet, zone, w, notes);
+            try writeClusterAttrs(look, zone, defaults, w, notes);
             try w.print("    a{d} [label=\"\", shape=point, width=0.01, height=0.01, style=\"invis\"]\n", .{z});
             try w.writeAll("  }\n");
             continue;
         }
 
-        const grouped = as != .flat;
-        if (as == .node or as == .table) try notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone } });
+        const grouped = look.as != .flat;
+        if (look.as == .node or look.as == .table) try notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone } });
 
         const indent = if (grouped) "    " else "  ";
         if (grouped) {
             try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(sheet, zone, w, notes);
+            try writeClusterAttrs(look, zone, defaults, w, notes);
         }
         for (node_zone, 0..) |owner, n| {
             if (owner != zone) continue;
             try w.print("{s}n{d}", .{ indent, n });
             const index: fab.Ir.NodeIndex = @fromBackingInt(@as(u32, @intCast(n)));
             const sizes: Sizes = .{ .circle = circle, .branches = branches(ir, index) };
-            try writeNodeAttrs(sheet.nodes[n], index, sizes, w, notes);
+            try writeNodeAttrs(nodes[n], index, sizes, defaults, w, notes);
             try w.writeAll("\n");
         }
         if (grouped) try w.writeAll("  }\n");
     }
 
     // 2. Edges, at the top level, so they place no node.
-    for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), sheet.edges, 0..) |s, t, directed, style, e| {
+    for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), edges, 0..) |s, t, directed, look, e| {
         try w.print("  n{d} -> n{d}", .{ @backingInt(s), @backingInt(t) });
-        try writeEdgeAttrs(style, directed, @fromBackingInt(@as(u32, @intCast(e))), w, notes);
+        try writeEdgeAttrs(look, directed, @fromBackingInt(@as(u32, @intCast(e))), defaults, w, notes);
         try w.writeAll("\n");
     }
 
@@ -114,17 +135,191 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
 }
 
 // ---------------------------------------------------------------------------
+// What Graphviz draws, read from the Sheet
+
+/// The descriptors this engine draws. Any other the author binds (a theme
+/// or the program, not `[base]`) gets a note, once per diagram. `:marks`
+/// is drawn by core, which applies the marks or not.
+const drawn = [_][]const u8{ ":label", ":face", ":ink", ":stroke", ":fill", ":line", ":shape", ":as", ":caption", ":arrow", ":hide", ":marks" };
+
+/// The labels it gives a meaning to, as enums; nil is the absence of one.
+const Shape = enum { box, round, circle, double_circle, ellipse, stadium, diamond, hexagon, parallelogram, cylinder, document, bar, point, terminal, bullseye };
+const Line = enum { solid, dashed, dotted, double, triple, wavy };
+const Face = enum { regular, italic, bold, bold_italic };
+const As = enum { flat, cluster, node, table };
+
+/// One element's style, as Graphviz draws it.
+const Look = struct {
+    label: []const u8 = "",
+    face: Face = .regular,
+    ink: ?Rgba = null,
+    stroke: ?Rgba = null,
+    fill: ?Rgba = null,
+    /// Null: no line.
+    line: ?Line = .solid,
+    /// Null: no shape, the label alone.
+    shape: ?Shape = null,
+    as: As = .cluster,
+    caption: ?Caption = null,
+    hide: bool = false,
+
+    const Caption = struct { text: []const u8, ink: ?Rgba };
+
+    /// A cluster draws a border or a background only when it has one.
+    fn framed(l: Look) bool {
+        return l.stroke != null or l.fill != null;
+    }
+
+    fn font(l: Look) ?[]const u8 {
+        return switch (l.face) {
+            .regular => null,
+            .italic => Theme.font_italic,
+            .bold => Theme.font_bold,
+            .bold_italic => Theme.font_bold_italic,
+        };
+    }
+};
+
+/// The colours the header sets, so no element repeats them.
+const Defaults = struct { ink: Rgba, soft: Rgba };
+
+const Reader = struct {
+    sheet: *const Sheet,
+    notes: *Note.List,
+    defaults: Defaults,
+    /// `drawn`'s descriptors, looked up once.
+    d: [drawn.len]?Sheet.Descriptor,
+    /// The (zone, descriptor) pairs already noted.
+    noted: std.AutoHashMapUnmanaged(struct { u32, u16 }, void) = .empty,
+
+    fn init(sheet: *const Sheet, notes: *Note.List) error{OutOfMemory}!Reader {
+        var r: Reader = .{ .sheet = sheet, .notes = notes, .defaults = .{
+            .ink = baseColor(sheet, "ink") orelse .{ .r = 0, .g = 0, .b = 0 },
+            .soft = baseColor(sheet, "soft") orelse .{ .r = 0, .g = 0, .b = 0 },
+        }, .d = undefined };
+        inline for (drawn, 0..) |name, i| r.d[i] = sheet.descriptor(name);
+        return r;
+    }
+
+    fn deinit(r: *Reader) void {
+        r.noted.deinit(r.notes.gpa);
+    }
+
+    fn at(r: *const Reader, comptime name: []const u8) ?Sheet.Descriptor {
+        inline for (drawn, 0..) |n, i| if (comptime std.mem.eql(u8, n, name)) return r.d[i];
+        @compileError("not drawn: " ++ name);
+    }
+
+    fn read(r: *Reader, subject: fab.Ir.Subject, zone: fab.Ir.ZoneIndex) error{OutOfMemory}!Look {
+        const v = r.sheet.style(subject);
+        try r.noteUndrawn(v, subject, zone);
+        var l: Look = .{};
+        if (r.at(":label")) |d| l.label = v.text(d) orelse math(v, d) orelse "";
+        if (r.at(":face")) |d| l.face = try r.label(Face, v, d, subject) orelse .regular;
+        if (r.at(":ink")) |d| l.ink = v.color(d);
+        if (r.at(":stroke")) |d| l.stroke = v.color(d);
+        if (r.at(":fill")) |d| l.fill = v.color(d);
+        if (r.at(":line")) |d| l.line = try r.label(Line, v, d, subject);
+        if (r.at(":shape")) |d| l.shape = try r.label(Shape, v, d, subject);
+        if (r.at(":as")) |d| l.as = try r.label(As, v, d, subject) orelse .cluster;
+        if (r.at(":hide")) |d| l.hide = v.flag(d);
+        if (subject == .edge) {
+            l.fill = null;
+            l.line = .solid;
+            if (r.at(":arrow")) |d| if (v.entry(d)) |e| {
+                l.line = try r.arrowLine(e, subject);
+            };
+        }
+        if (subject == .zone) if (r.at(":caption")) |d| if (v.entry(d)) |e| switch (e.value) {
+            .text, .math => |text| l.caption = .{
+                .text = text,
+                // A mark's caption, "unsupported", in its own colour.
+                .ink = if (e.layer == .mark) tokenColor(r.sheet, subject.zone, "unsupported") else l.ink,
+            },
+            else => {},
+        };
+        return l;
+    }
+
+    /// A label as `E`, null for nil; one `E` lacks is noted, and drawn as
+    /// nil.
+    fn label(r: *Reader, comptime E: type, v: Sheet.View, d: Sheet.Descriptor, subject: fab.Ir.Subject) error{OutOfMemory}!?E {
+        return switch (v.label(E, d)) {
+            .value => |x| x,
+            .nil => null,
+            .unknown => |name| {
+                try r.notes.add(.{ .tag = .label_not_drawn, .subject = subject, .name = name });
+                return null;
+            },
+        };
+    }
+
+    /// An edge's line, its arrow's middle; ends other than `[/…/>]` noted.
+    fn arrowLine(r: *Reader, e: Sheet.Entry, subject: fab.Ir.Subject) error{OutOfMemory}!?Line {
+        const slots = switch (e.value) {
+            .elements => |es| es,
+            else => return .solid,
+        };
+        if (slots.len != 3) return .solid;
+        const plain_ends = slots[0] == .nil and slots[2] == .label and std.mem.eql(u8, slots[2].label.name, ">");
+        if (!plain_ends and e.layer != .base and e.layer != .computed) try r.notes.add(.{ .tag = .arrow_ends_not_drawn, .subject = subject });
+        return switch (slots[1]) {
+            .label => |l| std.meta.stringToEnum(Line, l.name) orelse blk: {
+                try r.notes.add(.{ .tag = .label_not_drawn, .subject = subject, .name = l.name });
+                break :blk .solid;
+            },
+            .nil => null,
+            else => .solid,
+        };
+    }
+
+    /// What the author bound that this engine doesn't draw, once per
+    /// diagram and descriptor.
+    fn noteUndrawn(r: *Reader, v: Sheet.View, subject: fab.Ir.Subject, zone: fab.Ir.ZoneIndex) error{OutOfMemory}!void {
+        for ([_][]const Sheet.Entry{ v.own, v.rule }) |entries| for (entries) |e| {
+            if (e.layer != .theme and e.layer != .program) continue;
+            if (r.drawsDescriptor(e.descriptor)) continue;
+            const gop = try r.noted.getOrPut(r.notes.gpa, .{ @backingInt(zone), @backingInt(e.descriptor) });
+            if (gop.found_existing) continue;
+            try r.notes.add(.{ .tag = .descriptor_not_drawn, .subject = subject, .name = r.sheet.descriptors[@backingInt(e.descriptor)] });
+        };
+    }
+
+    fn drawsDescriptor(r: *const Reader, d: Sheet.Descriptor) bool {
+        for (r.d) |x| if (x == d) return true;
+        return false;
+    }
+};
+
+fn math(v: Sheet.View, d: Sheet.Descriptor) ?[]const u8 {
+    return if (v.get(d)) |x| switch (x) {
+        .math => |m| m,
+        else => null,
+    } else null;
+}
+
+fn baseColor(sheet: *const Sheet, name: []const u8) ?Rgba {
+    return switch (sheet.baseToken(name) orelse return null) {
+        .color => |c| c,
+        else => null,
+    };
+}
+
+fn tokenColor(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, name: []const u8) ?Rgba {
+    return switch (sheet.token(zone, name) orelse return null) {
+        .color => |c| c,
+        else => null,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Defaults and sizes
 
-const font = "Helvetica";
-const font_italic = "Helvetica-Oblique";
-
 /// Graph-wide defaults, so that each node and edge lists only what differs.
-fn writeHeader(w: *Writer) Writer.Error!void {
-    const t = Theme.default;
-    try w.print("  graph [fontname=\"{s}\", fontsize=11, fontcolor=\"#{x:0>6}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ font, t.ink });
-    try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\"]\n", .{ font, t.ink, t.ink });
-    try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\", arrowsize=0.6]\n", .{ font, t.soft, t.ink });
+fn writeHeader(d: Defaults, w: *Writer) Writer.Error!void {
+    try w.print("  graph [fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ Theme.font, hex(d.ink) });
+    try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", color=\"{f}\"]\n", .{ Theme.font, hex(d.ink), hex(d.ink) });
+    try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"{f}\", color=\"{f}\", arrowsize=0.6]\n", .{ Theme.font, hex(d.soft), hex(d.ink) });
 }
 
 /// What a node's size depends on, beyond its own style.
@@ -137,11 +332,12 @@ const Sizes = struct {
 
 /// One diameter for every circle, wide enough for the longest label inside
 /// one. An estimate: about 0.085 in per character at 11 pt, plus a margin.
-fn circleSize(sheet: *const Sheet) f32 {
+fn circleSize(nodes: []const Look) f32 {
     var longest: usize = 0;
-    for (sheet.nodes) |style| {
-        if (style.shape != .circle and style.shape != .double_circle) continue;
-        const chars = std.unicode.utf8CountCodepoints(style.label) catch style.label.len;
+    for (nodes) |look| {
+        const shape = look.shape orelse continue;
+        if (shape != .circle and shape != .double_circle) continue;
+        const chars = std.unicode.utf8CountCodepoints(look.label) catch look.label.len;
         longest = @max(longest, chars);
     }
     return @max(0.35, 0.085 * @as(f32, @floatFromInt(longest)) + 0.2);
@@ -198,15 +394,13 @@ const Attrs = struct {
     }
 
     /// `key`, unless `c` is what the graph's header already sets.
-    fn colorUnless(a: *Attrs, key: []const u8, c: Style.Color, default: u24) Writer.Error!void {
-        if (Theme.default.rgb(c) != default) try a.color(key, c);
+    fn colorUnless(a: *Attrs, key: []const u8, c: Rgba, default: Rgba) Writer.Error!void {
+        if (!std.meta.eql(c, default)) try a.color(key, c);
     }
 
-    fn color(a: *Attrs, key: []const u8, c: Style.Color) Writer.Error!void {
+    fn color(a: *Attrs, key: []const u8, c: Rgba) Writer.Error!void {
         try a.sep();
-        try a.w.print("{s}=\"", .{key});
-        try writeColor(a.w, c);
-        try a.w.writeByte('"');
+        try a.w.print("{s}=\"{f}\"", .{ key, hex(c) });
     }
 
     fn flag(a: *Attrs, name: []const u8) void {
@@ -249,9 +443,8 @@ const ShapeRealization = struct {
     };
 };
 
-fn realizeShape(shape: Style.Shape) ShapeRealization {
-    return switch (shape) {
-        .none => .{ .shape = "plaintext" },
+fn realizeShape(shape: ?Shape) ShapeRealization {
+    return switch (shape orelse return .{ .shape = "plaintext" }) {
         .box => .{ .shape = "box" },
         .round => .{ .shape = "box", .rounded = true },
         .circle => .{ .shape = "circle", .size = .circle },
@@ -270,17 +463,17 @@ fn realizeShape(shape: Style.Shape) ShapeRealization {
     };
 }
 
-fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, sizes: Sizes, w: *Writer, notes: *Note.List) Error!void {
-    const r = realizeShape(style.shape);
+fn writeNodeAttrs(look: Look, n: fab.Ir.NodeIndex, sizes: Sizes, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
+    const r = realizeShape(look.shape);
     if (r.approximated) try notes.add(.{ .tag = .shape_approximated, .subject = .{ .node = n } });
     const beside = r.size == .mark or r.size == .bar;
 
     var a: Attrs = .begin(w);
     if (beside) {
         try a.text("label", "");
-        if (style.label.len > 0) try a.text("xlabel", style.label);
+        if (look.label.len > 0) try a.text("xlabel", look.label);
     } else {
-        try a.text("label", style.label);
+        try a.text("label", look.label);
     }
     try a.raw("shape", r.shape);
     switch (r.size) {
@@ -302,105 +495,92 @@ fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, sizes: Sizes, w: *Writer, n
             try a.raw("fixedsize", "true");
         },
     }
-    // A font for text only: a mark's canonical italic draws nothing.
-    if (style.label.len > 0) {
-        if (style.italic) try a.text("fontname", font_italic);
-        if (style.ink) |c| try a.colorUnless("fontcolor", c, Theme.default.ink);
+    // A font for text only.
+    if (look.label.len > 0) {
+        if (look.font()) |f| try a.text("fontname", f);
+        if (look.ink) |c| try a.colorUnless("fontcolor", c, d.ink);
     }
-    if (style.stroke) |c| try a.colorUnless("color", c, Theme.default.ink);
+    if (look.stroke) |c| try a.colorUnless("color", c, d.ink);
     if (r.solid) {
         a.flag("filled");
-        try a.color("fillcolor", style.stroke orelse style.fill orelse .{ .rgb = Theme.default.ink });
-    } else if (style.fill) |c| {
+        try a.color("fillcolor", look.stroke orelse look.fill orelse d.ink);
+    } else if (look.fill) |c| {
         a.flag("filled");
         try a.color("fillcolor", c);
     }
     if (r.rounded) a.flag("rounded");
-    try lineFlags(&a, style.line, .{ .node = n }, notes);
-    switch (style.line) {
+    try lineFlags(&a, look.line, .{ .node = n }, notes);
+    if (look.hide) a.flag("invis");
+    if (look.line) |line| switch (line) {
         .double => try a.raw("peripheries", "2"),
         .triple => try a.raw("peripheries", "3"),
         else => {},
-    }
+    };
     try a.end();
 }
 
-fn writeEdgeAttrs(style: Style, directed: bool, e: fab.Ir.EdgeIndex, w: *Writer, notes: *Note.List) Error!void {
+fn writeEdgeAttrs(look: Look, directed: bool, e: fab.Ir.EdgeIndex, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
     var a: Attrs = .begin(w);
-    try a.text("label", style.label);
+    try a.text("label", look.label);
     if (!directed) try a.raw("dir", "none");
-    if (style.italic) try a.text("fontname", font_italic);
-    if (style.ink) |c| try a.colorUnless("fontcolor", c, Theme.default.soft);
-    if (style.line == .double or style.line == .triple) {
+    if (look.font()) |f| try a.text("fontname", f);
+    if (look.ink) |c| try a.colorUnless("fontcolor", c, d.soft);
+    if (look.line == .double or look.line == .triple) {
         // Parallel lines: the colour, a gap, the colour (and again).
-        const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
+        const c = look.stroke orelse d.ink;
         try a.sep();
-        try w.writeAll("color=\"");
-        try writeColor(w, c);
-        try w.writeAll(":invis:");
-        try writeColor(w, c);
-        if (style.line == .triple) {
-            try w.writeAll(":invis:");
-            try writeColor(w, c);
-        }
+        try w.print("color=\"{f}:invis:{f}", .{ hex(c), hex(c) });
+        if (look.line == .triple) try w.print(":invis:{f}", .{hex(c)});
         try w.writeByte('"');
-    } else if (style.stroke) |c| {
-        try a.colorUnless("color", c, Theme.default.ink);
+    } else if (look.stroke) |c| {
+        try a.colorUnless("color", c, d.ink);
     }
-    try lineFlags(&a, style.line, .{ .edge = e }, notes);
+    try lineFlags(&a, look.line, .{ .edge = e }, notes);
+    if (look.hide) a.flag("invis");
     try a.end();
 }
 
-fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, notes: *Note.List) Error!void {
-    const style = sheet.zone(zone);
-    if (!sheet.isFramed(zone)) {
+fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
+    if (!look.framed()) {
         // Groups the nodes for layout, draws nothing.
         try w.writeAll("    peripheries=0\n");
         return;
     }
     try w.writeAll("    label=");
-    if (style.caption) |caption| {
+    if (look.caption) |caption| {
         // `<<font …>unsupported</font><br/>G>`: the caption above the name.
-        try w.writeAll("<<font point-size=\"9\" color=\"");
-        try writeColor(w, caption.ink);
-        try w.writeAll("\">");
+        try w.writeAll("<<font point-size=\"9\"");
+        if (caption.ink) |c| try w.print(" color=\"{f}\"", .{hex(c)});
+        try w.writeAll(">");
         try html(w, caption.text);
         try w.writeAll("</font><br/>");
-        try html(w, style.label);
+        try html(w, look.label);
         try w.writeByte('>');
     } else {
-        try quoted(w, style.label);
+        try quoted(w, look.label);
     }
     try w.writeByte('\n');
-    if (style.stroke) |c| {
-        try w.writeAll("    pencolor=\"");
-        try writeColor(w, c);
-        try w.writeAll("\"\n");
+    if (look.stroke) |c| {
+        try w.print("    pencolor=\"{f}\"\n", .{hex(c)});
     } else {
         try w.writeAll("    peripheries=0\n");
     }
-    if (style.ink) |c| if (Theme.default.rgb(c) != Theme.default.ink) {
-        try w.writeAll("    fontcolor=\"");
-        try writeColor(w, c);
-        try w.writeAll("\"\n");
-    };
+    if (look.ink) |c| if (!std.meta.eql(c, d.ink)) try w.print("    fontcolor=\"{f}\"\n", .{hex(c)});
     var flags: [2][]const u8 = undefined;
     var count: usize = 0;
-    if (style.fill) |c| {
+    if (look.fill) |c| {
         flags[count] = "filled";
         count += 1;
-        try w.writeAll("    fillcolor=\"");
-        try writeColor(w, c);
-        try w.writeAll("\"\n");
+        try w.print("    fillcolor=\"{f}\"\n", .{hex(c)});
     }
-    switch (style.line) {
+    if (look.line) |line| switch (line) {
         .dashed, .dotted => {
-            flags[count] = @tagName(style.line);
+            flags[count] = @tagName(line);
             count += 1;
         },
         .wavy => try notes.add(.{ .tag = .wavy_line_drawn_solid, .subject = .{ .zone = zone } }),
-        .solid, .double, .triple, .none => {},
-    }
+        .solid, .double, .triple => {},
+    };
     if (count > 0) {
         try w.writeAll("    style=\"");
         for (flags[0..count], 0..) |name, i| {
@@ -412,24 +592,23 @@ fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, no
 }
 
 /// The one node of a placeholder: a square holding ✕, in the frame's colour.
-fn writePlaceholder(style: Style, z: usize, w: *Writer) Writer.Error!void {
-    const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
+fn writePlaceholder(look: Look, z: usize, d: Defaults, w: *Writer) Writer.Error!void {
+    const c = look.stroke orelse d.ink;
     try w.print("    z{d} [label=\"✕\", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16", .{z});
-    try w.writeAll(", color=\"");
-    try writeColor(w, c);
-    try w.writeAll("\", fontcolor=\"");
-    try writeColor(w, c);
-    try w.writeAll("\"]\n");
+    try w.print(", color=\"{f}\", fontcolor=\"{f}\"]\n", .{ hex(c), hex(c) });
 }
 
 /// The `style` flags a line needs. `double` and `triple` are handled by the
-/// caller, since nodes and edges draw them differently.
-fn lineFlags(a: *Attrs, line: Style.Line, subject: fab.Ir.Subject, notes: *Note.List) error{OutOfMemory}!void {
-    switch (line) {
+/// caller, since nodes and edges draw them differently; no line is
+/// invisible.
+fn lineFlags(a: *Attrs, line: ?Line, subject: fab.Ir.Subject, notes: *Note.List) error{OutOfMemory}!void {
+    switch (line orelse {
+        a.flag("invis");
+        return;
+    }) {
         .solid, .double, .triple => {},
         .dashed => a.flag("dashed"),
         .dotted => a.flag("dotted"),
-        .none => a.flag("invis"),
         .wavy => try notes.add(.{ .tag = .wavy_line_drawn_solid, .subject = subject }),
     }
 }
@@ -437,9 +616,14 @@ fn lineFlags(a: *Attrs, line: Style.Line, subject: fab.Ir.Subject, notes: *Note.
 // ---------------------------------------------------------------------------
 // Values
 
-/// A colour as DOT writes it: `#rrggbb`, tokens resolved by the theme.
-fn writeColor(w: *Writer, c: Style.Color) Writer.Error!void {
-    try w.print("#{x:0>6}", .{Theme.default.rgb(c)});
+/// A colour as DOT writes it: `#rrggbb`, and `aa` when it isn't opaque.
+fn hex(c: Rgba) std.fmt.Alt(Rgba, writeHex) {
+    return .{ .data = c };
+}
+
+fn writeHex(c: Rgba, w: *Writer) Writer.Error!void {
+    try w.print("#{x:0>2}{x:0>2}{x:0>2}", .{ c.r, c.g, c.b });
+    if (c.a != 0xff) try w.print("{x:0>2}", .{c.a});
 }
 
 /// A DOT string. Backslashes are escaped too, so that DOT's own escapes

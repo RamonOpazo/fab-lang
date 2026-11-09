@@ -1,55 +1,7 @@
-//! What the colour tokens mean. Every backend resolves a token through the
-//! same theme, so `muted` is one grey whether Graphviz, TikZ or the native
-//! renderer draws it.
-//!
-//! A Color is either a literal RGB or a token; the theme sends both to RGB:
-//!
-//!   rgb : Color → u24,   rgb(.rgb = x) = x,   rgb(.token = t) = theme(t)
-//!
-//! Backends only format the result (`#rrggbb`, `\definecolor`, …).
-//!
-//! Besides the tokens, a theme has the colours a backend uses where the Sheet
-//! sets none: `ink` for lines, shapes and node text, `soft` for edge labels.
+//! What a backend decides that the Sheet doesn't say: fonts. Colours come
+//! from the Sheet, every token resolved per diagram (statements.md §22.12).
 
-const Style = @import("fab_core").Style;
-
-const Theme = @This();
-
-ink: u24,
-soft: u24,
-muted: u24,
-accent: u24,
-/// Marks: what is wrong, from most to least severe (statements.md §18).
-@"error": u24,
-warning: u24,
-unsupported: u24,
-
-pub const default: Theme = .{
-    .ink = 0x333333,
-    .soft = 0x555555,
-    .muted = 0x888888,
-    .accent = 0x1f6feb,
-    .@"error" = 0xd1242f,
-    .warning = 0xbf8700,
-    .unsupported = 0x8250df,
-};
-
-pub fn rgb(theme: Theme, c: Style.Color) u24 {
-    return switch (c) {
-        .rgb => |x| x,
-        .token => |t| switch (t) {
-            .muted => theme.muted,
-            .accent => theme.accent,
-            .@"error" => theme.@"error",
-            .warning => theme.warning,
-            .unsupported => theme.unsupported,
-        },
-    };
-}
-
-test "literals pass through; tokens come from the theme" {
-    const std = @import("std");
-    try std.testing.expectEqual(@as(u24, 0x336699), default.rgb(.{ .rgb = 0x336699 }));
-    try std.testing.expectEqual(@as(u24, 0x888888), default.rgb(.{ .token = .muted }));
-    try std.testing.expectEqual(@as(u24, 0x1f6feb), default.rgb(.{ .token = .accent }));
-}
+pub const font = "Helvetica";
+pub const font_italic = "Helvetica-Oblique";
+pub const font_bold = "Helvetica-Bold";
+pub const font_bold_italic = "Helvetica-BoldOblique";

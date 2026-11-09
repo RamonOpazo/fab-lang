@@ -29,37 +29,6 @@ test "the prelude checks with nothing to report" {
     try testing.expectEqual(@as(usize, 0), all.len);
 }
 
-test "the prelude's labels are the ones Zig gives meaning to" {
-    const Style = @import("../style/Style.zig");
-    var c = try Compilation.init(testing.allocator, "", strict);
-    defer c.deinit();
-    _ = try c.ir();
-    const env = &c.analysed.?.env;
-    try expectLabels(env, ":Shape", Style.Shape, &.{"none"});
-    try expectLabels(env, ":As", Style.As, &.{"placeholder"});
-    try expectLabels(env, ":Line", Style.Line, &.{"none"});
-}
-
-/// Every label of `type_name` is a value of `E`, hyphens read as
-/// underscores, and every value of `E` but `internal` is a label of it.
-fn expectLabels(env: *const @import("../analyse/Env.zig"), type_name: []const u8, E: type, internal: []const []const u8) !void {
-    const t = env.type_table.get(type_name).?.index;
-    var count: usize = 0;
-    var it = env.values.iterator();
-    while (it.next()) |entry| {
-        if (entry.value_ptr.type != t) continue;
-        count += 1;
-        var buffer: [32]u8 = undefined;
-        const name = buffer[0..entry.key_ptr.len];
-        _ = std.mem.replace(u8, entry.key_ptr.*, "-", "_", name);
-        if (std.meta.stringToEnum(E, name) == null) {
-            std.debug.print("{s}: [{s}] has no meaning in Zig\n", .{ type_name, entry.key_ptr.* });
-            return error.TestUnexpectedResult;
-        }
-    }
-    try testing.expectEqual(std.enums.values(E).len - internal.len, count);
-}
-
 test "references reach into the prelude" {
     var c = try Compilation.init(testing.allocator, "G :: f\nG.f :label \"x\"", preview);
     defer c.deinit();

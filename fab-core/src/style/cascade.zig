@@ -18,13 +18,13 @@ const Ir = @import("../analyse/Ir.zig");
 const Env = @import("../analyse/Env.zig");
 const decoded = @import("../analyse/decoded.zig");
 const layers = @import("../analyse/layers.zig");
-const Style = @import("Style.zig");
 const Sheet = @import("Sheet.zig");
 
 const Descriptor = Sheet.Descriptor;
 const Entry = Sheet.Entry;
 const Value = decoded.Value;
-const Mark = Style.Mark;
+const Mark = Sheet.Mark;
+const Layer = Sheet.Layer;
 
 /// What the cascade reads besides the IR: the environment (`[base]`, the
 /// themes, the bundles) and the program's layers.
@@ -110,6 +110,7 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
         e.* = try b.element(.{ .zone = zone }, zone, .initOne(.zone), .{ .text = ir.string(name) }, mark.border, true);
     }
 
+    try b.prune();
     const descriptors = try b.names.toOwnedSlice(gpa);
     errdefer gpa.free(descriptors);
     const made = try b.rules.toOwnedSlice(gpa);
@@ -118,6 +119,7 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
     sheet.descriptors = descriptors;
     sheet.rules = made;
     sheet.tokens = b.zone_tokens;
+    if (b.base) |base| sheet.base_tokens = base.tokens;
     sheet.elements = .{ .nodes = b.nodes, .edges = b.edges, .cells = b.cells, .zones = b.zones };
 }
 
@@ -134,7 +136,7 @@ fn record(env: *const Env, v: ?Env.Value) ?decoded.Record {
 const Precedence = u32;
 
 /// A descriptor's value so far, and the precedence it was bound at.
-const Slot = ?struct { at: Precedence, value: Value };
+const Slot = ?struct { at: Precedence, value: Value, layer: Layer };
 
 const Builder = struct {
     gpa: std.mem.Allocator,
@@ -323,7 +325,7 @@ const Builder = struct {
         // [base] is layer 0, each theme one more, the program the last.
         if (b.base) |base| try b.foldRecord(slots, base, classes, 0);
         const themes = b.zone_themes[@backingInt(zone)];
-        for (themes, 1..) |theme, layer| try b.foldRecord(slots, theme, classes, @intCast(layer));
+        for (themes, 1..) |theme, at| try b.foldRecord(slots, theme, classes, @intCast(at));
         const program: Precedence = @intCast(themes.len + 1);
         for (b.top.items) |i| try b.foldProgram(slots, i, classes, program, 0);
         if (b.in_zone.get(@backingInt(zone))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, program, 4);
@@ -343,7 +345,7 @@ const Builder = struct {
             if (binding.key != null) continue;
             const meet = (binding.classes orelse continue).intersectWith(classes);
             if (meet.count() == 0) continue;
-            try b.bind(slots, binding.descriptor, binding.value, layer * 16 + rank(meet), 8);
+            try b.bind(slots, binding.descriptor, binding.value, layer * 16 + rank(meet), if (layer == 0) .base else .theme, 8);
         }
     }
 
@@ -353,30 +355,67 @@ const Builder = struct {
         const binding = b.in.bindings[i];
         const meet = binding.subject.class.classes.intersectWith(classes);
         if (meet.count() == 0) return;
-        try b.bind(slots, binding.descriptor, binding.value, layer * 16 + shift + rank(meet), 8);
+        try b.bind(slots, binding.descriptor, binding.value, layer * 16 + shift + rank(meet), .program, 8);
     }
 
     /// Binds `descriptor` in `slots` at `at`, unless something more specific
     /// was bound. A bundle binds its body in its place.
-    fn bind(b: *Builder, slots: []Slot, descriptor: []const u8, v: Value, at: Precedence, depth: u32) error{OutOfMemory}!void {
+    fn bind(b: *Builder, slots: []Slot, descriptor: []const u8, v: Value, at: Precedence, layer: Layer, depth: u32) error{OutOfMemory}!void {
         if (b.by_name.get(descriptor)) |d| {
             const slot = &slots[@backingInt(d)];
-            if (slot.* == null or at >= slot.*.?.at) slot.* = .{ .at = at, .value = v };
+            if (slot.* == null or at >= slot.*.?.at) slot.* = .{ .at = at, .value = v, .layer = layer };
             return;
         }
         const f = b.in.env.functions.get(descriptor) orelse return;
         if (!f.bundle or depth == 0) return;
         if (v != .flag or !v.flag) return;
         const body = b.in.env.records.items[@backingInt(f.body orelse return)];
-        for (body.bindings) |binding| try b.bind(slots, binding.descriptor, binding.value, at, depth - 1);
+        for (body.bindings) |binding| try b.bind(slots, binding.descriptor, binding.value, at, layer, depth - 1);
     }
 
     /// The bound slots as entries, in descriptor order, tokens resolved.
+    /// `:theme` is the cascade's, no element's style.
     fn emit(b: *Builder, slots: []const Slot, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
-        for (slots, 0..) |slot, i| if (slot) |s| try b.entries.append(b.gpa, .{
-            .descriptor = @fromBackingInt(@as(u16, @intCast(i))),
-            .value = try b.resolve(s.value, zone),
-        });
+        for (slots, 0..) |slot, i| if (slot) |s| {
+            if (std.mem.eql(u8, b.names.items[i], ":theme")) continue;
+            try b.entries.append(b.gpa, .{
+                .descriptor = @fromBackingInt(@as(u16, @intCast(i))),
+                .value = try b.resolve(s.value, zone),
+                .layer = s.layer,
+            });
+        };
+    }
+
+    /// Drops the rules no element names (the `&canonical` check makes some
+    /// on the way), and the entries only they held.
+    fn prune(b: *Builder) error{OutOfMemory}!void {
+        const tables = [_][]Sheet.Element{ b.nodes, b.edges, b.cells, b.zones };
+        const renumber = try b.gpa.alloc(?Sheet.RuleIndex, b.rules.items.len);
+        defer b.gpa.free(renumber);
+        @memset(renumber, null);
+        for (tables) |table| for (table) |e| {
+            renumber[@backingInt(e.rule)] = e.rule;
+        };
+        var entries: std.ArrayList(Entry) = .empty;
+        errdefer entries.deinit(b.gpa);
+        var rules: std.ArrayList(Sheet.Rule) = .empty;
+        errdefer rules.deinit(b.gpa);
+        for (b.rules.items, renumber) |r, *new| if (new.* != null) {
+            new.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
+            const start: u32 = @intCast(entries.items.len);
+            try entries.appendSlice(b.gpa, b.entries.items[r.entries.start..r.entries.end]);
+            try rules.append(b.gpa, .{ .zone = r.zone, .classes = r.classes, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
+        };
+        for (tables) |table| for (table) |*e| {
+            e.rule = renumber[@backingInt(e.rule)].?;
+            const start: u32 = @intCast(entries.items.len);
+            try entries.appendSlice(b.gpa, b.entries.items[e.own.start..e.own.end]);
+            e.own = .{ .start = start, .end = @intCast(entries.items.len) };
+        };
+        b.entries.deinit(b.gpa);
+        b.entries = entries;
+        b.rules.deinit(b.gpa);
+        b.rules = rules;
     }
 
     /// A label a token of `zone` binds, replaced by its value, once: in a
@@ -409,7 +448,7 @@ const Builder = struct {
         @memset(slots, null);
         if (b.own.get(subjectKey(subject))) |list| for (list.items) |i| {
             const binding = b.in.bindings[i];
-            try b.bind(slots, binding.descriptor, binding.value, 0, 8);
+            try b.bind(slots, binding.descriptor, binding.value, 0, .program, 8);
         };
 
         const rule_entries = b.entries.items[b.rules.items[@backingInt(r)].entries.start..b.rules.items[@backingInt(r)].entries.end];
@@ -421,14 +460,14 @@ const Builder = struct {
             }
         }.get;
         if (b.by_name.get(":label")) |d| if (isNil(merged(slots, rule_entries, d))) {
-            slots[@backingInt(d)] = .{ .at = 0, .value = label };
+            slots[@backingInt(d)] = .{ .at = 0, .value = label, .layer = .computed };
         };
         if (subject == .cell) if (b.by_name.get(":arrow")) |d| if (isNil(merged(slots, rule_entries, d))) {
             const arrow = try b.arena.alloc(Value, 3);
             arrow[0] = .nil;
             arrow[1] = .{ .label = .{ .name = if (b.level <= 2) "double" else "triple" } };
             arrow[2] = .{ .label = .{ .name = ">" } };
-            slots[@backingInt(d)] = .{ .at = 0, .value = .{ .elements = arrow } };
+            slots[@backingInt(d)] = .{ .at = 0, .value = .{ .elements = arrow }, .layer = .computed };
         };
 
         // Marks, unless the diagram draws none (`:marks []`).
@@ -436,17 +475,17 @@ const Builder = struct {
         if (drawn) {
             if (is_zone) {
                 if (b.zone_mark.border) |m| if (b.by_name.get(":stroke")) |d| {
-                    slots[@backingInt(d)] = .{ .at = 0, .value = .{ .label = .{ .name = tokenOf(m) } } };
+                    slots[@backingInt(d)] = .{ .at = 0, .value = .{ .label = .{ .name = tokenOf(m) } }, .layer = .mark };
                 };
                 if (b.zone_mark.unsupported) if (b.by_name.get(":caption")) |d| {
-                    slots[@backingInt(d)] = .{ .at = 0, .value = .{ .text = "unsupported" } };
+                    slots[@backingInt(d)] = .{ .at = 0, .value = .{ .text = "unsupported" }, .layer = .mark };
                 };
             } else if (mark) |m| {
                 const colour: Value = .{ .label = .{ .name = tokenOf(m) } };
-                if (b.by_name.get(":stroke")) |d| slots[@backingInt(d)] = .{ .at = 0, .value = colour };
+                if (b.by_name.get(":stroke")) |d| slots[@backingInt(d)] = .{ .at = 0, .value = colour, .layer = .mark };
                 // A solid shape's fill is its line.
                 if (b.by_name.get(":shape")) |d| if (merged(slots, rule_entries, d)) |shape| if (shape == .label and solid(shape.label.name)) {
-                    if (b.by_name.get(":fill")) |f| slots[@backingInt(f)] = .{ .at = 0, .value = colour };
+                    if (b.by_name.get(":fill")) |f| slots[@backingInt(f)] = .{ .at = 0, .value = colour, .layer = .mark };
                 };
             }
         }
@@ -464,7 +503,7 @@ const Builder = struct {
         @memset(slots, null);
         if (b.own.get(subjectKey(subject))) |list| for (list.items) |i| {
             const binding = b.in.bindings[i];
-            try b.bind(slots, binding.descriptor, binding.value, 0, 8);
+            try b.bind(slots, binding.descriptor, binding.value, 0, .program, 8);
         };
         if (slots[@backingInt(d)]) |s| return s.value == .nil;
         const rule = b.rules.items[@backingInt(r)];

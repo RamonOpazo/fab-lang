@@ -13,17 +13,12 @@
 //! since the fill is the shape. A diagram with any issue, on it or on what
 //! it holds, is framed in the colour of its worst, with "unsupported" above
 //! its name while any is unsupported. `:marks []` draws none.
-//!
-//! Until fab-render reads the Sheet of values (plan step 9d5), the typed
-//! tables are translated from it: `bridge`.
 
 const std = @import("std");
 const Ir = @import("../analyse/Ir.zig");
-const Style = @import("Style.zig");
 const Sheet = @import("Sheet.zig");
 const cascade = @import("cascade.zig");
-const value = @import("../analyse/value.zig");
-const Mark = Style.Mark;
+const Mark = Sheet.Mark;
 
 pub const Inputs = cascade.Inputs;
 pub const ZoneMark = cascade.ZoneMark;
@@ -59,10 +54,9 @@ pub fn style(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, marks: []const M
     defer gpa.free(zone_marks);
     for (zone_marks, 0..) |*m, z| m.* = zoneMark(ir, marks, @fromBackingInt(@as(u32, @intCast(z))));
 
-    var sheet: Sheet = .{ .ir = ir, .nodes = &.{}, .edges = &.{}, .zones = &.{}, .arena = .init(gpa), .gpa = gpa };
+    var sheet: Sheet = .{ .ir = ir, .arena = .init(gpa), .gpa = gpa };
     errdefer sheet.deinit();
     try cascade.build(gpa, ir, in, reached, .{ .nodes = node_marks, .edges = edge_marks, .cells = cell_marks, .zones = zone_marks }, &sheet);
-    try bridge(&sheet, zone_marks);
     return sheet;
 }
 
@@ -86,114 +80,6 @@ pub fn zoneMark(ir: *const Ir, marks: []const Mark, zone: Ir.ZoneIndex) ZoneMark
 
 fn join(worst: *?Mark, m: Mark) void {
     worst.* = if (worst.*) |w| w.max(m) else m;
-}
-
-// ---------------------------------------------------------------------------
-// The bridge (plan steps 9d4–9d5): the typed tables renderers read, from the
-// Sheet of values. It goes once fab-render reads the Sheet.
-
-const Names = struct {
-    label: ?Sheet.Descriptor,
-    caption: ?Sheet.Descriptor,
-    face: ?Sheet.Descriptor,
-    ink: ?Sheet.Descriptor,
-    stroke: ?Sheet.Descriptor,
-    fill: ?Sheet.Descriptor,
-    line: ?Sheet.Descriptor,
-    shape: ?Sheet.Descriptor,
-    as: ?Sheet.Descriptor,
-    arrow: ?Sheet.Descriptor,
-};
-
-fn bridge(s: *Sheet, zone_marks: []const ZoneMark) error{OutOfMemory}!void {
-    const n: Names = .{
-        .label = s.descriptor(":label"),
-        .caption = s.descriptor(":caption"),
-        .face = s.descriptor(":face"),
-        .ink = s.descriptor(":ink"),
-        .stroke = s.descriptor(":stroke"),
-        .fill = s.descriptor(":fill"),
-        .line = s.descriptor(":line"),
-        .shape = s.descriptor(":shape"),
-        .as = s.descriptor(":as"),
-        .arrow = s.descriptor(":arrow"),
-    };
-    const ir = s.ir;
-    const nodes = try s.gpa.alloc(Style, ir.nodes.len);
-    s.nodes = nodes;
-    for (nodes, 0..) |*out, i| out.* = typed(s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) }), n, .node);
-    const edges = try s.gpa.alloc(Style, ir.edges.len);
-    s.edges = edges;
-    for (edges, 0..) |*out, i| out.* = typed(s.style(.{ .edge = @fromBackingInt(@as(u32, @intCast(i))) }), n, .edge);
-    const zones = try s.gpa.alloc(Style, ir.zones.len);
-    s.zones = zones;
-    for (zones, ir.zones.items(.placeholder), zone_marks, 0..) |*out, placeholder, mark, i| {
-        const zone: Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(i)));
-        const view = s.style(.{ .zone = zone });
-        out.* = typed(view, n, .zone);
-        if (placeholder) out.as = .placeholder;
-        // In its own colour, even under a red frame (statements.md §15.3).
-        if (mark.unsupported) if (n.caption) |d| if (view.text(d)) |text| {
-            const ink = if (s.token(zone, "unsupported")) |v| switch (v) {
-                .color => |c| rgb(c),
-                else => Mark.unsupported.color(),
-            } else Mark.unsupported.color();
-            out.caption = .{ .text = text, .ink = ink };
-        };
-    }
-}
-
-fn typed(v: Sheet.View, n: Names, comptime of: enum { node, edge, zone }) Style {
-    const face = if (n.face) |d| v.label(enum { regular, italic, bold, bold_italic }, d) else .nil;
-    return .{
-        .label = if (n.label) |d| v.text(d) orelse math(v, d) orelse "" else "",
-        .caption = null,
-        .italic = face == .value and (face.value == .italic or face.value == .bold_italic),
-        .ink = colour(v, n.ink),
-        .stroke = colour(v, n.stroke),
-        .fill = if (of == .edge) null else colour(v, n.fill),
-        .line = switch (of) {
-            .node, .zone => if (n.line) |d| switch (v.label(Style.Line, d)) {
-                .value => |l| l,
-                .nil, .unknown => .none,
-            } else .solid,
-            // An edge's line is its arrow's middle.
-            .edge => if (n.arrow) |d| arrowLine(v.get(d)) else .solid,
-        },
-        .shape = if (of == .node) if (n.shape) |d| switch (v.label(Style.Shape, d)) {
-            .value => |shape| shape,
-            .nil, .unknown => .none,
-        } else .none else .none,
-        .as = if (of == .zone) if (n.as) |d| switch (v.label(Style.As, d)) {
-            .value => |as| as,
-            .nil, .unknown => .cluster,
-        } else .cluster else .cluster,
-    };
-}
-
-fn math(v: Sheet.View, d: Sheet.Descriptor) ?[]const u8 {
-    return if (v.get(d)) |x| switch (x) {
-        .math => |m| m,
-        else => null,
-    } else null;
-}
-
-fn colour(v: Sheet.View, d: ?Sheet.Descriptor) ?Style.Color {
-    return rgb(v.color(d orelse return null) orelse return null);
-}
-
-fn rgb(c: value.Rgba) Style.Color {
-    return .{ .rgb = (@as(u24, c.r) << 16) | (@as(u24, c.g) << 8) | c.b };
-}
-
-fn arrowLine(arrow: ?@import("../analyse/decoded.zig").Value) Style.Line {
-    const a = arrow orelse return .solid;
-    if (a != .elements or a.elements.len != 3) return .solid;
-    return switch (a.elements[1]) {
-        .label => |l| std.meta.stringToEnum(Style.Line, l.name) orelse .solid,
-        .nil => .none,
-        else => .solid,
-    };
 }
 
 test {

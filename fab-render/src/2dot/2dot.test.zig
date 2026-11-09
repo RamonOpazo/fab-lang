@@ -11,13 +11,6 @@ const fab = @import("fab_core");
 const to_dot = @import("root.zig");
 const Note = @import("../shared/Note.zig");
 
-const Style = fab.Style;
-
-/// A resolved style from just the attributes a test cares about.
-fn style(a: Style.Attrs) Style {
-    return a.resolve();
-}
-
 const preview: fab.Compilation.Tolerance = .{ .warnings = .warn, .ir = .keep };
 
 /// The DOT for `sheet`, and its notes. Caller frees both.
@@ -291,16 +284,22 @@ test "a warning frames its diagram in amber, and marks its node" {
 }
 
 test "a marked edge takes the colour, and a marked dot is filled with it" {
-    // No analysis error marks an edge yet: the marks are set by hand.
-    var c = try fab.Compilation.init(testing.allocator, "G :: */f", preview);
+    // No analysis error marks an edge yet: the IR and its issues are made
+    // by hand, and styled with the prelude.
+    var b: fab.Ir.Builder = .init(testing.allocator);
+    errdefer b.deinit();
+    const z = try b.addZone(.{ .name = try b.addString("G"), .own = null });
+    const start = try b.addNode(.{ .kind = .null_node, .name = null, .zone = z, .canonical = null });
+    const end = try b.addNode(.{ .kind = .plain, .name = null, .zone = z, .canonical = .{ .edge = @fromBackingInt(@as(u32, 0)), .side = .cod } });
+    const f = try b.addEdge(.{ .name = try b.addString("f"), .source = start, .target = end, .directed = true, .zone = z });
+    try b.addIssue(.{ .subject = .{ .node = start }, .err = .{ .analysis = 0 } });
+    try b.addIssue(.{ .subject = .{ .edge = f }, .err = .{ .analysis = 1 } });
+    var ir = try b.finish();
+    defer ir.deinit(testing.allocator);
+    var c = try fab.Compilation.init(testing.allocator, "", preview);
     defer c.deinit();
-    var sheet = (try c.sheet()).?.*;
-    var nodes = [_]Style{ sheet.nodes[0], sheet.nodes[1] };
-    nodes[0].stroke = .{ .token = .@"error" };
-    var edges = [_]Style{sheet.edges[0]};
-    edges[0].stroke = .{ .token = .warning };
-    sheet.nodes = &nodes;
-    sheet.edges = &edges;
+    var sheet = try fab.Styler.style(testing.allocator, &ir, .{ .env = &(try c.analysis()).env }, &.{ .@"error", .warning });
+    defer sheet.deinit();
     var o = try render(&sheet);
     defer o.deinit();
     try testing.expect(std.mem.indexOf(u8, o.dot, "n0 [label=\"\", shape=circle, width=0.14, height=0.14, fixedsize=true, color=\"#d1242f\", fillcolor=\"#d1242f\", style=\"filled\"]") != null);
@@ -341,16 +340,13 @@ test "HTML text escapes what an HTML label would read" {
 }
 
 // ---------------------------------------------------------------------------
-// Realization of looks the source can't ask for yet. The Sheet is the
-// contract, so a hand-made Sheet stands in for the format layer to come.
+// Looks a program asks for. `:marks []` keeps the layer's own issue, still
+// unsupported, from framing the diagram.
 
 test "a framed cluster draws its border, label and fill" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: f\nG :style { :marks [], :stroke [#336699], :fill [accent], :line [dashed] }", preview);
     defer c.deinit();
-    var sheet = (try c.sheet()).?.*;
-    const zones = [_]Style{style(.{ .label = "G", .stroke = .{ .rgb = 0x336699 }, .fill = .{ .token = .accent }, .line = .dashed })};
-    sheet.zones = &zones;
-    var o = try render(&sheet);
+    var o = try render((try c.sheet()).?);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -368,12 +364,16 @@ test "a framed cluster draws its border, label and fill" {
 }
 
 test "flat zones have no cluster; :as node and table are clusters, with a note" {
-    var c = try fab.Compilation.init(testing.allocator, "A :: f\nB :: g\nC :: h", preview);
+    var c = try fab.Compilation.init(testing.allocator,
+        \\A :: f
+        \\B :: g
+        \\C :: h
+        \\A :style { :marks [], :as [flat] }
+        \\B :style { :marks [], :as [node] }
+        \\C :style { :marks [], :as [table] }
+    , preview);
     defer c.deinit();
-    var sheet = (try c.sheet()).?.*;
-    const zones = [_]Style{ style(.{ .as = .flat }), style(.{ .as = .node }), style(.{ .as = .table }) };
-    sheet.zones = &zones;
-    var o = try render(&sheet);
+    var o = try render((try c.sheet()).?);
     defer o.deinit();
     try testing.expect(std.mem.indexOf(u8, o.dot, "cluster_0") == null);
     try testing.expect(std.mem.indexOf(u8, o.dot, "cluster_1") != null);
@@ -383,21 +383,19 @@ test "flat zones have no cluster; :as node and table are clusters, with a note" 
 }
 
 test "lines and shapes: double, invisible, wavy, approximations" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f g", preview);
+    var c = try fab.Compilation.init(testing.allocator,
+        \\G :: f g
+        \\G :style {
+        \\    :marks [],
+        \\    +f { :label "a", :shape [stadium] },
+        \\    f+ { :label "b", :shape [round], :line [double], :stroke [#ff0000] },
+        \\    g+ { :label "c", :shape [document], :line [wavy] },
+        \\    f  :arrow [/double/>],
+        \\    g  :arrow [//>]
+        \\}
+    , preview);
     defer c.deinit();
-    var sheet = (try c.sheet()).?.*;
-    const nodes = [_]Style{
-        style(.{ .label = "a", .shape = .stadium }),
-        style(.{ .label = "b", .shape = .round, .line = .double, .stroke = .{ .rgb = 0xff0000 } }),
-        style(.{ .label = "c", .shape = .document, .line = .wavy }),
-    };
-    const edges = [_]Style{
-        style(.{ .label = "f", .line = .double }),
-        style(.{ .label = "g", .line = .none }),
-    };
-    sheet.nodes = &nodes;
-    sheet.edges = &edges;
-    var o = try render(&sheet);
+    var o = try render((try c.sheet()).?);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -417,17 +415,9 @@ test "lines and shapes: double, invisible, wavy, approximations" {
 }
 
 test "lines: triple, as three parallel lines" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: f\nG :style { :marks [], +f { :label \"a\", :line [triple] }, f+ :label \"b\", f :arrow [/triple/>] }", preview);
     defer c.deinit();
-    var sheet = (try c.sheet()).?.*;
-    const nodes = [_]Style{
-        style(.{ .label = "a", .shape = .circle, .line = .triple }),
-        style(.{ .label = "b", .shape = .circle }),
-    };
-    const edges = [_]Style{style(.{ .label = "f", .line = .triple })};
-    sheet.nodes = &nodes;
-    sheet.edges = &edges;
-    var o = try render(&sheet);
+    var o = try render((try c.sheet()).?);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -551,25 +541,27 @@ fn expectLaw(source: []const u8) !void {
     // Nodes: the same set, each in its owning zone's cluster.
     try testing.expectEqual(ir.nodes.len, r.nodes.items.len);
     for (ir.nodes.items(.zone), r.nodes.items) |zone, cluster| {
-        const expected: ?u32 = if (sheet.drawnAs(zone) == .flat) null else @backingInt(zone);
+        const as = sheet.style(.{ .zone = zone }).label(enum { flat, cluster, node, table }, sheet.descriptor(":as").?);
+        const expected: ?u32 = if (as == .value and as.value == .flat) null else @backingInt(zone);
         try testing.expectEqual(expected, cluster);
     }
     // Edges: the same multiset, in order, with ends, direction and label.
     try testing.expectEqual(ir.edges.len, r.edges.items.len);
-    for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), sheet.edges, r.edges.items) |s, t, d, look, e| {
+    for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), r.edges.items, 0..) |s, t, d, e, i| {
+        const label = sheet.style(.{ .edge = @fromBackingInt(@as(u32, @intCast(i))) }).text(sheet.descriptor(":label").?).?;
         try testing.expectEqual(@backingInt(s), e.source);
         try testing.expectEqual(@backingInt(t), e.target);
         try testing.expectEqual(d, e.directed);
         var escaped: std.Io.Writer.Allocating = .init(testing.allocator);
         defer escaped.deinit();
-        try to_dot.quoted(&escaped.writer, look.label);
+        try to_dot.quoted(&escaped.writer, label);
         const q = escaped.written();
         try testing.expectEqualStrings(q[1 .. q.len - 1], e.label);
     }
     // One placeholder per placeholder zone, in its own cluster.
     var expected_placeholders: usize = 0;
     for (0..ir.zones.len) |z| {
-        if (sheet.drawnAs(@fromBackingInt(@as(u32, @intCast(z)))) != .placeholder) continue;
+        if (!ir.zones.items(.placeholder)[z]) continue;
         expected_placeholders += 1;
         var found: usize = 0;
         for (r.placeholders.items) |p| found += @intFromBool(p[0] == z and p[1] == z);
@@ -580,7 +572,11 @@ fn expectLaw(source: []const u8) !void {
     var expected_anchors: usize = 0;
     for (0..ir.zones.len) |z| {
         const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
-        if (sheet.drawnAs(zone) == .placeholder or sheet.drawnAs(zone) == .flat or !sheet.isFramed(zone)) continue;
+        const v = sheet.style(.{ .zone = zone });
+        const as = v.label(enum { flat, cluster, node, table }, sheet.descriptor(":as").?);
+        const flat = as == .value and as.value == .flat;
+        const framed = v.color(sheet.descriptor(":stroke").?) != null or v.color(sheet.descriptor(":fill").?) != null;
+        if (ir.zones.items(.placeholder)[z] or flat or !framed) continue;
         var owns = false;
         for (ir.nodes.items(.zone)) |owner| owns = owns or owner == zone;
         if (owns) continue;
@@ -697,4 +693,52 @@ test "out of memory is reported, never a crash or a leak" {
     defer c.deinit();
     const sheet = (try c.sheet()).?;
     try testing.checkAllAllocationFailures(testing.allocator, Case.run, .{sheet});
+}
+
+// ---------------------------------------------------------------------------
+// What Graphviz reads of the Sheet, and what it notes (statements.md §22.12)
+
+fn countNotes(notes: []const Note, tag: Note.Tag, name: []const u8) usize {
+    var n: usize = 0;
+    for (notes) |note| n += @intFromBool(note.tag == tag and std.mem.eql(u8, note.name, name));
+    return n;
+}
+
+test "what the author binds and graphviz doesn't draw is noted, once per diagram" {
+    var c = try fab.Compilation.init(testing.allocator,
+        \\:Shape :: [star]
+        \\G :: f g
+        \\G :style { :marks [], (f, g) :bend [inner], f+ :shape [star], g :arrow [epi] }
+        \\H :: h
+        \\H :style { :marks [], h :bend [outer] }
+    , preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    const notes = o.notes.items.items;
+    // :bend, bound on two edges of G and one of H: one note per diagram.
+    try testing.expectEqual(2, countNotes(notes, .descriptor_not_drawn, ":bend"));
+    // [base]'s bindings are never noted: :font, :size, :pen…
+    var undrawn: usize = 0;
+    for (notes) |n| undrawn += @intFromBool(n.tag == .descriptor_not_drawn);
+    try testing.expectEqual(2, undrawn);
+    try testing.expectEqual(1, countNotes(notes, .label_not_drawn, "star"));
+    try testing.expectEqual(1, countNotes(notes, .arrow_ends_not_drawn, ""));
+    // A label with no meaning here draws as none: the label alone.
+    try testing.expect(std.mem.indexOf(u8, o.dot, "n1 [label=\"f+\", shape=plaintext") != null);
+}
+
+test ":hide, a bold face, and a themed diagram's own colours" {
+    var c = try fab.Compilation.init(testing.allocator,
+        \\G :: #A/f/#B
+        \\G :style { :marks [], :theme [dark], #A :hide, #B :face [bold] }
+    , preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    try testing.expectEqual(0, o.notes.items.items.len);
+    // [dark]'s ink, not the header's [base] one.
+    try testing.expect(std.mem.indexOf(u8, o.dot, "n0 [label=\"A\", shape=circle, width=0.35, height=0.35, fixedsize=true, fontcolor=\"#dddddd\", color=\"#dddddd\", style=\"invis\"]") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "fontname=\"Helvetica-Bold\"") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "fillcolor=\"#1e1e1e\"") != null);
 }

@@ -1,19 +1,18 @@
-//! The product of the style pass: a resolved Style for every node, edge and
-//! zone of an IR, the way a style sheet maps elements to styles.
+//! The product of the style pass: every element's style, resolved, the way
+//! a style sheet maps elements to styles (statements.md §22.12).
+//!
+//! The prelude is its only schema: a style is a list of entries, a
+//! descriptor of `:Style` and its value, resolved (tokens as colours,
+//! computed defaults filled in). Styles are shared the way the author
+//! shares them: a *rule* per diagram and set of classes present holds what
+//! those make, and each element names its rule and holds only its own
+//! entries. `style` merges the two. A renderer reads what it draws, by
+//! descriptor, and reports the rest.
 //!
 //! Made by Styler.zig. A Sheet borrows the IR and the environment, which
 //! must outlive it, and owns its tables; what the cascade computes (labels,
 //! values with their tokens resolved, each diagram's tokens) is in its
 //! arena.
-//!
-//! Two forms live here while the style pass moves (plan step 9d): the typed
-//! tables `nodes`, `edges` and `zones`, which renderers read until 9d5 and
-//! which the Styler translates from the other, and the Sheet of values (statements.md §22.12). The prelude is its only
-//! schema: a style is a list of entries, a descriptor of `:Style` and its
-//! value, resolved. Styles are shared the way the author shares them: a
-//! *rule* per diagram and set of classes present holds what those make, and
-//! each element names its rule and holds only its own entries. `style`
-//! merges the two.
 
 const std = @import("std");
 const Ir = @import("../analyse/Ir.zig");
@@ -21,15 +20,11 @@ const Env = @import("../analyse/Env.zig");
 const Decimal = @import("../analyse/Decimal.zig");
 const value = @import("../analyse/value.zig");
 const decoded = @import("../analyse/decoded.zig");
-const Style = @import("Style.zig");
 const Value = decoded.Value;
 
 const Sheet = @This();
 
 ir: *const Ir,
-nodes: []const Style,
-edges: []const Style,
-zones: []const Style,
 /// What the cascade computes: canonical labels, resolved values, tokens.
 arena: std.heap.ArenaAllocator,
 
@@ -44,13 +39,32 @@ entries: []const Entry = &.{},
 elements: Elements = .{},
 /// Each diagram's tokens, resolved: `[base]`'s, its themes', its own.
 tokens: []const []const decoded.Token = &.{},
+/// `[base]`'s tokens: the defaults a renderer may set once, for every
+/// diagram.
+base_tokens: []const decoded.Token = &.{},
 gpa: std.mem.Allocator,
 
 /// A descriptor of `:Style`, by its place in `descriptors`.
 pub const Descriptor = enum(u16) { _ };
 
-/// A descriptor and the value it resolves to.
-pub const Entry = struct { descriptor: Descriptor, value: Value };
+/// A descriptor and the value it resolves to, with the layer that bound it.
+pub const Entry = struct { descriptor: Descriptor, value: Value, layer: Layer = .base };
+
+/// Where an entry's value comes from. Above `base`, the author asked for
+/// it: what a renderer reports when it can't draw it.
+pub const Layer = enum { computed, base, theme, program, mark };
+
+/// How serious an issue is, as drawn: the colour of its mark, the token of
+/// that name. A promoted warning is drawn as an error.
+pub const Mark = enum(u2) {
+    unsupported,
+    warning,
+    @"error",
+
+    pub fn max(a: Mark, b: Mark) Mark {
+        return if (@backingInt(a) >= @backingInt(b)) a else b;
+    }
+};
 
 /// Entries `start..end` of `entries`.
 pub const Span = struct { start: u32 = 0, end: u32 = 0 };
@@ -65,7 +79,7 @@ pub const Element = struct {
     rule: RuleIndex,
     own: Span = .{},
     /// Its worst issue, drawn or not (`:marks []`).
-    mark: ?Style.Mark = null,
+    mark: ?Mark = null,
 };
 
 pub const Elements = struct {
@@ -76,17 +90,9 @@ pub const Elements = struct {
 };
 
 /// An element of the IR, of any table.
-pub const Subject = union(enum) {
-    node: Ir.NodeIndex,
-    edge: Ir.EdgeIndex,
-    cell: Ir.CellIndex,
-    zone: Ir.ZoneIndex,
-};
+pub const Subject = Ir.Subject;
 
 pub fn deinit(s: *Sheet) void {
-    s.gpa.free(s.nodes);
-    s.gpa.free(s.edges);
-    s.gpa.free(s.zones);
     s.arena.deinit();
     s.gpa.free(s.descriptors);
     s.gpa.free(s.rules);
@@ -110,6 +116,12 @@ pub fn descriptor(s: *const Sheet, name: []const u8) ?Descriptor {
 /// colour, for a caption.
 pub fn token(s: *const Sheet, z: Ir.ZoneIndex, name: []const u8) ?Value {
     for (s.tokens[@backingInt(z)]) |t| if (std.mem.eql(u8, t.label, name)) return t.value;
+    return null;
+}
+
+/// `[base]`'s value for the token `name`.
+pub fn baseToken(s: *const Sheet, name: []const u8) ?Value {
+    for (s.base_tokens) |t| if (std.mem.eql(u8, t.label, name)) return t.value;
     return null;
 }
 
@@ -144,6 +156,11 @@ pub const View = struct {
     rule: []const Entry,
 
     pub fn get(v: View, d: Descriptor) ?Value {
+        return if (v.entry(d)) |e| e.value else null;
+    }
+
+    /// The entry for `d`, with the layer that bound it.
+    pub fn entry(v: View, d: Descriptor) ?Entry {
         return find(v.own, d) orelse find(v.rule, d);
     }
 
@@ -206,38 +223,14 @@ fn kebab(field: []const u8, name: []const u8) bool {
     return true;
 }
 
-fn find(entries: []const Entry, d: Descriptor) ?Value {
+fn find(entries: []const Entry, d: Descriptor) ?Entry {
     var lo: usize = 0;
     var hi: usize = entries.len;
     while (lo < hi) {
         const mid = (lo + hi) / 2;
         const at = @backingInt(entries[mid].descriptor);
-        if (at == @backingInt(d)) return entries[mid].value;
+        if (at == @backingInt(d)) return entries[mid];
         if (at < @backingInt(d)) lo = mid + 1 else hi = mid;
     }
     return null;
-}
-
-pub fn node(s: *const Sheet, n: Ir.NodeIndex) Style {
-    return s.nodes[@backingInt(n)];
-}
-
-pub fn edge(s: *const Sheet, e: Ir.EdgeIndex) Style {
-    return s.edges[@backingInt(e)];
-}
-
-pub fn zone(s: *const Sheet, z: Ir.ZoneIndex) Style {
-    return s.zones[@backingInt(z)];
-}
-
-/// How a zone appears: flat, a cluster, one node or a table.
-pub fn drawnAs(s: *const Sheet, z: Ir.ZoneIndex) Style.As {
-    return s.zones[@backingInt(z)].as;
-}
-
-/// Whether a zone draws a border or background around its contents. A
-/// cluster has neither unless the program gives it a stroke or a fill.
-pub fn isFramed(s: *const Sheet, z: Ir.ZoneIndex) bool {
-    const drawn = s.zones[@backingInt(z)];
-    return drawn.stroke != null or drawn.fill != null;
 }
