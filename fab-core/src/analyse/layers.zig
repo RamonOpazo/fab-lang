@@ -21,6 +21,7 @@ const Env = @import("Env.zig");
 const Ir = @import("Ir.zig");
 const records = @import("records.zig");
 const vocabulary = @import("vocabulary.zig");
+const elaborate = @import("elaborate.zig");
 
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
@@ -207,7 +208,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                     .hole => return,
                     .node => unreachable, // nodes are named with `#`
                 };
-                try a.referToken(main, if (name.level == 1) .edge else .cell, .{ .token = name.is.generator.token });
+                try a.referTokenTo(main, if (name.level == 1) .edge else .cell, .{ .token = name.is.generator.token }, elaborate.names(name));
                 try add(a, out, .{ .subject = .{ .subject = subject }, .zone = null }, main);
             },
             .node_id, .at => {
@@ -219,12 +220,12 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                     .hole => return,
                     .generator => unreachable,
                 };
-                try a.referToken(main, .node, .{ .token = name.token });
+                try a.referTokenTo(main, .node, .{ .token = name.token }, .{ .elem = elem });
                 try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = null, .token = main, .zone = zone.index } }, .zone = null }, main);
             },
             .class_id => try class(a, main, zone.index, out),
             .zone_id => if (std.mem.eql(u8, cst.tokenText(main), a.cst.tokenText(zone.token))) {
-                try a.referToken(main, .zone, .{ .token = zone.token });
+                try a.referTokenTo(main, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
                 try add(a, out, .{ .subject = .{ .subject = .{ .zone = zone.index } }, .zone = zone }, main);
             } else try a.fail(.another_diagrams_subject, main),
             else => try notASubject(a, node),
@@ -242,7 +243,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                 .hole => return,
                 .node => unreachable,
             };
-            try a.referToken(edge_token, .edge, .{ .token = g.token });
+            try a.referTokenTo(edge_token, .edge, .{ .token = g.token }, .{ .subject = .{ .edge = @fromBackingInt(g.index) } });
             const side: Ir.End.Side = if (cst.tag(node) == .prefix) .dom else .cod;
             const elem = if (side == .dom) g.left else g.right;
             const end: Ir.End = .{ .edge = @fromBackingInt(g.index), .side = side };
@@ -255,7 +256,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
             const left_token = cst.mainToken(left);
             if (!std.mem.eql(u8, cst.tokenText(left_token), cst.tokenText(zone.token)))
                 return a.fail(.another_diagrams_subject, left_token);
-            try a.referToken(left_token, .zone, .{ .token = zone.token });
+            try a.referTokenTo(left_token, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
             try part(a, zone, right, out);
         },
         else => try notASubject(a, node),
@@ -277,7 +278,7 @@ fn diagram(a: *Analyser, token: TokenIndex) error{OutOfMemory}!?Analyser.Zone {
         try a.fail(.description_at_undeclared_context, token);
         return null;
     };
-    try a.referToken(token, .zone, .{ .token = zone.token });
+    try a.referTokenTo(token, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
     return if (zone.broken) null else zone;
 }
 

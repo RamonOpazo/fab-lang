@@ -152,3 +152,34 @@ test "classes by name" {
     try testing.expectEqual(Env.Class.node, Env.class("&node").?);
     try testing.expectEqual(@as(?Env.Class, null), Env.class("&nodes"));
 }
+
+test "types are written as fAB spells them" {
+    const Parser = @import("../parse/Parser.zig");
+    const Analyser = @import("Analyser.zig");
+    var cst = try Parser.parse(testing.allocator,
+        \\:Tip :: [a], [b]
+        \\:Angle :: :Number!
+        \\:Pair :: [:Tip/:Color]
+        \\:Many :: [:Tip]
+        \\:Either :: :Tip, :Color
+        \\&node :angle :: :Angle
+        \\&node :twin :: :Number!
+        \\&node :pair :: [:Tip/:Color]
+        \\&node :either :: :Tip, :Color
+    );
+    defer cst.deinit(testing.allocator);
+    var result = try Analyser.analyse(testing.allocator, &cst, null);
+    defer result.deinit(testing.allocator);
+    const env = &result.env;
+    for ([_][2][]const u8{
+        .{ ":angle", ":Angle" },
+        .{ ":twin", ":Number!" },
+        .{ ":pair", "[:Tip/:Color]" },
+        .{ ":either", ":Tip, :Color" },
+    }) |case| {
+        var out: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer out.deinit();
+        try env.writeType(env.functions.get(case[0]).?.type, &out.writer);
+        try testing.expectEqualStrings(case[1], out.written());
+    }
+}

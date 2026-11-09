@@ -282,6 +282,36 @@ pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
     if (slot.* == null) slot.* = text;
 }
 
+/// Writes a type as fAB spells it: its name, `:T!`, `[:A/:B]`, `[:A]`,
+/// `:A, :B`. A type nothing names, as an unknown one, is `?`.
+pub fn writeType(env: *const Env, index: TypeIndex, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    if (env.type_names.items[@backingInt(index)]) |n| return w.writeAll(n);
+    switch (env.get(index)) {
+        .twin => |t| {
+            try env.writeType(t, w);
+            try w.writeByte('!');
+        },
+        .list => |t| {
+            try w.writeByte('[');
+            try env.writeType(t, w);
+            try w.writeByte(']');
+        },
+        .tuple => |ts| {
+            try w.writeByte('[');
+            for (ts, 0..) |t, i| {
+                if (i > 0) try w.writeByte('/');
+                try env.writeType(t, w);
+            }
+            try w.writeByte(']');
+        },
+        .@"union" => |ts| for (ts, 0..) |t, i| {
+            if (i > 0) try w.writeAll(", ");
+            try env.writeType(t, w);
+        },
+        else => try w.writeByte('?'),
+    }
+}
+
 /// Whether a value of type `actual` can stand where `expected` is.
 pub fn fits(env: *const Env, actual: TypeIndex, expected: TypeIndex) bool {
     if (actual == expected or actual == .unknown or expected == .unknown) return true;

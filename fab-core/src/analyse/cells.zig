@@ -17,6 +17,7 @@ const Cst = @import("../parse/Cst.zig");
 const Ir = @import("Ir.zig");
 const Analyser = @import("Analyser.zig");
 const sort = @import("sort.zig");
+const elaborate = @import("elaborate.zig");
 
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
@@ -173,8 +174,8 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     if (cst.tokenTag(token) != .edge_id or sort.isSide(a, token)) {
         const name = a.scope.table.get(text).?;
         switch (name.is) {
-            .node => try a.referToken(token, .node, .{ .token = name.token }),
-            .generator => |g| try a.referToken(token, if (name.level == 1) .edge else .cell, .{ .token = g.token }),
+            .node => try a.referTokenTo(token, .node, .{ .token = name.token }, elaborate.names(name)),
+            .generator => |g| try a.referTokenTo(token, if (name.level == 1) .edge else .cell, .{ .token = g.token }, elaborate.names(name)),
             .hole => {},
         }
         return one(l, switch (name.is) {
@@ -188,7 +189,7 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     if (gop.found_existing) {
         switch (gop.value_ptr.is) {
             .generator => |first| {
-                try a.referToken(token, .cell, .{ .token = first.token });
+                try a.referTokenTo(token, .cell, .{ .token = first.token }, .{ .cell = first.token });
                 try a.errors.append(a.gpa, .{ .tag = .edge_declared_twice, .token = token, .related = first.token });
             },
             .hole, .node => {},
@@ -198,7 +199,7 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const i: u32 = @intCast(l.cells.items.len);
     try l.cells.append(l.arena(), .{ .token = token });
     gop.value_ptr.* = .{ .level = a.scope.level, .is = .{ .generator = .{ .index = i, .token = token } } };
-    try a.referToken(token, .cell, .{ .token = token });
+    try a.referTokenTo(token, .cell, .{ .token = token }, .{ .cell = token });
 
     const ports = try l.arena().alloc(Port, 2);
     ports[0] = .{ .slot = .{ .cell = i, .end = .left } };

@@ -139,7 +139,7 @@ test "unknown requests fail, unknown notifications are ignored, bad JSON is a pa
     try s.send(initialize);
     _ = try s.received(arena.allocator());
     try s.send(
-        \\{"jsonrpc":"2.0","id":"x","method":"textDocument/hover","params":{}}
+        \\{"jsonrpc":"2.0","id":"x","method":"textDocument/codeLens","params":{}}
     );
     try s.send(
         \\{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":1}}
@@ -221,4 +221,24 @@ test "the prelude's file has no diagnostics" {
     );
     const got = try s.received(arena.allocator());
     try std.testing.expectEqual(0, field(got[0], &.{ "params", "diagnostics" }).?.array.items.len);
+}
+
+test "hover answers in Markdown, with the name's range" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","version":1,"text":"G :: f g"}}}
+    );
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","id":7,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":5}}}
+    );
+    const got = try s.received(arena.allocator());
+    try std.testing.expectEqualStrings("markdown", field(got[0], &.{ "result", "contents", "kind" }).?.string);
+    try std.testing.expect(std.mem.startsWith(u8, field(got[0], &.{ "result", "contents", "value" }).?.string, "**edge** `f`"));
+    try std.testing.expectEqual(6, field(got[0], &.{ "result", "range", "end", "character" }).?.integer);
 }

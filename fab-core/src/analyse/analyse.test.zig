@@ -172,6 +172,9 @@ fn dumpReferences(source: [:0]const u8) ![]u8 {
         if (r.definition) |d| {
             if (d.prelude) try out.writer.writeAll(" prelude") else try out.writer.print(" @{d}", .{@intFromPtr(a.cst.tokenText(d.token).ptr) - @intFromPtr(source.ptr)});
         } else try out.writer.writeAll(" built-in");
+        if (r.subject) |subject| switch (subject) {
+            inline else => |i, tag| try out.writer.print(" ={s}{d}", .{ @tagName(tag), @backingInt(i) }),
+        };
         try out.writer.writeByte('\n');
     }
     return out.toOwnedSlice();
@@ -187,22 +190,22 @@ test "references: every name in a declaration, and what it names" {
     // A's names, then B's uses of them: an end (`A.f+`), a named node
     // (`A.#X`), the diagram as its own node (`A`), its own edge (`+h`).
     try expectReferences("A :: @/f/#X g\nB :: A.f+/h, A.#X/k, A/m, +h/n",
-        \\A@0 zone @0
-        \\@@5 node @5
-        \\f@7 edge @7
-        \\#X@9 node @9
-        \\g@12 edge @12
-        \\B@14 zone @14
-        \\A@19 zone @0
-        \\f@21 edge @7
-        \\h@24 edge @24
-        \\A@27 zone @0
-        \\#X@29 node @9
-        \\k@32 edge @32
-        \\A@35 zone @0
-        \\m@37 edge @37
-        \\h@41 edge @24
-        \\n@43 edge @43
+        \\A@0 zone @0 =zone0
+        \\@@5 node @5 =node0
+        \\f@7 edge @7 =edge0
+        \\#X@9 node @9 =node1
+        \\g@12 edge @12 =edge1
+        \\B@14 zone @14 =zone1
+        \\A@19 zone @0 =zone0
+        \\f@21 edge @7 =edge0
+        \\h@24 edge @24 =edge2
+        \\A@27 zone @0 =zone0
+        \\#X@29 node @9 =node1
+        \\k@32 edge @32 =edge3
+        \\A@35 zone @0 =zone0
+        \\m@37 edge @37 =edge4
+        \\h@41 edge @24 =edge2
+        \\n@43 edge @43 =edge5
         \\
     );
 }
@@ -211,14 +214,14 @@ test "references: sides above level 1, and a diagram declared twice" {
     // The second G is drawn apart: its name points to the first, its `f`
     // is its own.
     try expectReferences("G :: f/g | f/α/g\nG :: f",
-        \\G@0 zone @0
-        \\f@5 edge @5
-        \\g@7 edge @7
-        \\f@11 edge @5
-        \\α@13 cell @13
-        \\g@16 edge @7
-        \\G@18 zone @0
-        \\f@23 edge @23
+        \\G@0 zone @0 =zone0
+        \\f@5 edge @5 =edge0
+        \\g@7 edge @7 =edge1
+        \\f@11 edge @5 =edge0
+        \\α@13 cell @13 =cell0
+        \\g@16 edge @7 =edge1
+        \\G@18 zone @0 =zone0
+        \\f@23 edge @23 =edge2
         \\
     );
 }
@@ -240,18 +243,18 @@ test "references: types, labels, values and descriptors, once each" {
         \\:Style@141 type @16
         \\warn@149 value @148
         \\red@159 label @10
-        \\G@164 zone @164
-        \\f@169 edge @169
-        \\G@171 zone @164
+        \\G@164 zone @164 =zone0
+        \\f@169 edge @169 =edge0
+        \\G@171 zone @164 =zone0
         \\:style@173 descriptor @131
-        \\f@182 edge @169
+        \\f@182 edge @169 =edge0
         \\:fill@184 descriptor @82
         \\warn@191 value @148
-        \\f@199 edge @169
+        \\f@199 edge @169 =edge0
         \\:fill@201 descriptor @82
         \\red@208 label @10
-        \\G@215 zone @164
-        \\f@217 edge @169
+        \\G@215 zone @164 =zone0
+        \\f@217 edge @169 =edge0
         \\:label@219 descriptor @50
         \\
     );

@@ -12,6 +12,7 @@ const Transport = @import("Transport.zig");
 const diagnostics = @import("diagnostics.zig");
 const tokens = @import("tokens.zig");
 const navigation = @import("navigation.zig");
+const hover = @import("hover.zig");
 
 const Server = @This();
 
@@ -133,6 +134,14 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
             return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
         const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, &[_]Message.DocumentHighlight{});
         return respond(arena, out, i, try navigation.highlights(arena, doc, p.position));
+    }
+
+    if (std.mem.eql(u8, method, "textDocument/hover")) {
+        const i = id orelse return;
+        const p = params(Message.PositionParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, null);
+        return respond(arena, out, i, try hover.of(arena, doc, p.position));
     }
 
     // Requests must be answered; unknown notifications are ignored.

@@ -78,11 +78,17 @@ pub const InitializeResult = struct {
         definitionProvider: bool = true,
         referencesProvider: bool = true,
         documentHighlightProvider: bool = true,
+        hoverProvider: bool = true,
     },
     serverInfo: struct { name: []const u8 = "fab", version: []const u8 },
 };
 
 pub const SemanticTokens = struct { data: []const u32 };
+
+pub const Hover = struct {
+    contents: struct { kind: []const u8 = "markdown", value: []const u8 },
+    range: ?Range = null,
+};
 
 pub const ResponseError = struct { code: i32, message: []const u8 };
 

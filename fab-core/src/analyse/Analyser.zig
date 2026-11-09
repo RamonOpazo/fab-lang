@@ -64,6 +64,9 @@ pub const Reference = struct {
     sort: Sort,
     /// Where it is defined; null for a built-in (`:Text`).
     definition: ?Site,
+    /// The element of the graph it names: a diagram, an edge, a cell, a
+    /// node. Null for the vocabulary's names, and for what failed.
+    subject: ?Ir.Subject = null,
 
     pub const Span = struct { start: u32, end: u32 };
     pub const Sort = enum { zone, node, edge, cell, type, label, value, descriptor };
@@ -77,6 +80,19 @@ pub const Reference = struct {
             return .{ .token = token orelse return null, .prelude = prelude };
         }
     };
+};
+
+const PendingReference = struct { reference: Reference, names: Names };
+
+/// The element a name names, as it is known while the graph is built.
+pub const Names = union(enum) {
+    nothing,
+    subject: Ir.Subject,
+    /// A node: its union-find element.
+    elem: u32,
+    /// A cell, by its declaring token: its IR index comes when its level
+    /// is added.
+    cell: TokenIndex,
 };
 
 /// Always an IR, and the errors found while building it. Errors with a
@@ -112,8 +128,9 @@ env: Env,
 /// nodes still elements until the graph is built (`layers.finish`).
 bindings: std.ArrayList(layers.PendingBinding) = .empty,
 contexts: std.ArrayList(layers.PendingReference) = .empty,
-/// The names used so far, with what they name.
-references: std.ArrayList(Reference) = .empty,
+/// The names used so far, with what they name: nodes still elements, and
+/// cells still tokens, until the graph is built.
+references: std.ArrayList(PendingReference) = .empty,
 /// Each element's IR node, once the graph is built.
 node_of: []Ir.NodeIndex = &.{},
 /// The zones declared so far, by name: the first declaration of each.
@@ -226,34 +243,57 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
 /// Records a use of a name: `text` is a slice of the program, a token or a
 /// bracket's element.
 pub fn refer(a: *Analyser, text: []const u8, sort: Reference.Sort, definition: ?Reference.Site) error{OutOfMemory}!void {
+    try a.referTo(text, sort, definition, .nothing);
+}
+
+/// Records a use of a name of the graph, with the element it names.
+pub fn referTo(a: *Analyser, text: []const u8, sort: Reference.Sort, definition: ?Reference.Site, names: Names) error{OutOfMemory}!void {
     const base = @intFromPtr(a.cst.source.ptr);
     std.debug.assert(@intFromPtr(text.ptr) >= base and @intFromPtr(text.ptr) + text.len <= base + a.cst.source.len);
     const start: u32 = @intCast(@intFromPtr(text.ptr) - base);
-    try a.references.append(a.gpa, .{ .span = .{ .start = start, .end = start + @as(u32, @intCast(text.len)) }, .sort = sort, .definition = definition });
+    try a.references.append(a.gpa, .{
+        .reference = .{ .span = .{ .start = start, .end = start + @as(u32, @intCast(text.len)) }, .sort = sort, .definition = definition },
+        .names = names,
+    });
 }
 
-/// Records a token's use; a definition with no site of its own is itself.
+/// Records a token's use, as `refer` does.
 pub fn referToken(a: *Analyser, token: TokenIndex, sort: Reference.Sort, definition: ?Reference.Site) error{OutOfMemory}!void {
     try a.refer(a.cst.tokenText(token), sort, definition);
 }
 
+/// Records a token's use, as `referTo` does.
+pub fn referTokenTo(a: *Analyser, token: TokenIndex, sort: Reference.Sort, definition: ?Reference.Site, names: Names) error{OutOfMemory}!void {
+    try a.referTo(a.cst.tokenText(token), sort, definition, names);
+}
+
 /// The references in source order, each span once: a name checked twice
-/// (a value read for its type, then for its structure) is one use.
+/// (a value read for its type, then for its structure) is one use. Once
+/// the graph is built, so nodes and cells are the IR's.
 fn sortedReferences(a: *Analyser) error{OutOfMemory}![]Reference {
     const items = a.references.items;
-    std.mem.sort(Reference, items, {}, struct {
-        fn lessThan(_: void, x: Reference, y: Reference) bool {
-            return x.span.start < y.span.start;
+    std.mem.sort(PendingReference, items, {}, struct {
+        fn lessThan(_: void, x: PendingReference, y: PendingReference) bool {
+            return x.reference.span.start < y.reference.span.start;
         }
     }.lessThan);
-    var n: usize = 0;
-    for (items) |r| {
-        if (n > 0 and items[n - 1].span.start == r.span.start and items[n - 1].span.end == r.span.end) continue;
-        items[n] = r;
-        n += 1;
+    var out: std.ArrayList(Reference) = .empty;
+    errdefer out.deinit(a.gpa);
+    for (items) |p| {
+        const last = if (out.items.len > 0) out.items[out.items.len - 1].span else null;
+        if (last) |l| if (l.start == p.reference.span.start and l.end == p.reference.span.end) continue;
+        var r = p.reference;
+        r.subject = switch (p.names) {
+            .nothing => null,
+            .subject => |s| s,
+            .elem => |e| .{ .node = a.node_of[a.uf.find(e)] },
+            .cell => |token| for (a.cell_tokens.items, 0..) |t, i| {
+                if (t == token) break .{ .cell = @fromBackingInt(@as(u32, @intCast(i))) };
+            } else null,
+        };
+        try out.append(a.gpa, r);
     }
-    a.references.shrinkRetainingCapacity(n);
-    return a.references.toOwnedSlice(a.gpa);
+    return out.toOwnedSlice(a.gpa);
 }
 
 /// The zone of the declaration being elaborated.
@@ -465,7 +505,7 @@ fn declareZone(a: *Analyser, name: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
     } else {
         gop.value_ptr.* = .{ .index = index, .token = name };
     }
-    try a.referToken(name, .zone, .{ .token = gop.value_ptr.token });
+    try a.referTokenTo(name, .zone, .{ .token = gop.value_ptr.token }, .{ .subject = .{ .zone = gop.value_ptr.index } });
     return index;
 }
 

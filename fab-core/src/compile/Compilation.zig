@@ -216,7 +216,10 @@ pub fn diagnosticIndex(c: *Compilation, issue: Ir.Issue) error{OutOfMemory}!usiz
     };
 }
 
-fn analysis(c: *Compilation) error{OutOfMemory}!*const Analyser.Result {
+/// The analysis, whatever the tolerance: the IR, the environment, the
+/// references. For tools that read a broken program too, as the language
+/// server does.
+pub fn analysis(c: *Compilation) error{OutOfMemory}!*const Analyser.Result {
     if (c.analysed == null) {
         const tree = try c.cst();
         const base: ?Env = if (c.prelude) try c.preludeEnv() else null;

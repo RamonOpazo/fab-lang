@@ -21,15 +21,16 @@ pub const Document = struct {
     prelude_uri: ?[]const u8,
 };
 
-/// A compiled document, and the reference at a position.
-const Context = struct {
+/// A compiled document, and the reference at a position: what navigation
+/// and hover read.
+pub const Context = struct {
     c: fab.Compilation,
     lines: fab.Lines,
     all: []const Reference,
     /// The reference at the position, if any.
     at: ?Reference,
 
-    fn init(arena: std.mem.Allocator, doc: Document, position: Message.Position) error{OutOfMemory}!Context {
+    pub fn init(arena: std.mem.Allocator, doc: Document, position: Message.Position) error{OutOfMemory}!Context {
         var c = try fab.Compilation.init(arena, doc.source, .{ .warnings = .warn, .ir = .keep });
         const lines = try fab.Lines.init(arena, c.source);
         const all = try c.references();
@@ -47,7 +48,7 @@ const Context = struct {
             std.mem.eql(u8, ctx.text(r), ctx.text(target));
     }
 
-    fn text(ctx: *const Context, r: Reference) []const u8 {
+    pub fn text(ctx: *const Context, r: Reference) []const u8 {
         return ctx.c.source[r.span.start..r.span.end];
     }
 
@@ -60,7 +61,7 @@ const Context = struct {
         return span.start <= r.span.start and r.span.end <= span.end;
     }
 
-    fn range(ctx: *const Context, start: u32, end: u32) Message.Range {
+    pub fn range(ctx: *const Context, start: u32, end: u32) Message.Range {
         return rangeIn(&ctx.lines, start, end);
     }
 };
