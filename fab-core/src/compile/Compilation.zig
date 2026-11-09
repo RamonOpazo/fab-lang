@@ -140,7 +140,7 @@ pub fn ir(c: *Compilation) error{OutOfMemory}!?*const Ir {
 /// null when `ir` is.
 pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
     const graph = try c.ir() orelse return null;
-    if (c.styled == null) c.styled = try Styler.style(c.gpa, graph, try c.marks());
+    if (c.styled == null) c.styled = try Styler.style(c.gpa, graph, &(try c.analysis()).env, try c.marks());
     return &c.styled.?;
 }
 

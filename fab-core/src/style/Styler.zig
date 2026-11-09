@@ -38,6 +38,8 @@ const std = @import("std");
 const Ir = @import("../analyse/Ir.zig");
 const Style = @import("Style.zig");
 const Sheet = @import("Sheet.zig");
+const Env = @import("../analyse/Env.zig");
+const rules = @import("rules.zig");
 const Attrs = Style.Attrs;
 const Mark = Style.Mark;
 
@@ -54,8 +56,9 @@ spans: std.ArrayList(Span) = .empty,
 const Span = struct { node: usize, start: usize, end: usize };
 
 /// Resolves every node, edge and zone of `ir`, with `marks[i]` the severity
-/// of issue i. The Sheet borrows `ir`.
-pub fn style(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{OutOfMemory}!Sheet {
+/// of issue i, and the styles `env`'s `[base]` gives them. The Sheet borrows
+/// `ir` and `env`.
+pub fn style(gpa: std.mem.Allocator, ir: *const Ir, env: *const Env, marks: []const Mark) error{OutOfMemory}!Sheet {
     std.debug.assert(marks.len == ir.issues.len);
     var f: Styler = .{ .gpa = gpa, .ir = ir };
     defer f.labels.deinit(gpa);
@@ -106,8 +109,11 @@ pub fn style(gpa: std.mem.Allocator, ir: *const Ir, marks: []const Mark) error{O
     }
 
     const owned = try f.labels.toOwnedSlice(gpa);
+    errdefer gpa.free(owned);
     for (f.spans.items) |span| nodes[span.node].label = owned[span.start..span.end];
-    return .{ .ir = ir, .nodes = nodes, .edges = edges, .zones = zones, .labels = owned, .gpa = gpa };
+    var sheet: Sheet = .{ .ir = ir, .nodes = nodes, .edges = edges, .zones = zones, .labels = owned, .gpa = gpa };
+    try rules.build(gpa, ir, env, reached, &sheet);
+    return sheet;
 }
 
 /// How a diagram is drawn for its issues: a border in the colour of the most

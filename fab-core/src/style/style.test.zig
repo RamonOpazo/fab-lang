@@ -185,7 +185,10 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     var ir = try b.finish();
     defer ir.deinit(testing.allocator);
 
-    var s = try Styler.style(testing.allocator, &ir, &.{ .warning, .unsupported, .@"error" });
+    // No prelude: no descriptors, and every rule empty.
+    var env = try @import("../analyse/Env.zig").init(testing.allocator);
+    defer env.deinit(testing.allocator);
+    var s = try Styler.style(testing.allocator, &ir, &env, &.{ .warning, .unsupported, .@"error" });
     defer s.deinit();
     try testing.expectEqual(amber, s.edges[0].stroke);
     // The start is a dot: its fill is its line.
@@ -249,4 +252,85 @@ test "running out of memory while styling leaks nothing" {
     // In-place growth makes the count of allocations drift from run to run.
     var fixed: @import("../compile/compilation.test.zig").FixedInPlace = .{ .backing = testing.allocator };
     try testing.checkAllAllocationFailures(fixed.allocator(), styleEverything, .{});
+}
+
+/// A label's name, or "nil" when there is none.
+fn labelName(v: Sheet.View, d: Sheet.Descriptor) []const u8 {
+    return if (v.get(d)) |x| switch (x) {
+        .label => |l| l.name,
+        else => "not a label",
+    } else "nil";
+}
+
+test "the Sheet of values: [base] folded by specificity into rules" {
+    var c = try Compilation.init(testing.allocator, "G :: #A/f/? +(a, b), g/? +(c, d)", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const d = struct {
+        fn of(sheet: *const Sheet, name: []const u8) !Sheet.Descriptor {
+            return sheet.descriptor(name) orelse error.TestUnexpectedResult;
+        }
+    }.of;
+    const shape = try d(s, ":shape");
+    const face = try d(s, ":face");
+    const label = try d(s, ":label");
+
+    // #A, then f's and g's choices, unnamed: canonical.
+    const named = s.style(.{ .node = @fromBackingInt(@as(u32, 0)) });
+    try testing.expectEqualStrings("circle", labelName(named, shape));
+    try testing.expectEqualStrings("regular", labelName(named, face));
+    try testing.expectEqual(@as(?@import("../analyse/decoded.zig").Value, .nil), named.get(label));
+
+    const choice = s.style(.{ .node = @fromBackingInt(@as(u32, 1)) });
+    // &choice over &node; &canonical over both.
+    try testing.expectEqualStrings("diamond", labelName(choice, shape));
+    try testing.expectEqualStrings("", choice.text(label).?);
+    try testing.expectEqualStrings("italic", labelName(choice, face));
+    try testing.expectEqualStrings("muted", labelName(choice, try d(s, ":ink")));
+
+    // The two choices share one rule; #A has its own.
+    var choices: usize = 0;
+    var rule: ?Sheet.RuleIndex = null;
+    for (s.ir.nodes.items(.kind), s.elements.nodes) |kind, e| if (kind == .choice) {
+        choices += 1;
+        if (rule) |r| try testing.expectEqual(r, e.rule) else rule = e.rule;
+    };
+    try testing.expectEqual(@as(usize, 2), choices);
+    try testing.expect(s.elements.nodes[0].rule != rule.?);
+
+    // An edge's arrow, a zone's `:as`.
+    const edge = s.style(.{ .edge = @fromBackingInt(@as(u32, 0)) });
+    const arrow = edge.get(try d(s, ":arrow")).?.elements;
+    try testing.expectEqual(@as(usize, 3), arrow.len);
+    try testing.expectEqual(@as(@import("../analyse/decoded.zig").Value, .nil), arrow[0]);
+    const zone = s.style(.{ .zone = @fromBackingInt(@as(u32, 0)) });
+    try testing.expectEqualStrings("cluster", labelName(zone, try d(s, ":as")));
+}
+
+test "a renderer reads labels as its own enum, and is told what it can't draw" {
+    var c = try Compilation.init(testing.allocator, "G :: #A/f/? +(a, b)", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const Shape = enum { circle, diamond, double_circle };
+    const shape = s.descriptor(":shape").?;
+    const choice = s.style(.{ .node = @fromBackingInt(@as(u32, 1)) });
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .diamond }, choice.label(Shape, shape));
+    // Nil is nothing there: `:fill []`.
+    try testing.expectEqual(Sheet.Label(Shape).nil, choice.label(Shape, s.descriptor(":fill").?));
+    const Point = enum { point };
+    try testing.expectEqualStrings("diamond", choice.label(Point, shape).unknown);
+}
+
+test "the names core gives meaning to are :Style's descriptors" {
+    var c = try Compilation.init(testing.allocator, "", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    for ([_][]const u8{ ":label", ":arrow", ":theme", ":marks" }) |name| {
+        if (s.descriptor(name) == null) {
+            std.debug.print("not in :Style: {s}\n", .{name});
+            return error.TestUnexpectedResult;
+        }
+    }
+    // In declaration order, the prelude's first.
+    try testing.expectEqualStrings(":label", s.descriptors[0]);
 }
