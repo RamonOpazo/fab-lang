@@ -25,6 +25,13 @@ pub const DidOpen = struct { textDocument: TextDocumentItem };
 pub const DidChange = struct { textDocument: VersionedDocumentId, contentChanges: []const Change };
 pub const DidClose = struct { textDocument: DocumentId };
 pub const SemanticTokensParams = struct { textDocument: DocumentId };
+/// A place in a document: definition, references, highlights.
+pub const PositionParams = struct { textDocument: DocumentId, position: Position };
+pub const ReferenceParams = struct {
+    textDocument: DocumentId,
+    position: Position,
+    context: struct { includeDeclaration: bool = true } = .{},
+};
 
 // ---------------------------------------------------------------------------
 // Written
@@ -43,6 +50,16 @@ pub const Diagnostic = struct {
     relatedInformation: ?[]const Related = null,
 };
 
+/// Where a name is used, in the document: written (its definition) or
+/// read.
+pub const DocumentHighlight = struct {
+    range: Range,
+    kind: u8,
+
+    pub const read: u8 = 2;
+    pub const write: u8 = 3;
+};
+
 pub const PublishDiagnostics = struct {
     uri: []const u8,
     version: ?i64 = null,
@@ -58,6 +75,9 @@ pub const InitializeResult = struct {
             legend: struct { tokenTypes: []const []const u8, tokenModifiers: []const []const u8 },
             full: bool = true,
         },
+        definitionProvider: bool = true,
+        referencesProvider: bool = true,
+        documentHighlightProvider: bool = true,
     },
     serverInfo: struct { name: []const u8 = "fab", version: []const u8 },
 };

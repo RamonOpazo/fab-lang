@@ -4,8 +4,10 @@ fAB's language server, as a library: messages in, messages out, no I/O.
 `fab lsp` (fab-cli) runs it over standard input and output. Depends on
 fab-core and on Zig's standard library only.
 
-Today (plan step L1): diagnostics on open and change (whole-document sync),
-and semantic tokens by sort. Positions are UTF-16.
+Today (plan steps L1, L2b): diagnostics on open and change (whole-document
+sync), semantic tokens by sort, go to definition, references and document
+highlights. Positions are UTF-16. A definition in the prelude opens a copy of
+it that `fab lsp` writes to `$XDG_CACHE_HOME/fab` (or `~/.cache/fab`).
 
 ```
 zig build test

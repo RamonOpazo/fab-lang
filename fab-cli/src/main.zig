@@ -11,6 +11,7 @@ const fab_cli = @import("fab_cli");
 const Args = fab_cli.Args;
 const run = fab_cli.run;
 const fab_lsp = @import("fab_lsp");
+const fab_core = @import("fab_core");
 
 const version = "0.0.0";
 
@@ -24,13 +25,13 @@ pub fn main(init: std.process.Init) !void {
     var err_buffer: [4096]u8 = undefined;
     var stderr = Io.File.stderr().writer(io, &err_buffer);
 
-    const code = dispatch(init.gpa, io, arena, argv[1..], &stdout.interface, &stderr.interface);
+    const code = dispatch(init.gpa, io, arena, init.environ_map, argv[1..], &stdout.interface, &stderr.interface);
     stdout.interface.flush() catch {};
     stderr.interface.flush() catch {};
     std.process.exit(code);
 }
 
-fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, args: []const []const u8, out: *Io.Writer, err: *Io.Writer) u8 {
+fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.Map, args: []const []const u8, out: *Io.Writer, err: *Io.Writer) u8 {
     const command = switch (Args.parse(args)) {
         .command => |c| c,
         .help => {
@@ -48,7 +49,7 @@ fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, args: []co
             , .{version}) catch {};
             return 0;
         },
-        .lsp => return lsp(gpa, io, out, err),
+        .lsp => return lsp(gpa, io, arena, env, out, err),
         .usage => |u| {
             if (u.argument) |a| err.print("fab: {s}: {s}\n", .{ u.message, a }) catch {} else err.print("fab: {s}\n", .{u.message}) catch {};
             if (u.hint) |h| err.print("hint: {s}\n", .{h}) catch {} else err.writeAll("Run `fab --help` for usage.\n") catch {};
@@ -62,10 +63,10 @@ fn dispatch(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, args: []co
 /// The language server: messages from standard input, answers to standard
 /// output, until the editor says `exit` or closes the input. Problems with
 /// the stream go to standard error, which editors log.
-fn lsp(gpa: std.mem.Allocator, io: Io, out: *Io.Writer, err: *Io.Writer) u8 {
+fn lsp(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.Map, out: *Io.Writer, err: *Io.Writer) u8 {
     var buffer: [64 * 1024]u8 = undefined;
     var stdin = Io.File.stdin().readerStreaming(io, &buffer);
-    var server: fab_lsp.Server = .init(gpa);
+    var server: fab_lsp.Server = .init(gpa, .{ .prelude_uri = preludeUri(io, arena, env) });
     defer server.deinit();
     while (server.exit_code == null) {
         const body = fab_lsp.Transport.read(gpa, &stdin.interface) catch |e| {
@@ -81,6 +82,37 @@ fn lsp(gpa: std.mem.Allocator, io: Io, out: *Io.Writer, err: *Io.Writer) u8 {
         err.flush() catch {};
     }
     return server.exit_code.?;
+}
+
+/// The prelude, written where an editor can open it, as a file URI: a
+/// definition in the prelude lands there. In `$XDG_CACHE_HOME/fab`, or
+/// `~/.cache/fab`, and written at every start, so it is always this
+/// compiler's. Null when there is nowhere to write it: navigation then
+/// stops at the program.
+fn preludeUri(io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.Map) ?[]const u8 {
+    const xdg = env.get("XDG_CACHE_HOME") orelse "";
+    const dir = if (xdg.len > 0 and xdg[0] == '/')
+        std.fmt.allocPrint(arena, "{s}/fab", .{xdg}) catch return null
+    else if (env.get("HOME")) |home|
+        std.fmt.allocPrint(arena, "{s}/.cache/fab", .{home}) catch return null
+    else
+        return null;
+    Io.Dir.cwd().createDirPath(io, dir) catch return null;
+    const path = std.fmt.allocPrint(arena, "{s}/prelude-{s}.fab", .{ dir, version }) catch return null;
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = fab_core.Compilation.prelude_source }) catch return null;
+    return fileUri(arena, path) catch null;
+}
+
+/// `file://` and the path, its bytes outside the unreserved set and `/`
+/// percent-encoded.
+fn fileUri(arena: std.mem.Allocator, path: []const u8) error{OutOfMemory}![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    try out.appendSlice(arena, "file://");
+    for (path) |byte| switch (byte) {
+        'A'...'Z', 'a'...'z', '0'...'9', '-', '.', '_', '~', '/' => try out.append(arena, byte),
+        else => try out.print(arena, "%{X:0>2}", .{byte}),
+    };
+    return out.items;
 }
 
 /// Runs the command once, start to finish.

@@ -11,6 +11,7 @@ const Message = @import("Message.zig");
 const Transport = @import("Transport.zig");
 const diagnostics = @import("diagnostics.zig");
 const tokens = @import("tokens.zig");
+const navigation = @import("navigation.zig");
 
 const Server = @This();
 
@@ -19,6 +20,7 @@ pub const version = "0.0.0";
 pub const Error = Io.Writer.Error || error{OutOfMemory};
 
 gpa: std.mem.Allocator,
+options: Options,
 /// Open documents by URI. Keys and texts are owned.
 documents: std.StringHashMapUnmanaged(Document) = .empty,
 state: enum { waiting, running, shutting_down } = .waiting,
@@ -27,8 +29,14 @@ exit_code: ?u8 = null,
 
 pub const Document = struct { text: []u8, version: i64 };
 
-pub fn init(gpa: std.mem.Allocator) Server {
-    return .{ .gpa = gpa };
+pub const Options = struct {
+    /// A file holding the prelude, as a URI: definitions in the prelude land
+    /// there. `fab lsp` writes it; without one, they are not found.
+    prelude_uri: ?[]const u8 = null,
+};
+
+pub fn init(gpa: std.mem.Allocator, options: Options) Server {
+    return .{ .gpa = gpa, .options = options };
 }
 
 pub fn deinit(s: *Server) void {
@@ -105,6 +113,28 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
         return respond(arena, out, i, Message.SemanticTokens{ .data = try tokens.encode(arena, doc.text) });
     }
 
+    if (std.mem.eql(u8, method, "textDocument/definition")) {
+        const i = id orelse return;
+        const p = params(Message.PositionParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, null);
+        return respond(arena, out, i, try navigation.definition(arena, doc, p.position));
+    }
+    if (std.mem.eql(u8, method, "textDocument/references")) {
+        const i = id orelse return;
+        const p = params(Message.ReferenceParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, &[_]Message.Location{});
+        return respond(arena, out, i, try navigation.references(arena, doc, p.position, p.context.includeDeclaration));
+    }
+    if (std.mem.eql(u8, method, "textDocument/documentHighlight")) {
+        const i = id orelse return;
+        const p = params(Message.PositionParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
+        const doc = s.navigable(p.textDocument.uri) orelse return respond(arena, out, i, &[_]Message.DocumentHighlight{});
+        return respond(arena, out, i, try navigation.highlights(arena, doc, p.position));
+    }
+
     // Requests must be answered; unknown notifications are ignored.
     if (id) |i| return fail(arena, out, i, Message.Code.method_not_found, method);
 }
@@ -125,12 +155,22 @@ fn store(s: *Server, uri: []const u8, text: []const u8, version_: i64) error{Out
     gop.value_ptr.* = .{ .text = owned_text, .version = version_ };
 }
 
+/// An open document, for navigation.
+fn navigable(s: *Server, uri: []const u8) ?navigation.Document {
+    const doc = s.documents.get(uri) orelse return null;
+    return .{ .uri = uri, .source = doc.text, .prelude_uri = s.options.prelude_uri };
+}
+
+/// Publishes a document's diagnostics. The prelude's file has none: it is
+/// the compiler's own, read before every program, so read as one it would
+/// define every name twice.
 fn publish(s: *Server, arena: std.mem.Allocator, out: *Io.Writer, uri: []const u8) Error!void {
     const doc = s.documents.get(uri).?;
+    const prelude = if (s.options.prelude_uri) |p| std.mem.eql(u8, p, uri) else false;
     try notify(arena, out, "textDocument/publishDiagnostics", Message.PublishDiagnostics{
         .uri = uri,
         .version = doc.version,
-        .diagnostics = try diagnostics.of(arena, uri, doc.text),
+        .diagnostics = if (prelude) &.{} else try diagnostics.of(arena, uri, doc.text),
     });
 }
 
@@ -141,6 +181,12 @@ fn params(comptime T: type, arena: std.mem.Allocator, value: ?std.json.Value) ?T
 }
 
 fn respond(arena: std.mem.Allocator, out: *Io.Writer, id: std.json.Value, result: anytype) Error!void {
+    // A response always has a result: an empty optional is `null`, not left
+    // out as null fields are.
+    if (@typeInfo(@TypeOf(result)) == .optional) {
+        if (result) |r| return respond(arena, out, id, r);
+        return send(arena, out, .{ .jsonrpc = "2.0", .id = id, .result = null });
+    }
     try send(arena, out, .{ .jsonrpc = "2.0", .id = id, .result = result });
 }
 

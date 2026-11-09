@@ -50,6 +50,22 @@ pub fn position(lines: *const Lines, offset: u32) Position {
     return .{ .line = line, .character = lines.unitsBetween(lines.starts[line], offset) };
 }
 
+/// The byte offset of a position, as an editor sends it. A character past
+/// its line's end is the line's end, before the "\n"; a line past the last
+/// is the end of the source.
+pub fn byteOffset(lines: *const Lines, p: Position) u32 {
+    if (p.line >= lines.starts.len) return @intCast(lines.source.len);
+    const end: usize = if (p.line + 1 < lines.starts.len) lines.starts[p.line + 1] - 1 else lines.source.len;
+    var i: usize = lines.starts[p.line];
+    var units: u32 = 0;
+    while (i < end and units < p.character) {
+        const step, const width = unitAt(lines.source, i);
+        i += step;
+        units += width;
+    }
+    return @intCast(i);
+}
+
 /// The UTF-16 offset of a byte offset.
 pub fn utf16(lines: *const Lines, offset: u32) u32 {
     const line = lines.lineOf(offset);
@@ -92,4 +108,8 @@ pub fn utf8Length(s: []const u8) usize {
     if (len > s.len) return 0;
     _ = std.unicode.utf8Decode(s[0..len]) catch return 0;
     return len;
+}
+
+test {
+    _ = @import("lines.test.zig");
 }

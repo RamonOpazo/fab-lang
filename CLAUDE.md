@@ -72,7 +72,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     | L2a done |
+| L    | Language server (after 9c, before 9d)     | L2b done |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -218,7 +218,7 @@ Done when every level case passes.
 - **L1** (done). The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort. fab-lsp is a library without I/O (`Server.handle`: one message in, framed messages out; `Transport` the `Content-Length` framing); `fab lsp` in fab-cli owns the standard streams. Editors in `editors/`: Helix, and Zed through a small Rust extension that starts `fab lsp` from the PATH.
 - **L2.** Navigation: go to definition, references, hover, rename. In increments:
   - **L2a** (done). fab-core: `Result.references`, one per name the program uses, its definition included: a span (a token, or a bracket's element: the `solid` in `[/solid/>]`), a sort (zone, node, edge, cell, type, label, value, descriptor), and the definition's site, a token in the program or in the prelude (null for a built-in). In source order, each span once. `Compilation.references()` and `definitionSpan(site)`. A named node keeps its first token as its definition. Classes have no site, and are left out. Layers keep their contexts apart, for the canonical checks.
-  - **L2b.** Definition, references, document highlight. The prelude is not a virtual `fab://` document, which editors don't open: `fab lsp` (fab-cli) writes the embedded prelude to a cache file, `$XDG_CACHE_HOME/fab/prelude-<version>.fab`, and the server points into it, so it always matches the compiler.
+  - **L2b** (done). Definition, references, document highlight (`navigation.zig`), from the name at the cursor or just before it; uses of one thing share its definition, built-ins their text. The prelude is not a virtual `fab://` document, which editors don't open: `fab lsp` (fab-cli) writes the embedded prelude at every start to `$XDG_CACHE_HOME/fab/prelude-<version>.fab` (or `~/.cache/fab`), and the server points into it (`Server.Options.prelude_uri`), so it always matches the compiler; that file publishes no diagnostics. `Lines.byteOffset` reads positions back.
   - **L2c.** Hover: signatures, types, a node's canonical end.
   - **L2d.** Rename, of what the program owns; prelude names don't rename.
 - **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.

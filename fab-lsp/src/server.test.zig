@@ -13,7 +13,7 @@ const Session = struct {
     out: Io.Writer.Allocating,
 
     fn init() Session {
-        return .{ .server = .init(gpa), .out = .init(gpa) };
+        return .{ .server = .init(gpa, .{}), .out = .init(gpa) };
     }
 
     fn deinit(s: *Session) void {
@@ -172,4 +172,53 @@ test "exit after shutdown is 0, without it 1" {
         \\{"jsonrpc":"2.0","method":"exit"}
     );
     try std.testing.expectEqual(1, t.server.exit_code.?);
+}
+
+test "definition, references and highlights answer from the open document" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","version":1,"text":"G :: f/g, +f/h"}}}
+    );
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","id":3,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":11}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":4,"method":"textDocument/references","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":11},"context":{"includeDeclaration":true}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":5,"method":"textDocument/documentHighlight","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":11}}}
+    );
+    // Nothing at the position: null.
+    try s.send(
+        \\{"jsonrpc":"2.0","id":6,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///a.fab"},"position":{"line":0,"character":2}}}
+    );
+    const got = try s.received(arena.allocator());
+    try std.testing.expectEqual(4, got.len);
+    try std.testing.expectEqual(5, field(got[0], &.{ "result", "range", "start", "character" }).?.integer);
+    try std.testing.expectEqual(2, field(got[1], &.{"result"}).?.array.items.len);
+    try std.testing.expectEqual(3, field(got[2], &.{"result"}).?.array.items[0].object.get("kind").?.integer);
+    try std.testing.expectEqual(.null, std.meta.activeTag(field(got[3], &.{"result"}).?));
+}
+
+test "the prelude's file has no diagnostics" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    s.server.options.prelude_uri = "file:///cache/prelude.fab";
+    defer s.deinit();
+
+    try s.send(initialize);
+    _ = try s.received(arena.allocator());
+    // Read as a program, every name in it would be defined twice.
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///cache/prelude.fab","version":1,"text":":Shape :: [circle]"}}}
+    );
+    const got = try s.received(arena.allocator());
+    try std.testing.expectEqual(0, field(got[0], &.{ "params", "diagnostics" }).?.array.items.len);
 }

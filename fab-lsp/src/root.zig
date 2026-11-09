@@ -7,6 +7,7 @@ pub const Transport = @import("Transport.zig");
 pub const Message = @import("Message.zig");
 pub const diagnostics = @import("diagnostics.zig");
 pub const tokens = @import("tokens.zig");
+pub const navigation = @import("navigation.zig");
 
 test {
     _ = Server;
@@ -14,4 +15,5 @@ test {
     _ = Message;
     _ = diagnostics;
     _ = tokens;
+    _ = navigation;
 }
