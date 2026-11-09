@@ -309,6 +309,16 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Only a diagram has parts. Inside the block of an element or a class, a descriptor with no context describes the owner, and nothing else can be named.",
             .hint = "Move it to the diagram's block: `G :style { #Done { … }, f :label \"x\" }`.",
         },
+        .non_canonical_reference => .{
+            .message = "The node at this end of {} has another reference",
+            .explanation = "A node with no name is referenced by the first end that created it, in reading order: in `f g`, the middle node is `f+`, never `+g`. One node, one reference, so a description never depends on which end was used.",
+            .hint = "Reference the node through the end that created it.",
+        },
+        .named_node_referenced_by_end => .{
+            .message = "The node at this end of {} is named",
+            .explanation = "A name is opted into: a named node (`#A`, `@`) is referenced by its name, never by the end of an edge.",
+            .hint = "Use the node's name: `G.#A`.",
+        },
         .empty_arrow => .{
             .message = "An empty arrow",
             .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",

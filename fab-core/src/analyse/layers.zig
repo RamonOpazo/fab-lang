@@ -297,6 +297,25 @@ fn notASubject(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
 // ---------------------------------------------------------------------------
 // After the graph
 
+/// Canonical references (plan step 9c2), once every node has its canonical
+/// end: a node reached through an end must be reached through that one, and
+/// a named node only by its name. Each error marks the node.
+pub fn canonical(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
+    const ends = a.builder.nodes.items(.canonical);
+    for (a.references.items) |r| switch (r.subject) {
+        .node => |n| {
+            const end = n.end orelse continue;
+            const node = node_of[a.uf.find(n.elem)];
+            const tag: Analyser.Error.Tag = if (ends[@backingInt(node)]) |c| blk: {
+                if (c.edge == end.edge and c.side == end.side) continue;
+                break :blk .non_canonical_reference;
+            } else .named_node_referenced_by_end;
+            try a.failOn(tag, n.token, .{ .elem = n.elem });
+        },
+        .subject => {},
+    };
+}
+
 /// Nodes, once the graph is built: each element's class is an IR node.
 pub fn finish(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!struct { []Binding, []Reference } {
     const bindings = try a.gpa.alloc(Binding, a.bindings.items.len);

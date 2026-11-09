@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 31 };
+const done: Progress = .{ .step = 9, .rule = 32 };
 
 const Progress = struct {
     step: u8,
@@ -1089,9 +1089,9 @@ test "Definitions and values: a descriptor of another record type does not apply
 
 test "Layers: contexts are subjects" {
     const g = "G :: f/#Done g, +(h, k)+ | h/α/k\n";
-    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { :caption \"G\", #Done :shape [box], (f, g) :label \"x\", f+ :ink [red], +f :ink [red], α :label \"a\", &edge :pen [thin] }" });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { :caption \"G\", #Done :shape [box], (f, g) :label \"x\", g+ :ink [red], +f :ink [red], α :label \"a\", &edge :pen [thin] }" });
     // The top-level shorthand, a class in a diagram, a class everywhere.
-    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.f+ :ink [red]\nG.&edge :pen [thin]\n&node :fill [red]\n(G, G.f) :note \"n\"" });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.g+ :ink [red]\nG.&edge :pen [thin]\n&node :fill [red]\n(G, G.f) :note \"n\"" });
     // `G.f` inside G's block is `f`; braces and groups organise.
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { G.f :label \"x\", { g :label \"y\" }, f { :label \"z\" } }" });
     // `@`, a diagram's own node.
@@ -1134,6 +1134,23 @@ test "Layers: an element has no parts" {
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { &node { #Done :fill [red] } }", .codes = &.{.{ .analysis = .element_has_no_parts }} });
     // The owner, described with no context, is fine.
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { #Done { :fill [red], :shape [box] } }" });
+}
+
+test "Layers: a node is referenced canonically" {
+    // In `f g` the middle node is f+; in `+(f h, g k)+` the canonical
+    // references are +f, f+, g+ and h+.
+    try check(.{ .step = 9, .rule = 32, .source = "G :: f g\nG.f+ :label \"x\"\nG.+f :label \"s\"" });
+    try check(.{ .step = 9, .rule = 32, .source = "G :: +(f h, g k)+\nG :style { +f :label \"a\", f+ :label \"b\", g+ :label \"c\", h+ :label \"d\" }" });
+    try check(.{ .step = 9, .rule = 32, .source = "G :: f g\nG.+g :label \"x\"", .codes = &.{.{ .analysis = .non_canonical_reference }} });
+    try check(.{ .step = 9, .rule = 32, .source = "G :: +(f h, g k)+\nG :style { +g :label \"a\", +h :label \"b\", +k :label \"c\", k+ :label \"d\" }", .codes = &.{ .{ .analysis = .non_canonical_reference }, .{ .analysis = .non_canonical_reference }, .{ .analysis = .non_canonical_reference }, .{ .analysis = .non_canonical_reference } } });
+    // A null node's canonical end is its edge's.
+    try check(.{ .step = 9, .rule = 32, .source = "G :: */f g\nG.+f :label \"start\"" });
+}
+
+test "Layers: a named node is referenced by its name" {
+    try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.+f :label \"x\"", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
+    try check(.{ .step = 9, .rule = 32, .source = "T :: @/(id, name)\nT.+id :shape [box]", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
+    try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.#A :label \"x\"" });
 }
 
 test "Layers: what is read is checked against :Style" {

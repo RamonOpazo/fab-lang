@@ -15,6 +15,7 @@ const Cst = @import("../parse/Cst.zig");
 const Ir = @import("Ir.zig");
 const Analyser = @import("Analyser.zig");
 const sort = @import("sort.zig");
+const layers = @import("layers.zig");
 
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
@@ -581,6 +582,8 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
         const node = @backingInt(node_of[root]);
         if (canonical[node] == null and !uf.class(root).named()) canonical[node] = end;
     }
+    try layers.canonical(a, node_of);
+
     const sources = a.builder.edges.items(.source);
     const targets = a.builder.edges.items(.target);
     for (a.edge_ends.items, sources, targets) |ends, *source, *target| {

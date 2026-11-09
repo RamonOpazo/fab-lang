@@ -129,6 +129,10 @@ pub const Tag = enum(u8) {
     not_a_subject,
     /// `G :style { #Done { f :label "x" } }`: only a diagram has parts.
     element_has_no_parts,
+    /// `G.+g` in `G :: f g`: the node is `f+`, the end that created it.
+    non_canonical_reference,
+    /// `G.+f` in `G :: #A/f`: a named node is referenced by its name.
+    named_node_referenced_by_end,
     /// `[//]`: an arrow that draws nothing.
     empty_arrow,
     /// `&zone :axiom.[a] :: :Proposition`.
