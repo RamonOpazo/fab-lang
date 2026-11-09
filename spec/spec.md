@@ -779,7 +779,7 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 - **`[base]` always applies, first.** It is the prelude's base theme: the kind defaults above, and every other default written as a value. Defaults that depend on the element are **computed** below it: a node's label from its name or canonical end, a cell's arrow from its level, one circle diameter per diagram. `[base]` binds nothing computed. Together they bind every attribute for every kind, so every element always has every attribute: the style is a total function, and themes and programs only override parts of it. What can be nothing admits nil, so a later layer can take a value away: `G :fill []`.
 - **"Each binding once" holds within a layer;** across layers, the later one wins, deliberately and in order. A flag set by one layer is turned off by a later one with `!`: `f :hide!`.
 - **`:theme`** chooses themes for a diagram, and cascades to nested diagrams: `Order :theme [dark/compact]`. A theme may include others, applied before its own bindings: `:Style [night] := { :theme [dark], [accent] := [#58a6ff] }`.
-- **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some: `[ink] := [#dddddd]`. Any label may be rebound so, one step: `[circle] := [box]` draws circles as boxes.
+- **Theme tokens** are colour labels whose value a record binds: `[ink]` (lines and text), `[soft]` (edge labels), `[muted]` (canonical labels), `[accent]`, and the severities `[error]`, `[warning]`, `[unsupported]`. `[base]` binds them all; a theme rebinds some, `[ink] := [#dddddd]`, and so does a diagram's own style, after its themes: `G :style { [ink] := [#000000] }`. Any label may be rebound so, one step: `[circle] := [box]` draws circles as boxes.
 
 ## Place layer
 
@@ -1236,7 +1236,6 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 **Style**
 
-- **Equal-specificity overlaps.** When two classes of equal specificity (`&choice` and `&canonical`) set the same attribute: an error, or a fixed precedence.
 - **The fallback for `[outer]`** on a lone edge that borders no region.
 - **The prelude's contents** beyond the draft in `prelude.fab`: more colour names and themes, and whether `[base]`'s sizes are right.
 - **A renderer's fallback per type,** for a label or an attribute it cannot draw.

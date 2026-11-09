@@ -1210,3 +1210,15 @@ Two contexts naming one element are one binding: `(f, f) :label "x"` binds twice
 **Each diagram styles itself.** In C's layer, `A.+f` is **another diagram's subject**; at the top level, `A.+f :fill [red]` is A's layer, and fine.
 
 **Rejected.** A layer bound once, `(G, :style)`: the top-level shorthand would then conflict with any block. Contexts inside an element read relative to its diagram: nesting would mean nothing. Classes only inside a diagram: a program could not restyle every diagram without a theme.
+
+### 22.11 The cascade, 2026-11-09
+
+Settles three questions before the style pass is written (plan step 9d).
+
+**Ties are settled.** Two classes of one rank setting one descriptor are no error: they apply in their fixed order, `&node` < the kinds < `&canonical` < `&hole` (§22.4). The open question in the spec's list goes.
+
+**Numbers stay exact to the renderer.** A `Style` holds a number as a `Decimal`, mantissa and scale, its normal form; core compares and checks it without reading text again, and only a renderer, laying out geometry, turns it into a float. JSON writes it as its normal form, a string: `"0.85"`, `"1.5"`. The string is the format at the boundary, the decimal the value inside.
+
+**A diagram's own layer rebinds tokens.** `G :style { [ink] := [#000000] }` is a `:Style` record like any theme, so it binds tokens for G, after its themes: `[base]`, then G's themes left to right, then G's own. What a theme can say, a diagram can say of itself.
+
+**Rejected.** Floats in the Sheet: simpler for a renderer, but `0.1` would stop being `0.1` on its way. Numbers as strings inside core: every check would parse again. Tokens only in themes: a diagram would need a theme of its own to change one colour.
