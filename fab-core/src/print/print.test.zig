@@ -72,7 +72,7 @@ test "line breaks are kept, blank lines at most one" {
     try expectPrinted("G :: f\r\nH :: g", "G :: f\nH :: g\n");
 }
 
-test "indentation: four per brace or parenthesis, two fewer for a comma" {
+test "indentation: four per brace or parenthesis, whatever the line begins with" {
     try expectPrinted(
         \\G :style {
         \\#A :fill [red],
@@ -100,9 +100,9 @@ test "indentation: four per brace or parenthesis, two fewer for a comma" {
         \\    */receive validate/? +(
         \\        yes fork/! +(
         \\            charge
-        \\          , reserve
+        \\            , reserve
         \\        )! ready
-        \\      , no
+        \\        , no
         \\    )
         \\}
         \\
@@ -263,9 +263,9 @@ test "the examples print as they are written" {
         \\    */receive/#Received validate/? +(
         \\        yes/#Accepted fork/! +(
         \\            charge/? +(paid, declined/#Waiting/retry)
-        \\          , reserve/? +(reserved, short/#Backorder/restock)
+        \\            , reserve/? +(reserved, short/#Backorder/restock)
         \\        )! ready/#Ready ship/#Shipped close/*
-        \\      , no/#Rejected notify/*
+        \\        , no/#Rejected notify/*
         \\    )
         \\}
         \\

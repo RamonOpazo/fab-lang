@@ -10,14 +10,13 @@
 //!   - Line breaks are the author's: each is kept, a run of blank lines
 //!     becomes one, and the file ends with one line end.
 //!   - A line is indented by what is open at its start, after the closers
-//!     it begins with: four spaces per brace or parenthesis alike, and two
-//!     fewer when it begins with a comma, so that the item after `, ` lines
-//!     up with the one above:
+//!     it begins with: four spaces per brace or parenthesis alike, whatever
+//!     the line begins with:
 //!
 //!       G :: {
 //!           f/? +(
 //!               a b
-//!             , c
+//!               , c
 //!           )
 //!       }
 //!
@@ -107,7 +106,7 @@ fn layOut(arena: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}![]Line {
         if (comment < cst.comments.len and cst.comments[comment].token == i) {
             const c = cst.comments[comment];
             comment += 1;
-            if (last == null) try lines.append(arena, .{ .indent = indent(depth, false), .blank = breaks >= 2 and lines.items.len > 0 });
+            if (last == null) try lines.append(arena, .{ .indent = 4 * depth, .blank = breaks >= 2 and lines.items.len > 0 });
             lines.items[lines.items.len - 1].comment = cst.source[c.start..c.end];
             breaks = 0;
         }
@@ -125,7 +124,7 @@ fn layOut(arena: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}![]Line {
             var at_start = depth;
             var j = i;
             while (tags[j] == .r_cur or tags[j] == .r_par) : (j += 1) at_start -|= 1;
-            try lines.append(arena, .{ .indent = indent(at_start, tag == .comma), .blank = breaks >= 2 and lines.items.len > 0, .first = i });
+            try lines.append(arena, .{ .indent = 4 * at_start, .blank = breaks >= 2 and lines.items.len > 0, .first = i });
             breaks = 0;
             relative = 0;
         }
@@ -164,11 +163,6 @@ fn layOut(arena: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}![]Line {
         }
     }
     return lines.items;
-}
-
-fn indent(depth: u32, comma: bool) u32 {
-    const w = 4 * depth;
-    return if (comma) w -| 2 else w;
 }
 
 /// Aligns each run's columns, in order, then its comments.

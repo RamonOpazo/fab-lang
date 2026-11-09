@@ -1073,9 +1073,9 @@ Order :: {
     */receive/#Received validate/? +(
         yes/#Accepted fork/! +(
             charge/? +(paid, declined/#Waiting/retry)
-          , reserve/? +(reserved, short/#Backorder/restock)
+            , reserve/? +(reserved, short/#Backorder/restock)
         )! ready/#Ready ship/#Shipped close/*
-      , no/#Rejected notify/*
+        , no/#Rejected notify/*
     )
 }
 
