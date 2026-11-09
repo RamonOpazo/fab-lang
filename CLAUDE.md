@@ -72,7 +72,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     | L3 done |
+| L    | Language server (after 9c, before 9d)     | L4a done |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -225,7 +225,11 @@ Done when every level case passes.
   - **L3a** (done). The machinery, and names: `G.` a diagram's parts (edges, cells, named nodes, `@`, classes); `#` and edge names, the statement's diagram's; capitals, the diagrams; `&`, the classes; `:T`, and `:` after `::` or `:=`, the types.
   - **L3b** (done). Descriptors applying at a context, by the subjects' classes as the analyser judges them (a node by its kind; a name the last good text lacks, by its sort): the entry's context, else its block's owner, read relative to the owner above (`G :style { #A { :`); a group's, those fitting every subject. Only in a description; a chain, an element's parts, a declaration or a type's block offer none. A layer (`:style`) only at the top level. The detail is the type, or *bundle*.
   - **L3c** (done). Values in an open bracket, read from the text (it lexes as no value): the labels and named values fitting the descriptor's type before it, the whole in the first slot or the slot's own type after a `/` (a tuple's slot, a list's element, through declarations and unions); after `:T [x] :=`, those fitting `:T`; a key (`:lemma.[`) none. In a record's block (`:Style [x] := {`), its type's descriptors, an entry with no subject describing the diagram applied to; in a bundle's, any descriptor, and no subject.
-- **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
+- **L4.** Formatting: a printer from the CST, which keeps the program's meaning, its line breaks and its comments. In increments:
+  - **L4a** (done). Comments kept: `Lexer.Comment` (its span, without a `\r`, and the token after it, a line end or the end: a comment runs to its line's end, so at most one comes before any token); `next` leaves it in `comment`, `tokenize` collects them when given a list, and the parser keeps them in `Cst.comments`. The tokens are the same either way.
+  - **L4b.** The printer (`fab-core/src/print/`, since `format/` is the style pass until 9d). Touching is meaning: what touches stays touching, and a space is one space; nothing is joined or split. Line breaks are the author's (gofmt's way): inside braces each kept, within a line normalised; two spaces per brace. No space before a comma, one after; a trailing comma dropped. Comments where they were, at a line's end or on their own line. Checked: printing twice changes nothing; the printed text parses to the same tree (the CST dump without positions) and the same comments; every example and the prelude.
+  - **L4c.** Columns aligned across consecutive entries, as the prelude and the examples write them (subjects, descriptors, `::`), a blank or comment line ending the run.
+  - **L4d.** `fab fmt x.fab` (to stdout; `-w` writes back, `--check` an exit code), a Makefile target over `examples/`, and `textDocument/formatting`, refused while the document has syntax errors.
 
 **T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension reading this repository's subdirectory at a commit (`path`, accepted by Zed 1.27).
 

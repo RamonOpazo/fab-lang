@@ -311,8 +311,58 @@ test "the spec's larger examples lex with no invalid tokens" {
 }
 
 test "tokenize collects every token, ending in eof" {
-    var tokens = try Lexer.tokenize(testing.allocator, "G :: f g");
+    var tokens = try Lexer.tokenize(testing.allocator, "G :: f g", null);
     defer tokens.deinit(testing.allocator);
     try testing.expectEqual(@as(usize, 5), tokens.len);
     try testing.expectEqual(Tag.eof, tokens.items(.tag)[4]);
+}
+
+/// The comments of `source`, each as its text and the tag of the token after
+/// it, one per line.
+fn dumpComments(source: [:0]const u8) ![]u8 {
+    var comments: std.ArrayList(Lexer.Comment) = .empty;
+    defer comments.deinit(testing.allocator);
+    var tokens = try Lexer.tokenize(testing.allocator, source, &comments);
+    defer tokens.deinit(testing.allocator);
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    errdefer out.deinit();
+    for (comments.items) |c| try out.writer.print("{s} before {t} {d}\n", .{ source[c.start..c.end], tokens.items(.tag)[c.token], c.token });
+    return out.toOwnedSlice();
+}
+
+fn expectComments(source: [:0]const u8, want: []const u8) !void {
+    const got = try dumpComments(source);
+    defer testing.allocator.free(got);
+    try testing.expectEqualStrings(want, got);
+}
+
+test "comments are kept beside the tokens, each before a line end or the end" {
+    // At the end of a line, on a line of its own, and at the end of input.
+    try expectComments(
+        \\G :: f g // a path
+        \\// the second
+        \\H :: h //
+    ,
+        \\// a path before eol 4
+        \\// the second before eol 5
+        \\// before eof 9
+        \\
+    );
+    // A carriage return before the line end is not the comment's.
+    try expectComments("G :: f // crlf\r\nH :: g", "// crlf before eol 3\n");
+    // Nothing else is a comment: a slash, or `//` inside a string.
+    try expectComments("G :: f/g, \"a // b\"", "");
+    try expectComments("// only\n", "// only before eol 0\n");
+}
+
+test "the tokens are the same with comments kept or not" {
+    const source = "G :: f // one\n// two\nH :: g";
+    var comments: std.ArrayList(Lexer.Comment) = .empty;
+    defer comments.deinit(testing.allocator);
+    var kept = try Lexer.tokenize(testing.allocator, source, &comments);
+    defer kept.deinit(testing.allocator);
+    var plain = try Lexer.tokenize(testing.allocator, source, null);
+    defer plain.deinit(testing.allocator);
+    try testing.expectEqualSlices(Tag, plain.items(.tag), kept.items(.tag));
+    try testing.expectEqualSlices(u32, plain.items(.start), kept.items(.start));
 }

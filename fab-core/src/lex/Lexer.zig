@@ -4,6 +4,9 @@
 //! fails either. Anything it doesn't recognise becomes an `.invalid` token,
 //! and the parser decides what to report. Names are classified by their first
 //! character only; naming conventions are checked later, by the analyser.
+//!
+//! Comments are trivia, but they are kept beside the tokens (`Comment`), for
+//! the printer, which must give them back (plan step L4).
 
 const std = @import("std");
 const Token = @import("Token.zig");
@@ -13,14 +16,28 @@ const Lexer = @This();
 
 source: [:0]const u8,
 index: u32 = 0,
+/// The comment skipped before the token `next` last returned, if any.
+comment: ?Comment = null,
+
+/// A `//` comment: its text, `//` included, without the line end (nor a
+/// `\r` before it). A comment runs to the end of its line, so it comes
+/// before a line end or the end of the input, `token`, and at most one comes
+/// before any token.
+pub const Comment = struct {
+    start: u32,
+    end: u32,
+    /// The index of the token after it: an `.eol` or the `.eof`.
+    token: u32,
+};
 
 pub fn init(source: [:0]const u8) Lexer {
     std.debug.assert(source.len <= std.math.maxInt(u32));
     return .{ .source = source };
 }
 
-/// Lexes the whole source into a struct-of-arrays token list, ending in `.eof`.
-pub fn tokenize(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}!std.MultiArrayList(Token) {
+/// Lexes the whole source into a struct-of-arrays token list, ending in
+/// `.eof`. The comments are appended to `comments`, in order, if given.
+pub fn tokenize(gpa: std.mem.Allocator, source: [:0]const u8, comments: ?*std.ArrayList(Comment)) error{OutOfMemory}!std.MultiArrayList(Token) {
     var tokens: std.MultiArrayList(Token) = .empty;
     errdefer tokens.deinit(gpa);
     // Roughly one token per 8 bytes of source, the same estimate Zig's own parser uses.
@@ -29,13 +46,21 @@ pub fn tokenize(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}
     var lexer = init(source);
     while (true) {
         const token = lexer.next();
+        if (comments) |list| if (lexer.comment) |c| {
+            var kept = c;
+            kept.token = @intCast(tokens.len);
+            try list.append(gpa, kept);
+        };
         try tokens.append(gpa, token);
         if (token.tag == .eof) return tokens;
     }
 }
 
-/// Returns the next token. After the end of the source it keeps returning `.eof`.
+/// Returns the next token. After the end of the source it keeps returning
+/// `.eof`. The comment before it, if any, is left in `comment`, its `token`
+/// unset: only `tokenize` counts tokens.
 pub fn next(self: *Lexer) Token {
+    self.comment = null;
     self.skipTrivia();
     const start = self.index;
     const tag: Tag = switch (self.peek(0)) {
@@ -111,7 +136,11 @@ fn skipTrivia(self: *Lexer) void {
         ' ', '\t', '\r' => self.index += 1,
         '/' => {
             if (self.peek(1) != '/') return;
+            const start = self.index;
             while (self.peek(0) != '\n' and !self.atEnd()) self.index += 1;
+            var end = self.index;
+            if (end > start and self.source[end - 1] == '\r') end -= 1;
+            self.comment = .{ .start = start, .end = end, .token = undefined };
         },
         else => return,
     };

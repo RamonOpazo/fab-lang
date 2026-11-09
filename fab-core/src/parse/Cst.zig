@@ -18,6 +18,7 @@
 
 const std = @import("std");
 const Token = @import("../lex/Token.zig");
+const Lexer = @import("../lex/Lexer.zig");
 
 const Cst = @This();
 
@@ -26,6 +27,9 @@ tokens: std.MultiArrayList(Token).Slice,
 nodes: std.MultiArrayList(Node).Slice,
 extra: []const u32,
 errors: []const Error,
+/// The comments, in order, each before a line end or the end: trivia to the
+/// tree, kept for the printer.
+comments: []const Lexer.Comment = &.{},
 
 pub const TokenIndex = u32;
 
@@ -173,6 +177,7 @@ pub fn deinit(cst: *Cst, gpa: std.mem.Allocator) void {
     cst.nodes.deinit(gpa);
     gpa.free(cst.extra);
     gpa.free(cst.errors);
+    gpa.free(cst.comments);
     cst.* = undefined;
 }
 

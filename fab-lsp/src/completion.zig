@@ -67,7 +67,7 @@ const Typed = struct {
 
 fn context(arena: std.mem.Allocator, before: []const u8) error{OutOfMemory}!Typed {
     const source = try arena.dupeSentinel(u8, before, 0);
-    const toks = try fab.Lexer.tokenize(arena, source);
+    const toks = try fab.Lexer.tokenize(arena, source, null);
     const tags = toks.items(.tag);
     const starts = toks.items(.start);
     const ends = toks.items(.end);

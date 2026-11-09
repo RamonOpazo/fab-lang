@@ -54,7 +54,9 @@ scratch: std.ArrayList(Node.Index) = .empty,
 
 /// Lexes and parses `source`. Syntax errors are returned inside the Cst.
 pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}!Cst {
-    var tokens = try Lexer.tokenize(gpa, source);
+    var comments: std.ArrayList(Lexer.Comment) = .empty;
+    defer comments.deinit(gpa);
+    var tokens = try Lexer.tokenize(gpa, source, &comments);
     errdefer tokens.deinit(gpa);
 
     var p: Parser = .{
@@ -77,12 +79,15 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) error{OutOfMemory}!Cs
     const extra = try p.extra.toOwnedSlice(gpa);
     errdefer gpa.free(extra);
     const errors = try p.errors.toOwnedSlice(gpa);
+    errdefer gpa.free(errors);
+    const kept = try comments.toOwnedSlice(gpa);
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = p.nodes.toOwnedSlice(),
         .extra = extra,
         .errors = errors,
+        .comments = kept,
     };
 }
 

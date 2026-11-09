@@ -113,7 +113,7 @@ pub fn deinit(c: *Compilation) void {
 
 /// Stage 1: the tokens, ending in `.eof`.
 pub fn tokens(c: *Compilation) error{OutOfMemory}!*const std.MultiArrayList(Token) {
-    if (c.lexed == null) c.lexed = try Lexer.tokenize(c.gpa, c.source);
+    if (c.lexed == null) c.lexed = try Lexer.tokenize(c.gpa, c.source, null);
     return &c.lexed.?;
 }
 

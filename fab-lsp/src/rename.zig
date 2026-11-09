@@ -98,7 +98,7 @@ fn tagOf(sort: Reference.Sort) ?Tag {
 fn spelled(arena: std.mem.Allocator, sort: Reference.Sort, name: []const u8) error{OutOfMemory}!bool {
     if (tagOf(sort)) |tag| {
         const source = try arena.dupeSentinel(u8, name, 0);
-        const toks = try fab.Lexer.tokenize(arena, source);
+        const toks = try fab.Lexer.tokenize(arena, source, null);
         const tags = toks.items(.tag);
         return tags.len == 2 and tags[0] == tag and tags[1] == .eof and toks.items(.end)[0] == name.len;
     }

@@ -805,3 +805,11 @@ test "recovery: a statement spanning lines is skipped until its parentheses bala
         \\
     );
 }
+
+test "the tree keeps the comments, for the printer" {
+    var cst = try Parser.parse(testing.allocator, "G :: f // one\n// two\nH :: g");
+    defer cst.deinit(testing.allocator);
+    try testing.expectEqual(@as(usize, 2), cst.comments.len);
+    try testing.expectEqualStrings("// one", cst.source[cst.comments[0].start..cst.comments[0].end]);
+    try testing.expectEqualStrings("\n", cst.tokenText(cst.comments[1].token));
+}
