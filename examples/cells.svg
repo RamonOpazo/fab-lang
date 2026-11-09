@@ -33,7 +33,7 @@
 <title>cluster_7</title>
 <polygon fill="none" stroke="#8250df" points="777,-8 777,-218.42 958,-218.42 958,-8 777,-8"/>
 <text xml:space="preserve" text-anchor="start" x="838.25" y="-206.87" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#8250df">unsupported</text>
-<text xml:space="preserve" text-anchor="start" x="861.88" y="-195.97" font-family="Helvetica,sans-Serif" font-size="11.00">W</text>
+<text xml:space="preserve" text-anchor="start" x="861.88" y="-195.97" font-family="Helvetica,sans-Serif" font-size="11.00" fill="#333333">W</text>
 </g>
 <!-- n0 -->
 <g id="node1" class="node">

@@ -19,23 +19,25 @@ fn expectNodes(source: []const u8, expected: []const Expected) !void {
     const s = (try c.sheet()).?;
     try testing.expectEqual(expected.len, s.nodes.len);
     for (s.nodes, expected, 0..) |style, want, i| {
-        const label, const italic, const ink, const shape = want;
+        const label, const italic, const want_ink, const shape = want;
         testing.expectEqualStrings(label, style.label) catch |err| {
             std.debug.print("node n{d}\n", .{i});
             return err;
         };
         try testing.expectEqual(italic, style.italic);
-        try testing.expectEqual(ink, style.ink);
+        try testing.expectEqual(want_ink, style.ink);
         try testing.expectEqual(shape, style.shape);
     }
 }
 
-const muted: ?Style.Color = .{ .token = .muted };
+// [base]'s tokens: `[ink]` and `[muted]`.
+const ink: ?Style.Color = .{ .rgb = 0x333333 };
+const muted: ?Style.Color = .{ .rgb = 0x888888 };
 
 test "labels: a name without its #, else the canonical end, in the canonical class" {
     try expectNodes("G :: #A/f #B/g", &.{
-        .{ "A", false, null, .circle },
-        .{ "B", false, null, .circle },
+        .{ "A", false, ink, .circle },
+        .{ "B", false, ink, .circle },
         .{ "g+", true, muted, .circle },
     });
     try expectNodes("G :: f", &.{
@@ -46,26 +48,32 @@ test "labels: a name without its #, else the canonical end, in the canonical cla
 
 test "kind defaults: plain circles, and marks with no label" {
     // A start, a fork after f, the join of g and h, and a choice after k.
+    // Marks are labelled "", so not by their canonical end.
     try expectNodes("G :: */f/! +(g, h)+ k/?", &.{
-        .{ "", false, null, .point },
-        .{ "", false, null, .bar },
+        .{ "", false, ink, .point },
+        .{ "", false, ink, .bar },
         .{ "g+", true, muted, .circle },
-        .{ "", false, null, .diamond },
+        .{ "", false, ink, .diamond },
+    });
+    // `&choice :label []` gives a choice its name back, and so its class.
+    try expectNodes("G :: k/?\nG :style { &choice :label [] }", &.{
+        .{ "+k", true, muted, .circle },
+        .{ "k+", true, muted, .diamond },
     });
 }
 
 test "a null node is a start if nothing arrives at it, else an end" {
     try expectNodes("G :: */f g/*", &.{
-        .{ "", false, null, .point },
+        .{ "", false, ink, .point },
         .{ "f+", true, muted, .circle },
-        .{ "", false, null, .bullseye },
+        .{ "", false, ink, .bullseye },
     });
 }
 
 test "the own node is labelled with its diagram's name" {
     try expectNodes("T :: #UUID7\nUser :: @/id/T.#UUID7", &.{
-        .{ "UUID7", false, null, .circle },
-        .{ "User", false, null, .circle },
+        .{ "UUID7", false, ink, .circle },
+        .{ "User", false, ink, .circle },
     });
 }
 
@@ -116,9 +124,10 @@ test "the sheet stage follows the IR: withheld with it, and computed once" {
 // ---------------------------------------------------------------------------
 // Marks: the last layer (statements.md §15.3, §18)
 
-const red: ?Style.Color = .{ .token = .@"error" };
-const amber: ?Style.Color = .{ .token = .warning };
-const violet: ?Style.Color = .{ .token = .unsupported };
+// [base]'s `[error]`, `[warning]` and `[unsupported]`.
+const red: ?Style.Color = .{ .rgb = 0xd1242f };
+const amber: ?Style.Color = .{ .rgb = 0xbf8700 };
+const violet: ?Style.Color = .{ .rgb = 0x8250df };
 
 test "marks win: a hole keeps its dashes, in its error's colour, and frames its diagram" {
     var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nH :: f", preview);
@@ -126,8 +135,8 @@ test "marks win: a hole keeps its dashes, in its error's colour, and frames its 
     const s = (try c.sheet()).?;
     try testing.expectEqual(red, s.nodes[2].stroke);
     try testing.expectEqual(Style.Line.dashed, s.nodes[2].line);
-    try testing.expectEqual(@as(?Style.Color, null), s.nodes[1].stroke);
-    try testing.expectEqual(@as(?Style.Color, null), s.edges[1].stroke);
+    try testing.expectEqual(ink, s.nodes[1].stroke);
+    try testing.expectEqual(ink, s.edges[1].stroke);
     // G is framed in red; H, clean, stays unframed.
     try testing.expectEqual(red, s.zones[0].stroke);
     try testing.expect(s.isFramed(@fromBackingInt(@as(u32, 0))));
@@ -185,10 +194,10 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     var ir = try b.finish();
     defer ir.deinit(testing.allocator);
 
-    // No prelude: no descriptors, and every rule empty.
-    var env = try @import("../analyse/Env.zig").init(testing.allocator);
-    defer env.deinit(testing.allocator);
-    var s = try Styler.style(testing.allocator, &ir, &env, &.{ .warning, .unsupported, .@"error" });
+    // The prelude's environment, from an empty program.
+    var c = try Compilation.init(testing.allocator, "", preview);
+    defer c.deinit();
+    var s = try Styler.style(testing.allocator, &ir, .{ .env = &(try c.analysis()).env }, &.{ .warning, .unsupported, .@"error" });
     defer s.deinit();
     try testing.expectEqual(amber, s.edges[0].stroke);
     // The start is a dot: its fill is its line.
@@ -279,14 +288,16 @@ test "the Sheet of values: [base] folded by specificity into rules" {
     const named = s.style(.{ .node = @fromBackingInt(@as(u32, 0)) });
     try testing.expectEqualStrings("circle", labelName(named, shape));
     try testing.expectEqualStrings("regular", labelName(named, face));
-    try testing.expectEqual(@as(?@import("../analyse/decoded.zig").Value, .nil), named.get(label));
+    // Computed below [base]'s nil: the name without its #.
+    try testing.expectEqualStrings("A", named.text(label).?);
 
     const choice = s.style(.{ .node = @fromBackingInt(@as(u32, 1)) });
-    // &choice over &node; &canonical over both.
+    // &choice over &node; labelled "", so not &canonical.
     try testing.expectEqualStrings("diamond", labelName(choice, shape));
     try testing.expectEqualStrings("", choice.text(label).?);
-    try testing.expectEqualStrings("italic", labelName(choice, face));
-    try testing.expectEqualStrings("muted", labelName(choice, try d(s, ":ink")));
+    try testing.expectEqualStrings("regular", labelName(choice, face));
+    // `[ink]`, a token, resolved to [base]'s colour.
+    try testing.expectEqual(@import("../analyse/value.zig").Rgba{ .r = 0x33, .g = 0x33, .b = 0x33 }, choice.color(try d(s, ":ink")).?);
 
     // The two choices share one rule; #A has its own.
     var choices: usize = 0;
@@ -333,4 +344,158 @@ test "the names core gives meaning to are :Style's descriptors" {
     }
     // In declaration order, the prelude's first.
     try testing.expectEqualStrings(":label", s.descriptors[0]);
+}
+
+// ---------------------------------------------------------------------------
+// The cascade (plan step 9d4): computed < [base] < themes < the program < marks
+
+const Rgba = @import("../analyse/value.zig").Rgba;
+
+fn rgba(hex: u24) Rgba {
+    return .{ .r = @truncate(hex >> 16), .g = @truncate(hex >> 8), .b = @truncate(hex) };
+}
+
+/// The style of the node named `name`, `#` included.
+fn nodeNamed(s: *const Sheet, name: []const u8) !Sheet.View {
+    for (s.ir.nodes.items(.name), 0..) |n, i| if (n) |text| if (std.mem.eql(u8, s.ir.string(text), name))
+        return s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
+    return error.TestUnexpectedResult;
+}
+
+/// The style of the first node of `kind`.
+fn firstOf(s: *const Sheet, kind: @import("../analyse/Ir.zig").Node.Kind) !Sheet.View {
+    for (s.ir.nodes.items(.kind), 0..) |k, i| if (k == kind)
+        return s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
+    return error.TestUnexpectedResult;
+}
+
+fn zoneStyle(s: *const Sheet, z: u32) Sheet.View {
+    return s.style(.{ .zone = @fromBackingInt(z) });
+}
+
+test "themes: left to right, a theme's own :theme included first, tokens through them" {
+    var c = try Compilation.init(testing.allocator,
+        \\:Style [warm] := { :theme [dark], &node :fill [#ffeeee], [soft] := [#ff0000] }
+        \\G :: #A/f
+        \\G :style { :theme [warm/compact] }
+        \\H :: #B/g
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const a = try nodeNamed(s, "#A");
+    try testing.expectEqual(rgba(0xffeeee), a.color(s.descriptor(":fill").?).?);
+    // [dark]'s, included by [warm]: its tokens and its zone fill.
+    try testing.expectEqual(rgba(0xdddddd), a.color(s.descriptor(":ink").?).?);
+    try testing.expectEqual(rgba(0x1e1e1e), zoneStyle(s, 0).color(s.descriptor(":fill").?).?);
+    // [warm] rebinds [soft] after [dark]: edge labels.
+    try testing.expectEqual(rgba(0xff0000), s.style(.{ .edge = @fromBackingInt(@as(u32, 0)) }).color(s.descriptor(":ink").?).?);
+    // [compact], after [warm].
+    try testing.expectEqualStrings("0.2", try decimal(a.number(s.descriptor(":padding").?).?));
+    // H has no theme: [base]'s.
+    const b = try nodeNamed(s, "#B");
+    try testing.expectEqual(rgba(0x333333), b.color(s.descriptor(":ink").?).?);
+    try testing.expectEqual(@as(?Rgba, null), b.color(s.descriptor(":fill").?));
+}
+
+/// A number in its normal form, `0.2`.
+fn decimal(d: @import("../analyse/Decimal.zig")) ![]const u8 {
+    const State = struct {
+        var buf: [32]u8 = undefined;
+    };
+    var w: std.Io.Writer = .fixed(&State.buf);
+    try d.format(&w);
+    return w.buffered();
+}
+
+test "the program's ranks: a top-level class, then a class in the diagram, then the element" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: #A/f/? +(a, b)
+        \\H :: #B/g/? +(c, d)
+        \\&choice :shape [box]
+        \\G :style { &node :shape [hexagon], #A :shape [round] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const shape = s.descriptor(":shape").?;
+    const Shape = enum { box, hexagon, round, circle, diamond };
+    // In H, the top-level &choice over [base]'s.
+    var choice_h: ?Sheet.View = null;
+    for (s.ir.nodes.items(.kind), s.ir.nodes.items(.zone), 0..) |k, z, i| if (k == .choice and @backingInt(z) == 1) {
+        choice_h = s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
+    };
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .box }, choice_h.?.label(Shape, shape));
+    // In G, G's &node over the top-level &choice; #A's own over both.
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .hexagon }, (try firstOf(s, .choice)).label(Shape, shape));
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .round }, (try nodeNamed(s, "#A")).label(Shape, shape));
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .circle }, (try nodeNamed(s, "#B")).label(Shape, shape));
+}
+
+test "a bundle binds its body where it is used; a token bound to a label resolves once" {
+    var c = try Compilation.init(testing.allocator,
+        \\:ref := :shape [round], :fill [muted]
+        \\:Style [boxes] := { [circle] := [box], [box] := [round] }
+        \\G :: #A/f/#B
+        \\G :style { #A :ref, :theme [boxes] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const Shape = enum { box, round, circle };
+    const shape = s.descriptor(":shape").?;
+    const a = try nodeNamed(s, "#A");
+    // The bundle's [round], which no token rebinds.
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .round }, a.label(Shape, shape));
+    try testing.expectEqual(rgba(0x888888), a.color(s.descriptor(":fill").?).?);
+    // [base]'s [circle] becomes [box], one step: not [round].
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .box }, (try nodeNamed(s, "#B")).label(Shape, shape));
+}
+
+test "a diagram's own tokens come after its themes" {
+    var c = try Compilation.init(testing.allocator, "G :: #A/f\nG :style { :theme [dark], [ink] := [#000000] }", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    try testing.expectEqual(rgba(0x000000), (try nodeNamed(s, "#A")).color(s.descriptor(":ink").?).?);
+    try testing.expectEqual(rgba(0x000000), s.token(@fromBackingInt(@as(u32, 0)), "ink").?.color);
+}
+
+test "computed below [base]: labels by name, `:label []` gives the name back, a cell's arrow by level" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: #A/f/#B, #A/g/#B | f/α/g
+        \\G :style { &node :label "n", #B :label [] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const label = s.descriptor(":label").?;
+    try testing.expectEqualStrings("n", (try nodeNamed(s, "#A")).text(label).?);
+    try testing.expectEqualStrings("B", (try nodeNamed(s, "#B")).text(label).?);
+    try testing.expectEqualStrings("G", zoneStyle(s, 0).text(label).?);
+    const cell = s.style(.{ .cell = @fromBackingInt(@as(u32, 0)) });
+    try testing.expectEqualStrings("α", cell.text(label).?);
+    const arrow = cell.get(s.descriptor(":arrow").?).?.elements;
+    try testing.expectEqualStrings("double", arrow[1].label.name);
+}
+
+test "marks over everything, unless the diagram draws none" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: f g/+k h
+        \\G :style { &node :stroke [#00ff00] }
+        \\Q :: f g/+k h
+        \\Q :style { :marks [], &node :stroke [#00ff00] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const stroke = s.descriptor(":stroke").?;
+    var seen: [2]bool = .{ false, false };
+    for (s.ir.nodes.items(.kind), s.ir.nodes.items(.zone), s.elements.nodes, 0..) |k, z, e, i| {
+        const v = s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
+        const zone = @backingInt(z);
+        if (k == .hole) {
+            seen[zone] = true;
+            try testing.expect(e.mark != null);
+            // G's hole in [error]'s colour; Q draws no marks.
+            try testing.expectEqual(rgba(if (zone == 0) 0xd1242f else 0x00ff00), v.color(stroke).?);
+        } else try testing.expectEqual(rgba(0x00ff00), v.color(stroke).?);
+    }
+    try testing.expect(seen[0] and seen[1]);
+    try testing.expectEqual(rgba(0xd1242f), zoneStyle(s, 0).color(stroke).?);
+    try testing.expectEqual(@as(?Rgba, null), zoneStyle(s, 1).color(stroke));
 }

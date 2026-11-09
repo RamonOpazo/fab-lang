@@ -44,7 +44,16 @@ pub const Subject = union(enum) {
 
 /// `G.f :label "x"`: a subject, the attribute that describes it (its name,
 /// key and value, read in the style pass), and its layer.
-pub const Binding = struct { subject: Subject, attr: Node.Index, layer: Layer, value: decoded.Value };
+pub const Binding = struct {
+    subject: Subject,
+    attr: Node.Index,
+    layer: Layer,
+    /// The attribute's name, `:` included, and its key without brackets:
+    /// what the style pass reads, with no CST.
+    descriptor: []const u8,
+    key: ?[]const u8 = null,
+    value: decoded.Value,
+};
 
 /// `G :style { [ink] := [#000000] }`: a token a diagram's own layer binds,
 /// after its themes (statements.md §22.11).
@@ -59,7 +68,7 @@ pub const Pending = union(enum) {
     node: struct { elem: u32, end: ?Ir.End, token: TokenIndex, zone: Ir.ZoneIndex },
 };
 
-pub const PendingBinding = struct { subject: Pending, attr: Node.Index, layer: Layer, value: decoded.Value };
+pub const PendingBinding = struct { subject: Pending, attr: Node.Index, layer: Layer, descriptor: []const u8, key: ?[]const u8, value: decoded.Value };
 pub const PendingReference = struct { token: TokenIndex, subject: Pending };
 
 /// Where a block's contexts are read: in a diagram, which has parts, or in
@@ -148,7 +157,11 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
 
     try records.function(a, attr, .{ .record = style, .at = .{ .subject = classes } });
     const bound = try decode.attr(a, attr, f);
-    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .value = bound });
+    const key: ?[]const u8 = if (cst.key(attr)) |k| blk: {
+        const text = cst.tokenText(k);
+        break :blk text[1 .. text.len - 1];
+    } else null;
+    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound });
 }
 
 /// The classes of what a descriptor is written at: an element's own, or a
@@ -473,7 +486,7 @@ fn errorSubject(p: Pending) ?Analyser.Subject {
 /// Nodes, once the graph is built: each element's class is an IR node.
 pub fn finish(a: *Analyser) error{OutOfMemory}![]Binding {
     const bindings = try a.gpa.alloc(Binding, a.bindings.items.len);
-    for (a.bindings.items, bindings) |p, *b| b.* = .{ .subject = resolve(a, p.subject, a.node_of), .attr = p.attr, .layer = p.layer, .value = p.value };
+    for (a.bindings.items, bindings) |p, *b| b.* = .{ .subject = resolve(a, p.subject, a.node_of), .attr = p.attr, .layer = p.layer, .descriptor = p.descriptor, .key = p.key, .value = p.value };
     return bindings;
 }
 

@@ -2,12 +2,13 @@
 //! zone of an IR, the way a style sheet maps elements to styles.
 //!
 //! Made by Styler.zig. A Sheet borrows the IR and the environment, which
-//! must outlive it, and owns its tables and the labels that aren't in the
-//! IR's strings.
+//! must outlive it, and owns its tables; what the cascade computes (labels,
+//! values with their tokens resolved, each diagram's tokens) is in its
+//! arena.
 //!
 //! Two forms live here while the style pass moves (plan step 9d): the typed
-//! tables `nodes`, `edges` and `zones`, which renderers read until 9d5, and
-//! the Sheet of values (statements.md §22.12). The prelude is its only
+//! tables `nodes`, `edges` and `zones`, which renderers read until 9d5 and
+//! which the Styler translates from the other, and the Sheet of values (statements.md §22.12). The prelude is its only
 //! schema: a style is a list of entries, a descriptor of `:Style` and its
 //! value, resolved. Styles are shared the way the author shares them: a
 //! *rule* per diagram and set of classes present holds what those make, and
@@ -29,8 +30,8 @@ ir: *const Ir,
 nodes: []const Style,
 edges: []const Style,
 zones: []const Style,
-/// Labels that aren't in the IR's strings: the canonical ends, `f+` and `+f`.
-labels: []const u8,
+/// What the cascade computes: canonical labels, resolved values, tokens.
+arena: std.heap.ArenaAllocator,
 
 /// `:Style`'s descriptors, in the order they are declared, the prelude's
 /// first: what a `Descriptor` indexes. Names borrow the environment's
@@ -41,6 +42,8 @@ rules: []const Rule = &.{},
 entries: []const Entry = &.{},
 /// Each element's rule and own entries, indexed as the IR's tables.
 elements: Elements = .{},
+/// Each diagram's tokens, resolved: `[base]`'s, its themes', its own.
+tokens: []const []const decoded.Token = &.{},
 gpa: std.mem.Allocator,
 
 /// A descriptor of `:Style`, by its place in `descriptors`.
@@ -58,7 +61,12 @@ pub const Rule = struct { zone: Ir.ZoneIndex, classes: Env.Classes, entries: Spa
 
 pub const RuleIndex = enum(u32) { _ };
 
-pub const Element = struct { rule: RuleIndex, own: Span = .{} };
+pub const Element = struct {
+    rule: RuleIndex,
+    own: Span = .{},
+    /// Its worst issue, drawn or not (`:marks []`).
+    mark: ?Style.Mark = null,
+};
 
 pub const Elements = struct {
     nodes: []const Element = &.{},
@@ -79,7 +87,7 @@ pub fn deinit(s: *Sheet) void {
     s.gpa.free(s.nodes);
     s.gpa.free(s.edges);
     s.gpa.free(s.zones);
-    s.gpa.free(s.labels);
+    s.arena.deinit();
     s.gpa.free(s.descriptors);
     s.gpa.free(s.rules);
     s.gpa.free(s.entries);
@@ -87,6 +95,7 @@ pub fn deinit(s: *Sheet) void {
     s.gpa.free(s.elements.edges);
     s.gpa.free(s.elements.cells);
     s.gpa.free(s.elements.zones);
+    s.gpa.free(s.tokens);
     s.* = undefined;
 }
 
@@ -97,18 +106,29 @@ pub fn descriptor(s: *const Sheet, name: []const u8) ?Descriptor {
     return null;
 }
 
+/// The value `zone` binds the token `name` to, if any: `[unsupported]`'s
+/// colour, for a caption.
+pub fn token(s: *const Sheet, z: Ir.ZoneIndex, name: []const u8) ?Value {
+    for (s.tokens[@backingInt(z)]) |t| if (std.mem.eql(u8, t.label, name)) return t.value;
+    return null;
+}
+
+pub fn element(s: *const Sheet, subject: Subject) Element {
+    return switch (subject) {
+        .node => |n| s.elements.nodes[@backingInt(n)],
+        .edge => |x| s.elements.edges[@backingInt(x)],
+        .cell => |x| s.elements.cells[@backingInt(x)],
+        .zone => |z| s.elements.zones[@backingInt(z)],
+    };
+}
+
 pub fn rule(s: *const Sheet, r: RuleIndex) Rule {
     return s.rules[@backingInt(r)];
 }
 
 /// The style of `subject`: its own entries over its rule's.
 pub fn style(s: *const Sheet, subject: Subject) View {
-    const e = switch (subject) {
-        .node => |n| s.elements.nodes[@backingInt(n)],
-        .edge => |x| s.elements.edges[@backingInt(x)],
-        .cell => |x| s.elements.cells[@backingInt(x)],
-        .zone => |z| s.elements.zones[@backingInt(z)],
-    };
+    const e = s.element(subject);
     return .{ .own = s.slice(e.own), .rule = s.slice(s.rule(e.rule).entries) };
 }
 

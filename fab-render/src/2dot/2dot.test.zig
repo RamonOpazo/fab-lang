@@ -42,7 +42,7 @@ fn render(sheet: *const fab.Sheet) !Output {
 
 /// Every file starts with these defaults, so goldens show only the body.
 const header =
-    \\  graph [fontname="Helvetica", fontsize=11, nodesep=0.45, ranksep=0.45, pad=0.2]
+    \\  graph [fontname="Helvetica", fontsize=11, fontcolor="#333333", nodesep=0.45, ranksep=0.45, pad=0.2]
     \\  node [fontname="Helvetica", fontsize=11, fontcolor="#333333", color="#333333"]
     \\  edge [fontname="Helvetica", fontsize=9, fontcolor="#555555", color="#333333", arrowsize=0.6]
     \\
@@ -254,7 +254,7 @@ test "unsupported: a violet frame, and the caption above the name" {
         \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
-        \\  n0 -> n1 [label="f"]
+        \\  n0 -> n1 [label="x"]
         \\}
         \\
     );

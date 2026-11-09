@@ -122,7 +122,7 @@ const font_italic = "Helvetica-Oblique";
 /// Graph-wide defaults, so that each node and edge lists only what differs.
 fn writeHeader(w: *Writer) Writer.Error!void {
     const t = Theme.default;
-    try w.print("  graph [fontname=\"{s}\", fontsize=11, nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{font});
+    try w.print("  graph [fontname=\"{s}\", fontsize=11, fontcolor=\"#{x:0>6}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ font, t.ink });
     try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\"]\n", .{ font, t.ink, t.ink });
     try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"#{x:0>6}\", color=\"#{x:0>6}\", arrowsize=0.6]\n", .{ font, t.soft, t.ink });
 }
@@ -195,6 +195,11 @@ const Attrs = struct {
     fn inches(a: *Attrs, key: []const u8, value: f32) Writer.Error!void {
         try a.sep();
         try a.w.print("{s}={d:.2}", .{ key, value });
+    }
+
+    /// `key`, unless `c` is what the graph's header already sets.
+    fn colorUnless(a: *Attrs, key: []const u8, c: Style.Color, default: u24) Writer.Error!void {
+        if (Theme.default.rgb(c) != default) try a.color(key, c);
     }
 
     fn color(a: *Attrs, key: []const u8, c: Style.Color) Writer.Error!void {
@@ -297,9 +302,12 @@ fn writeNodeAttrs(style: Style, n: fab.Ir.NodeIndex, sizes: Sizes, w: *Writer, n
             try a.raw("fixedsize", "true");
         },
     }
-    if (style.italic) try a.text("fontname", font_italic);
-    if (style.ink) |c| try a.color("fontcolor", c);
-    if (style.stroke) |c| try a.color("color", c);
+    // A font for text only: a mark's canonical italic draws nothing.
+    if (style.label.len > 0) {
+        if (style.italic) try a.text("fontname", font_italic);
+        if (style.ink) |c| try a.colorUnless("fontcolor", c, Theme.default.ink);
+    }
+    if (style.stroke) |c| try a.colorUnless("color", c, Theme.default.ink);
     if (r.solid) {
         a.flag("filled");
         try a.color("fillcolor", style.stroke orelse style.fill orelse .{ .rgb = Theme.default.ink });
@@ -322,7 +330,7 @@ fn writeEdgeAttrs(style: Style, directed: bool, e: fab.Ir.EdgeIndex, w: *Writer,
     try a.text("label", style.label);
     if (!directed) try a.raw("dir", "none");
     if (style.italic) try a.text("fontname", font_italic);
-    if (style.ink) |c| try a.color("fontcolor", c);
+    if (style.ink) |c| try a.colorUnless("fontcolor", c, Theme.default.soft);
     if (style.line == .double or style.line == .triple) {
         // Parallel lines: the colour, a gap, the colour (and again).
         const c = style.stroke orelse Style.Color{ .rgb = Theme.default.ink };
@@ -337,7 +345,7 @@ fn writeEdgeAttrs(style: Style, directed: bool, e: fab.Ir.EdgeIndex, w: *Writer,
         }
         try w.writeByte('"');
     } else if (style.stroke) |c| {
-        try a.color("color", c);
+        try a.colorUnless("color", c, Theme.default.ink);
     }
     try lineFlags(&a, style.line, .{ .edge = e }, notes);
     try a.end();
@@ -371,11 +379,11 @@ fn writeClusterAttrs(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, w: *Writer, no
     } else {
         try w.writeAll("    peripheries=0\n");
     }
-    if (style.ink) |c| {
+    if (style.ink) |c| if (Theme.default.rgb(c) != Theme.default.ink) {
         try w.writeAll("    fontcolor=\"");
         try writeColor(w, c);
         try w.writeAll("\"\n");
-    }
+    };
     var flags: [2][]const u8 = undefined;
     var count: usize = 0;
     if (style.fill) |c| {
