@@ -72,7 +72,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
-| L    | Language server (after 9c, before 9d)     | L3a done |
+| L    | Language server (after 9c, before 9d)     | L3b done |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -223,7 +223,7 @@ Done when every level case passes.
   - **L2d** (done). Rename and prepare rename (`rename.zig`), every use in the document, other diagrams' included. Refused, with a reason (error -32803): a built-in, the prelude's names, `@`, a name also written where the analyser couldn't read it, a new name spelled for another sort (lexed, or read as a bracket name; `fab.value` is exported), or one already naming its sort: in the same diagram for edges, cells and nodes, anywhere for the rest, the prelude's included.
 - **L3.** Completion (`completion.zig`). The context is read from the tokens before the cursor, since a line being typed doesn't parse; the names come from the document's last text with no syntax errors (`Document.last_good`), so a broken line doesn't hide what is declared above it. Each item replaces the name typed, sigil included. In increments:
   - **L3a** (done). The machinery, and names: `G.` a diagram's parts (edges, cells, named nodes, `@`, classes); `#` and edge names, the statement's diagram's; capitals, the diagrams; `&`, the classes; `:T`, and `:` after `::` or `:=`, the types.
-  - **L3b.** Descriptors applying at a context (`G.f :`, an owner's block), by the subject's classes.
+  - **L3b** (done). Descriptors applying at a context, by the subjects' classes as the analyser judges them (a node by its kind; a name the last good text lacks, by its sort): the entry's context, else its block's owner, read relative to the owner above (`G :style { #A { :`); a group's, those fitting every subject. Only in a description; a chain, an element's parts, a declaration or a type's block offer none. A layer (`:style`) only at the top level. The detail is the type, or *bundle*.
   - **L3c.** Labels and named values fitting the descriptor before `[`; completion inside a record's block.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
 

@@ -76,3 +76,42 @@ test "an item replaces the name typed, its sigil included" {
     try testing.expectEqual(@as(u32, 5), items[0].textEdit.range.start.character);
     try testing.expectEqual(@as(u32, 6), items[0].textEdit.range.end.character);
 }
+
+// The prelude's descriptors, by the classes they apply to.
+const edge_descriptors = ":arrow :bend :ink :label :label-at :label-end :label-start :link :note :pen :shorten :side :size :step :stroke";
+const zone_descriptors = ":alt :as :caption :cross :face :fill :font :ink :label :line :link :marks :note :padding :pen :size :stroke :theme";
+
+test "descriptors at a context: by the subject's classes" {
+    try expectOffered("G :: f/g\nG.f :bend [inner] :la", ":label :label-at :label-end :label-start");
+    try expectOffered("G :: #A/f\nG.#A :sh", ":shape");
+    try expectOffered("G :: f/?\nG.f+ :sh", ":shape");
+    try expectOffered("G :: f\nG :ca", ":caption");
+    // At the top level a diagram can open its layer; inside, it can't.
+    try expectOffered("G :: f\nG :st", ":stroke :style");
+    try expectOffered("G :: f\nG :style { :st", ":stroke");
+    try expectOffered("&edge :sh", ":shorten");
+}
+
+test "descriptors in a block: the entry's context, or the block's owner" {
+    try expectOffered("G :: #A/f\nG :style { :label \"x\", f :ar", ":arrow");
+    try expectOffered("G :: #A/f\nG :style {\n  #A { :sh", ":shape");
+    try expectOffered("G :: #A/f\nG :style { #A :fill [red], :cap", ":caption");
+    try expectOffered("G :: #A/f\nG :style { f :ar }\nG.#A :sh", ":shape");
+}
+
+test "a group's descriptors fit every subject" {
+    try expectOffered("G :: #A/f\nG :style { (f, #A) :s", ":size :step :stroke");
+}
+
+test "no descriptors where there is no subject" {
+    // A chain, parts of an element, a declaration, a type's block.
+    try expectOffered("G :: f g\nG :style { f g :", "");
+    try expectOffered("G :: #A/f\nG :style { #A { f :", "");
+    try expectOffered("G :: f :", "");
+    try expectOffered(":Mood :: { &node :", "");
+}
+
+test "a name not yet declared is judged by its sort" {
+    try expectOffered("G :: f\nG.g :sh", ":shorten");
+    try expectOffered("G :: f\nG.#B :sh", ":shape");
+}
