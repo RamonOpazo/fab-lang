@@ -1253,3 +1253,15 @@ Settles JSON version 2 (plan step 9d5b): the Sheet beside the IR.
 **Values tagged by shape,** JSON's own types where they cannot be confused: nil `null`, a flag `true` or `false`, elements an array; then `{"text"}`, `{"math"}`, `{"label", "inverted"}`, `{"color": "#rrggbbaa"}` (always eight digits), `{"number": "0.85"}` (its normal form, §22.11), `{"range": [lo, hi]}` (`hi` null when open). No record reaches the Sheet while `:theme` is the only descriptor taking one; `:prove` and `:place` (step 11) decide how theirs are written.
 
 **Rejected.** Keys with their sigils (`":label"`, `"#A"`): `style[":label"]` instead of `style.label`, for nothing a reader needs. A value's layer inside its object: nil and flags are JSON scalars and cannot carry it. Colours with the alpha only when not opaque, as the dumps write them: two forms for every reader to parse.
+
+### 22.14 Base rules, shared by every diagram, 2026-11-09
+
+Amends §22.12 and §22.13 (plan step 9d5d). A rule per diagram and set of classes repeated `[base]` in every diagram: every descriptor of `:Style`, for every class, the same in each unstyled diagram. That is the repetition §22.12 rejected for elements, one level up.
+
+**Base rules.** A *base rule* is what `[base]` makes for a set of classes, its tokens resolved with `[base]`'s own: one per set of classes present anywhere in the program, belonging to no diagram. A *diagram rule* names its base rule as its parent and holds only the entries that differ from it, by value or by layer: what the diagram's themes and class bindings make, and what its tokens change (`[ink] := [#000000]` changes every `[base]` entry written `[ink]`). A binding equal to `[base]`'s value is kept, since its layer is the author's and a renderer reports what it does not draw (§22.12). A diagram rule with nothing of its own is not made: its elements name the base rule. An unstyled program is its base rules, and each element's own entries.
+
+**One level.** A rule's parent is a base rule, and a base rule has none. Sharing along the classes (`&node`'s entries inherited by `&plain` and `&hole`) would make the Sheet a second cascade, ranked as fAB ranks it, which §22.12 rejected; between diagrams one level removes the repetition.
+
+**Read the same.** `sheet.style(element)` merges an element's own entries over its rule's, and those over its parent's. In JSON a rule is `{zone, classes, parent, style}`: a base rule has `"zone": null, "parent": null`, and a parent comes before the rules that name it. SVG writes a class per base rule and one per diagram rule, stacked (`class="node-plain G-node-plain"`), each with its own entries.
+
+**Rejected.** Sharing in JSON only, a diff written by the emitter: the Sheet, and so SVG, would still repeat it. A parent per class (`&node` under `&plain`): above. Dropping a diagram rule's entries equal to its parent's whatever their layer: what a theme binds and a renderer cannot draw would go unreported.

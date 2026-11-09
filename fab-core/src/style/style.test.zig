@@ -264,7 +264,7 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     try testing.expectEqualStrings("unsupported", look(&s, zoneAt(0)).caption.?);
 }
 
-test "rules no element names are pruned; :theme is no element's style" {
+test "every rule is an element's or a parent; :theme is no element's style" {
     var c = try Compilation.init(testing.allocator, "G :: f/? +(a, b)\nG :style { :theme [dark] }", preview);
     defer c.deinit();
     const s = (try c.sheet()).?;
@@ -273,9 +273,82 @@ test "rules no element names are pruned; :theme is no element's style" {
         for (s.elements.nodes) |e| named = named or @backingInt(e.rule) == r;
         for (s.elements.edges) |e| named = named or @backingInt(e.rule) == r;
         for (s.elements.zones) |e| named = named or @backingInt(e.rule) == r;
+        for (s.rules) |other| named = named or (other.parent != null and @backingInt(other.parent.?) == r);
         try testing.expect(named);
     }
     try testing.expectEqual(@as(?@import("../analyse/decoded.zig").Value, null), s.style(zoneAt(0)).get(s.descriptor(":theme").?));
+}
+
+/// The rule `subject` names.
+fn ruleOf(s: *const Sheet, subject: Sheet.Subject) Sheet.Rule {
+    return s.rule(s.element(subject).rule);
+}
+
+test "an unstyled program is its base rules, shared by every diagram" {
+    var c = try Compilation.init(testing.allocator, "G :: #A/f\nH :: #B/g", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    // One per set of classes: the zones, the named nodes, the canonical
+    // ones (`f+`), the edges.
+    try testing.expectEqual(4, s.rules.len);
+    for (s.rules) |r| {
+        try testing.expectEqual(null, r.zone);
+        try testing.expectEqual(null, r.parent);
+    }
+    try testing.expectEqual(s.element(nodeAt(0)).rule, s.element(nodeAt(2)).rule);
+    try testing.expectEqual(s.element(zoneAt(0)).rule, s.element(zoneAt(1)).rule);
+}
+
+test "a diagram rule holds what differs from its base rule, by value or by layer" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: #A/f
+        \\H :: #B/g
+        \\J :: #C/h
+        \\G :style { [ink] := [#000000] }
+        \\H :style { &edge :size [0.85] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const ink_of = s.descriptor(":ink").?;
+    const size = s.descriptor(":size").?;
+
+    // G rebinds a token: every entry written [ink] changes, the rest is the
+    // base rule's.
+    const g = ruleOf(s, nodeAt(0));
+    try testing.expectEqual(0, @backingInt(g.zone.?));
+    const base = s.rule(g.parent.?);
+    try testing.expectEqual(null, base.zone);
+    for (s.slice(g.entries)) |e| try testing.expect(e.value == .color);
+    try testing.expectEqual(0x000000, rgb(s.style(nodeAt(0)).color(ink_of).?));
+    try testing.expectEqual(ink, rgb(s.style(nodeAt(4)).color(ink_of).?));
+
+    // H binds [base]'s own value: kept, since the author bound it.
+    const h = ruleOf(s, edgeAt(1));
+    try testing.expectEqual(1, @backingInt(h.zone.?));
+    const entries = s.slice(h.entries);
+    try testing.expectEqual(1, entries.len);
+    try testing.expectEqual(size, entries[0].descriptor);
+    try testing.expectEqual(.program, entries[0].layer);
+    // Its nodes change nothing: they name the base rule.
+    try testing.expectEqual(null, ruleOf(s, nodeAt(2)).zone);
+
+    // J is unstyled.
+    try testing.expectEqual(null, ruleOf(s, nodeAt(4)).zone);
+    try testing.expectEqual(null, ruleOf(s, edgeAt(2)).zone);
+}
+
+test "a theme makes a diagram rule; parents come first" {
+    var c = try Compilation.init(testing.allocator, "G :: #A/f\nG :style { :theme [dark] }", preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const r = ruleOf(s, nodeAt(0));
+    try testing.expect(r.zone != null);
+    for (s.slice(r.entries)) |e| try testing.expect(e.layer == .theme or e.value == .color);
+    for (s.rules, 0..) |x, i| if (x.parent) |p| try testing.expect(@backingInt(p) < i);
+}
+
+fn rgb(c: @import("../analyse/value.zig").Rgba) u24 {
+    return @as(u24, c.r) << 16 | @as(u24, c.g) << 8 | c.b;
 }
 
 fn styleEverything(gpa: std.mem.Allocator) !void {

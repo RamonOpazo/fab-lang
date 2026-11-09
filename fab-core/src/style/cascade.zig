@@ -5,7 +5,10 @@
 //!
 //! A *rule*, one per diagram and set of classes present, folds `[base]`,
 //! the diagram's themes and the program's class bindings, the most specific
-//! winning within a layer and of one rank the later. Within the program, a
+//! winning within a layer and of one rank the later. Once every element is
+//! made, rules are shared (§22.14): each becomes its set of classes' base
+//! rule, `[base]` alone with its own tokens, and a diagram rule over it
+//! holding what differs, made only when something does. Within the program, a
 //! class at the top level (every diagram's) ranks below a class inside the
 //! diagram, each by the classes' own ranks: `&node` < the kinds <
 //! `&canonical` < `&hole`. An *element* holds its own bindings, then what is
@@ -110,7 +113,7 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
         e.* = try b.element(.{ .zone = zone }, zone, .initOne(.zone), .{ .text = ir.string(name) }, mark.border, true);
     }
 
-    try b.prune();
+    try b.share();
     const descriptors = try b.names.toOwnedSlice(gpa);
     errdefer gpa.free(descriptors);
     const made = try b.rules.toOwnedSlice(gpa);
@@ -331,7 +334,7 @@ const Builder = struct {
         if (b.in_zone.get(@backingInt(zone))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, program, 4);
 
         const start: u32 = @intCast(b.entries.items.len);
-        try b.emit(slots, zone);
+        try b.emit(slots, b.zone_tokens[@backingInt(zone)], &b.entries);
         try b.rules.append(b.gpa, .{
             .zone = zone,
             .classes = classes,
@@ -373,38 +376,71 @@ const Builder = struct {
         for (body.bindings) |binding| try b.bind(slots, binding.descriptor, binding.value, at, layer, depth - 1);
     }
 
-    /// The bound slots as entries, in descriptor order, tokens resolved.
-    /// `:theme` is the cascade's, no element's style.
-    fn emit(b: *Builder, slots: []const Slot, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
+    /// The bound slots as entries of `out`, in descriptor order, `tokens`
+    /// resolved. `:theme` is the cascade's, no element's style.
+    fn emit(b: *Builder, slots: []const Slot, tokens: []const decoded.Token, out: *std.ArrayList(Entry)) error{OutOfMemory}!void {
         for (slots, 0..) |slot, i| if (slot) |s| {
             if (std.mem.eql(u8, b.names.items[i], ":theme")) continue;
-            try b.entries.append(b.gpa, .{
+            try out.append(b.gpa, .{
                 .descriptor = @fromBackingInt(@as(u16, @intCast(i))),
-                .value = try b.resolve(s.value, zone),
+                .value = try b.resolve(s.value, tokens),
                 .layer = s.layer,
             });
         };
     }
 
-    /// Drops the rules no element names (the `&canonical` check makes some
-    /// on the way), and the entries only they held.
-    fn prune(b: *Builder) error{OutOfMemory}!void {
+    /// Shares the rules (§22.14): each an element names becomes its base
+    /// rule, made once per set of classes, and a diagram rule over it with
+    /// the entries that differ, by value or by layer; none when none do. The
+    /// rules no element names (the `&canonical` check makes some on the way)
+    /// are dropped, and the entries only they held.
+    fn share(b: *Builder) error{OutOfMemory}!void {
         const tables = [_][]Sheet.Element{ b.nodes, b.edges, b.cells, b.zones };
         const renumber = try b.gpa.alloc(?Sheet.RuleIndex, b.rules.items.len);
         defer b.gpa.free(renumber);
         @memset(renumber, null);
+        const used = try b.gpa.alloc(bool, b.rules.items.len);
+        defer b.gpa.free(used);
+        @memset(used, false);
         for (tables) |table| for (table) |e| {
-            renumber[@backingInt(e.rule)] = e.rule;
+            used[@backingInt(e.rule)] = true;
         };
         var entries: std.ArrayList(Entry) = .empty;
         errdefer entries.deinit(b.gpa);
         var rules: std.ArrayList(Sheet.Rule) = .empty;
         errdefer rules.deinit(b.gpa);
-        for (b.rules.items, renumber) |r, *new| if (new.* != null) {
+        var bases: std.AutoHashMapUnmanaged(u16, Sheet.RuleIndex) = .empty;
+        defer bases.deinit(b.gpa);
+        var diff: std.ArrayList(Entry) = .empty;
+        defer diff.deinit(b.gpa);
+        const slots = try b.gpa.alloc(Slot, b.names.items.len);
+        defer b.gpa.free(slots);
+        const base_tokens: []const decoded.Token = if (b.base) |base| base.tokens else &.{};
+
+        for (b.rules.items, used, renumber) |r, is_used, *new| if (is_used) {
+            const gop = try bases.getOrPut(b.gpa, bits(r.classes));
+            if (!gop.found_existing) {
+                gop.value_ptr.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
+                @memset(slots, null);
+                if (b.base) |base| try b.foldRecord(slots, base, r.classes, 0);
+                const start: u32 = @intCast(entries.items.len);
+                try b.emit(slots, base_tokens, &entries);
+                try rules.append(b.gpa, .{ .classes = r.classes, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
+            }
+            const parent = gop.value_ptr.*;
+            const inherited = rules.items[@backingInt(parent)].entries;
+            diff.clearRetainingCapacity();
+            for (b.entries.items[r.entries.start..r.entries.end]) |e| {
+                if (!inheritedFrom(entries.items[inherited.start..inherited.end], e)) try diff.append(b.gpa, e);
+            }
+            if (diff.items.len == 0) {
+                new.* = parent;
+                continue;
+            }
             new.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
             const start: u32 = @intCast(entries.items.len);
-            try entries.appendSlice(b.gpa, b.entries.items[r.entries.start..r.entries.end]);
-            try rules.append(b.gpa, .{ .zone = r.zone, .classes = r.classes, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
+            try entries.appendSlice(b.gpa, diff.items);
+            try rules.append(b.gpa, .{ .zone = r.zone, .classes = r.classes, .parent = parent, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
         };
         for (tables) |table| for (table) |*e| {
             e.rule = renumber[@backingInt(e.rule)].?;
@@ -418,18 +454,18 @@ const Builder = struct {
         b.rules = rules;
     }
 
-    /// A label a token of `zone` binds, replaced by its value, once: in a
+    /// A label one of `tokens` binds, replaced by its value, once: in a
     /// tuple too.
-    fn resolve(b: *Builder, v: Value, zone: Ir.ZoneIndex) error{OutOfMemory}!Value {
+    fn resolve(b: *Builder, v: Value, tokens: []const decoded.Token) error{OutOfMemory}!Value {
         switch (v) {
             .label => |l| {
                 if (l.inverted) return v;
-                for (b.zone_tokens[@backingInt(zone)]) |t| if (std.mem.eql(u8, t.label, l.name)) return t.value;
+                for (tokens) |t| if (std.mem.eql(u8, t.label, l.name)) return t.value;
                 return v;
             },
             .elements => |es| {
                 const out = try b.arena.alloc(Value, es.len);
-                for (es, out) |e, *o| o.* = try b.resolve(e, zone);
+                for (es, out) |e, *o| o.* = try b.resolve(e, tokens);
                 return .{ .elements = out };
             },
             else => return v,
@@ -491,7 +527,7 @@ const Builder = struct {
         }
 
         const start: u32 = @intCast(b.entries.items.len);
-        try b.emit(slots, zone);
+        try b.emit(slots, b.zone_tokens[@backingInt(zone)], &b.entries);
         return .{ .rule = r, .own = .{ .start = start, .end = @intCast(b.entries.items.len) }, .mark = mark };
     }
 
@@ -548,6 +584,32 @@ fn bindToken(gpa: std.mem.Allocator, tokens: *std.ArrayList(decoded.Token), t: d
         return;
     };
     try tokens.append(gpa, t);
+}
+
+/// Whether `parent`, sorted by descriptor, holds `e` as it is: the same
+/// value from the same layer.
+fn inheritedFrom(parent: []const Entry, e: Entry) bool {
+    for (parent) |p| if (p.descriptor == e.descriptor) return p.layer == e.layer and same(p.value, e.value);
+    return false;
+}
+
+/// Whether two values are the same value.
+fn same(a: Value, b: Value) bool {
+    if (std.meta.activeTag(a) != std.meta.activeTag(b)) return false;
+    return switch (a) {
+        .nil => true,
+        .flag => |x| x == b.flag,
+        .text => |x| std.mem.eql(u8, x, b.text),
+        .math => |x| std.mem.eql(u8, x, b.math),
+        .color => |x| std.meta.eql(x, b.color),
+        .number => |x| std.meta.eql(x, b.number),
+        .range => |x| std.meta.eql(x, b.range),
+        .label => |x| x.inverted == b.label.inverted and std.mem.eql(u8, x.name, b.label.name),
+        .elements => |xs| xs.len == b.elements.len and for (xs, b.elements) |x, y| {
+            if (!same(x, y)) break false;
+        } else true,
+        .record => |x| x == b.record,
+    };
 }
 
 fn isNil(v: ?Value) bool {

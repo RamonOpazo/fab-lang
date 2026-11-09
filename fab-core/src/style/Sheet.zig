@@ -4,10 +4,12 @@
 //! The prelude is its only schema: a style is a list of entries, a
 //! descriptor of `:Style` and its value, resolved (tokens as colours,
 //! computed defaults filled in). Styles are shared the way the author
-//! shares them: a *rule* per diagram and set of classes present holds what
-//! those make, and each element names its rule and holds only its own
-//! entries. `style` merges the two. A renderer reads what it draws, by
-//! descriptor, and reports the rest.
+//! shares them (§22.14): a *base rule* per set of classes holds what
+//! `[base]` makes, in every diagram; a *diagram rule* names its base rule as
+//! its parent and holds only what the diagram changes, and is not made when
+//! nothing is; each element names its rule and holds only its own entries.
+//! `style` merges the three. A renderer reads what it draws, by descriptor,
+//! and reports the rest.
 //!
 //! Made by Styler.zig. A Sheet borrows the IR and the environment, which
 //! must outlive it, and owns its tables; what the cascade computes (labels,
@@ -69,9 +71,15 @@ pub const Mark = enum(u2) {
 /// Entries `start..end` of `entries`.
 pub const Span = struct { start: u32 = 0, end: u32 = 0 };
 
-/// The style a diagram's elements of one set of classes share: `G`'s
-/// `&node, &choice`.
-pub const Rule = struct { zone: Ir.ZoneIndex, classes: Env.Classes, entries: Span };
+/// The style elements of one set of classes share: `&node, &choice`, in
+/// every diagram (a base rule: no zone, no parent), or in `G`, over its base
+/// rule (only the entries that differ from it, by value or by layer).
+pub const Rule = struct {
+    zone: ?Ir.ZoneIndex = null,
+    classes: Env.Classes,
+    parent: ?RuleIndex = null,
+    entries: Span,
+};
 
 pub const RuleIndex = enum(u32) { _ };
 
@@ -138,10 +146,16 @@ pub fn rule(s: *const Sheet, r: RuleIndex) Rule {
     return s.rules[@backingInt(r)];
 }
 
-/// The style of `subject`: its own entries over its rule's.
+/// The style of `subject`: its own entries over its rule's, over its rule's
+/// parent's.
 pub fn style(s: *const Sheet, subject: Subject) View {
     const e = s.element(subject);
-    return .{ .own = s.slice(e.own), .rule = s.slice(s.rule(e.rule).entries) };
+    const r = s.rule(e.rule);
+    return .{
+        .own = s.slice(e.own),
+        .rule = s.slice(r.entries),
+        .parent = if (r.parent) |p| s.slice(s.rule(p).entries) else &.{},
+    };
 }
 
 pub fn slice(s: *const Sheet, span: Span) []const Entry {
@@ -154,6 +168,8 @@ pub fn slice(s: *const Sheet, span: Span) []const Entry {
 pub const View = struct {
     own: []const Entry,
     rule: []const Entry,
+    /// The rule's parent's: `[base]`'s, which binds nothing of the author's.
+    parent: []const Entry = &.{},
 
     pub fn get(v: View, d: Descriptor) ?Value {
         return if (v.entry(d)) |e| e.value else null;
@@ -161,7 +177,7 @@ pub const View = struct {
 
     /// The entry for `d`, with the layer that bound it.
     pub fn entry(v: View, d: Descriptor) ?Entry {
-        return find(v.own, d) orelse find(v.rule, d);
+        return find(v.own, d) orelse find(v.rule, d) orelse find(v.parent, d);
     }
 
     pub fn color(v: View, d: Descriptor) ?value.Rgba {

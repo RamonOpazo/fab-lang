@@ -46,9 +46,15 @@
 //!                   "diagnostic": index into "diagnostics"}] }
 //!
 //!   Sheet: every element's style, resolved (statements.md §22.12). A rule
-//!   holds what a diagram's set of classes makes; an element names its rule
-//!   and holds only its own entries, which win over the rule's.
-//!     { "rules": [{"zone": zone, "classes": ["node", "plain"], "style": Style}],
+//!   holds what a set of classes makes; an element names its rule and holds
+//!   only its own entries, which win over the rule's, and those over its
+//!   parent's.
+//!     { "rules": [{"zone": null | zone, "classes": ["node", "plain"],
+//!                  "parent": null | rule, "style": Style}],
+//!                                       a base rule, [base]'s, has no zone and
+//!                                       no parent; a diagram's names its base
+//!                                       rule, written before it, and holds what
+//!                                       differs from it (statements.md §22.14)
 //!       "nodes" | "edges" | "cells" | "zones":
 //!               [{"rule": rule, "style": Style,
 //!                 "mark": null | "unsupported" | "warning" | "error"}],
@@ -227,14 +233,18 @@ fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
     try w.writeAll("{\"rules\":[");
     for (s.rules, 0..) |r, i| {
         if (i > 0) try w.writeByte(',');
-        try w.print("{{\"zone\":{d},\"classes\":[", .{@backingInt(r.zone)});
+        try w.writeAll("{\"zone\":");
+        try optionalIndex(w, r.zone);
+        try w.writeAll(",\"classes\":[");
         var it = r.classes.iterator();
         var first = true;
         while (it.next()) |class| : (first = false) {
             if (!first) try w.writeByte(',');
             try string(w, @tagName(class));
         }
-        try w.writeAll("],\"style\":");
+        try w.writeAll("],\"parent\":");
+        try optionalIndex(w, r.parent);
+        try w.writeAll(",\"style\":");
         try writeStyle(s, s.slice(r.entries), w);
         try w.writeByte('}');
     }
