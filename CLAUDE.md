@@ -73,7 +73,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 8    | Definitions and values                    | done    |
 | 9    | Style layer                               | 9c done  |
 | L    | Language server (after 9c, before 9d)     | L1 done |
-| T    | Tree-sitter grammar (after L1, before L2) | to try in the editors |
+| T    | Tree-sitter grammar (after L1, before L2) | done    |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -215,12 +215,16 @@ Done when every level case passes.
 - **9e. Examples.** Every example's style resolves to a Sheet; corpus rows from the spec's styled examples.
 
 **L. Language server** (`fab-lsp/`), moved before the cascade so styles and renders are iterated with it. Depends on fab-core only, and on no library outside Zig's standard one (the project stays independent): JSON-RPC over stdio with `std.json`, message types written by hand; the whole document recompiled on each change. Positions in UTF-16. In increments:
-- **L1** (done). The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort. fab-lsp is a library without I/O (`Server.handle`: one message in, framed messages out; `Transport` the `Content-Length` framing); `fab lsp` in fab-cli owns the standard streams. Editor first: Helix (`fab-lsp/README.md`); Zed waits, since it needs a WebAssembly extension and a Tree-sitter grammar to start a server.
-- **L2.** Navigation from `Result.references`: go to definition, references, hover (signatures, types, a node's canonical end), rename. The prelude as a read-only document, `fab://prelude.fab`.
+- **L1** (done). The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort. fab-lsp is a library without I/O (`Server.handle`: one message in, framed messages out; `Transport` the `Content-Length` framing); `fab lsp` in fab-cli owns the standard streams. Editors in `editors/`: Helix, and Zed through a small Rust extension that starts `fab lsp` from the PATH.
+- **L2.** Navigation: go to definition, references, hover, rename. In increments:
+  - **L2a.** fab-core: every use records its target, `Result.references` (a use's token → a target: a subject in the IR, or a definition in the Env), each definition with its span, in the program or in the prelude. Today only description contexts record one.
+  - **L2b.** Definition, references, document highlight. The prelude is not a virtual `fab://` document, which editors don't open: `fab lsp` (fab-cli) writes the embedded prelude to a cache file, `$XDG_CACHE_HOME/fab/prelude-<version>.fab`, and the server points into it, so it always matches the compiler.
+  - **L2c.** Hover: signatures, types, a node's canonical end.
+  - **L2d.** Rename, of what the program owns; prelude names don't rename.
 - **L3.** Completion from types: descriptors applying at a context, labels and named values fitting a descriptor, names after `.`.
 - **L4.** Formatting. Needs comments kept: the lexer skips them today, so it records them as trivia, and fab-core gains a printer from the CST (`fab fmt` beside it).
 
-**T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension pointing at this repository's subdirectory; if Zed can't take a subdirectory, the grammar moves to its own repository.
+**T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension reading this repository's subdirectory at a commit (`path`, accepted by Zed 1.27).
 
 **10. Renderer.** fab-render realises the new Style: arrows, ends, `:bend`, `:side`, theme tokens.
 

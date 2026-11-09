@@ -7,5 +7,5 @@ allowed here; nothing in fAB builds or tests through it.
 | Editor | Colours (Tree-sitter) | Diagnostics (`fab lsp`) |
 | ------ | --------------------- | ----------------------- |
 | [Helix](helix/) | yes | yes |
-| [Zed](zed/) | yes | waits: needs Rust code, built with rustup |
+| [Zed](zed/) | yes | yes |
 | VS Code, Neovim | later | later |

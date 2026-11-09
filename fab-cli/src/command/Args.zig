@@ -3,6 +3,7 @@
 //!   fab render <file> [options]          draw the diagram
 //!   fab check <file> [options]           diagnostics only
 //!   fab show tokens|cst|ir <file> [options]
+//!   fab lsp                              the language server
 //!
 //! The command is always the first word, so a file may have any name:
 //! `fab render check` draws a file called `check`. A bare `fab order.fab`
@@ -286,6 +287,8 @@ pub const help =
     \\  fab render <file> [options]             draw the diagram
     \\  fab check <file> [options]              report problems only
     \\  fab show tokens|cst|ir <file> [options] show a stage of compilation
+    \\  fab lsp                                 the language server, over
+    \\                                          standard input and output
     \\
     \\<file> is a path, or `-` for standard input.
     \\

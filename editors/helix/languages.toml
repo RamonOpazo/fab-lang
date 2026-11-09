@@ -1,6 +1,9 @@
 # fAB for Helix: append to ~/.config/helix/languages.toml, with the path set
 # to this repository's tree-sitter-fab.
 
+# Build only fAB's grammar: Helix ships the others.
+use-grammars = { only = ["fab"] }
+
 [language-server.fab]
 command = "fab"
 args = ["lsp"]

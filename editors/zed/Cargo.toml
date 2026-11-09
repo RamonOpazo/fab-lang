@@ -1,0 +1,15 @@
+[package]
+name = "zed-fab"
+version = "0.0.1"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+# Zed builds this to WebAssembly (wasm32-wasip2) when the extension is
+# installed; it only tells Zed how to start `fab lsp`.
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.7.0"

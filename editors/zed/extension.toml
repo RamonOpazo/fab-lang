@@ -3,7 +3,7 @@ name = "fAB"
 version = "0.0.1"
 schema_version = 1
 authors = ["Ramón Opazo"]
-description = "fAB, a language for diagrams: highlighting"
+description = "fAB, a language for diagrams: highlighting and diagnostics"
 repository = "https://github.com/RamonOpazo/fab-lang"
 
 # The grammar is a subdirectory of the fAB repository, at a commit. While
@@ -11,5 +11,10 @@ repository = "https://github.com/RamonOpazo/fab-lang"
 # must still be a commit in it that holds tree-sitter-fab.
 [grammars.fab]
 repository = "https://github.com/RamonOpazo/fab-lang"
-rev = "COMMIT"
+rev = "ddd9534ede93cde8cd5a73d3fab23752ee16db4f"
 path = "tree-sitter-fab"
+
+# `fab lsp`, found on the PATH (src/lib.rs).
+[language_servers.fab]
+name = "fab"
+languages = ["fAB"]
