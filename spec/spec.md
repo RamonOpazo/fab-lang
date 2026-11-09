@@ -1080,16 +1080,16 @@ Order :: {
 }
 
 Order :style {
-    #Received  :label "Order received",
-    validate+  :label "Valid?",
-    charge+    :label "Payment accepted?",
-    #Waiting   :label "Wait 10 min",
-    reserve+   :label "In stock?",
-    #Shipped   :label "Shipped",
-    #Rejected  :label "Rejected",
-    (yes, paid, reserved)  :label "yes",
-    (no, declined, short)  :label "no",
-    (retry, restock)       { :arrow [/dashed/>], :bend [inner] }
+    #Received             :label "Order received",
+    validate+             :label "Valid?",
+    charge+               :label "Payment accepted?",
+    #Waiting              :label "Wait 10 min",
+    reserve+              :label "In stock?",
+    #Shipped              :label "Shipped",
+    #Rejected             :label "Rejected",
+    (yes, paid, reserved) :label "yes",
+    (no, declined, short) :label "no",
+    (retry, restock)      { :arrow [/dashed/>], :bend [inner] }
 }
 ```
 
@@ -1129,10 +1129,10 @@ Db :prove {
     :axiom (&node.id :pk, &edge :card [0..*/1]),
     :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
     :axiom (parent { :nullable, :card [0..*/0..1] }),
-    :axiom (parent document == document)    // a reply is on the same document as its parent
+    :axiom (parent document == document)  // a reply is on the same document as its parent
 }
 
-Db :style { writer :label "author_id" }
+Db   :style { writer :label "author_id" }
 User :style { :label "users", :fill [muted] }
 ```
 
@@ -1156,27 +1156,27 @@ Repo :: {
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
-    &node :shape [point],
+    &node    :shape [point],
     #Head    { :ref, :label "main" },
     #Feature { :ref, :label "feature/auth" },
     #V1      { :ref, :label "v1.0" },
     #Spike   { :ref, :label "spike/cache" },
-    init    :label "a1f3 init",
-    readme  :label "b27c add readme",
-    fix     :label "c90e fix typo",
-    login   :label "d4a1 login form",
-    session :label "e5b2 sessions",
-    merge   :label "f6c3 merge feature/auth",
-    merge'  :arrow [/dashed/>],
-    bump    :label "0a7d bump to 1.0",
-    hotfix  :label "1b8e hotfix",
-    spike   :label "2c9f try cache"
+    init     :label "a1f3 init",
+    readme   :label "b27c add readme",
+    fix      :label "c90e fix typo",
+    login    :label "d4a1 login form",
+    session  :label "e5b2 sessions",
+    merge    :label "f6c3 merge feature/auth",
+    merge'   :arrow [/dashed/>],
+    bump     :label "0a7d bump to 1.0",
+    hotfix   :label "1b8e hotfix",
+    spike    :label "2c9f try cache"
 }
 
 Repo :prove {
     :kind [category],
-    :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
-    :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
+    :axiom (fix merge == login session merge'),  // both paths from the fork reach the same state
+    :lemma.[clean] (#Merged :pushout)            // fAB checks the merge is clean: the least common state
 }
 ```
 
