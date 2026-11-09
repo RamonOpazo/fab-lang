@@ -40,7 +40,7 @@ test "a node and a cell" {
 }
 
 test "a descriptor: its type, its classes, its record type" {
-    try expectHover(3, 6, "**descriptor** `:fill`: `:Color, :Nil`, on `&node`, `&zone`, in `:Style`, from the prelude\n\n```fab\n(&node, &zone)               :fill   :: (:Color, :Nil),\n```");
+    try expectHover(3, 6, "**descriptor** `:fill`: `(:Color, :Nil)`, on `&node`, `&zone`, in `:Style`, from the prelude\n\n```fab\n(&node, &zone)               :fill   :: (:Color, :Nil),\n```");
 }
 
 test "types, labels and values" {

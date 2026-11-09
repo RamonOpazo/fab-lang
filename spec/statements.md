@@ -1084,7 +1084,7 @@ Amends 21.2, 22.2–22.5 (plan step 9b); the tables of 22.3 and 22.5 are declare
 | a bracket of two or more type names | a tuple | `:Arrow :: [:Tip/:Stroke/:Tip]` |
 | a bracket of one type name | a list | `:Themes :: [:Style]` |
 
-- **A comma is a choice, as in a diagram's declaration** (side by side, the coproduct). Parentheses group, as in a graph: `:Tip :: (:Head, :Hook!, :Nil)` is `:Tip :: :Head, :Hook!, :Nil`, as `G :: (f, g)` is `G :: f, g`. Inside an expression the group is needed: `&node :fill :: (:Color, :Nil)`.
+- **A comma is a choice, as in a diagram's declaration** (side by side, the coproduct). Parentheses group, as in a graph: `:Tip :: (:Head, :Hook!, :Nil)` is `:Tip :: :Head, :Hook!, :Nil`, as `G :: (f, g)` is `G :: f, g`. Inside an expression the group is needed: `&node :fill :: (:Color, :Nil)`. **The grouped form is canonical:** wherever fAB prints a type (messages, hover, completion), a union is grouped, `(:Color, :Nil)`, so one spelling reads the same everywhere (9 November).
 - **A bracket is a tuple of its slots,** as `[>/solid/>]` is a tuple of values.
 - **`[:T]` is a list of `:T`:** a deliberate shorthand. A one-slot tuple would only repeat `:T`, so the spelling is free to mean the list. Its values are as before: `[dark]` is a list of one, `[dark/compact]` of two, `[]` none.
 - **A bracket holds type names only,** each with an optional `!`: no expression, so what it needs is named first, as a composite is before it is a side (`W :: +(f h, k, g)+`): `:Stroke :: :Line!, :Nil`, then `[:Tip/:Stroke/:Tip]`. A list of tuples is `:Pair :: [:A/:B]`, then `[:Pair]`.

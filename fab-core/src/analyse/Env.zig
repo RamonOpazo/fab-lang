@@ -282,8 +282,10 @@ pub fn name(env: *Env, index: TypeIndex, text: []const u8) void {
     if (slot.* == null) slot.* = text;
 }
 
-/// Writes a type as fAB spells it: its name, `:T!`, `[:A/:B]`, `[:A]`,
-/// `:A, :B`. A type nothing names, as an unknown one, is `?`.
+/// Writes a type as fAB spells it, in its canonical form: its name, `:T!`,
+/// `[:A/:B]`, `[:A]`, and a union always grouped, `(:A, :B)`, which reads
+/// the same inside an expression and after `::`. A type nothing names, as
+/// an unknown one, is `?`.
 pub fn writeType(env: *const Env, index: TypeIndex, w: *std.Io.Writer) std.Io.Writer.Error!void {
     if (env.type_names.items[@backingInt(index)]) |n| return w.writeAll(n);
     switch (env.get(index)) {
@@ -304,9 +306,13 @@ pub fn writeType(env: *const Env, index: TypeIndex, w: *std.Io.Writer) std.Io.Wr
             }
             try w.writeByte(']');
         },
-        .@"union" => |ts| for (ts, 0..) |t, i| {
-            if (i > 0) try w.writeAll(", ");
-            try env.writeType(t, w);
+        .@"union" => |ts| {
+            try w.writeByte('(');
+            for (ts, 0..) |t, i| {
+                if (i > 0) try w.writeAll(", ");
+                try env.writeType(t, w);
+            }
+            try w.writeByte(')');
         },
         else => try w.writeByte('?'),
     }

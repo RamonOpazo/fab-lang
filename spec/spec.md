@@ -537,7 +537,7 @@ Every value has a type, and so does every name. The kinds of type are fixed by t
 | `:Flag`            | none: written (`:hide`) or not, inverted with `!` (`:hide!`) |
 | `[:T/:U/…]`        | `[a/b/c]`, a tuple: one element of each type                 |
 | `[:T]`             | `[a/b/c]`, a list: any number of elements, all of type T     |
-| `:T, :U, …`        | a union: a value of any of its types; `(:T, :U)` inside an expression |
+| `:T, :U, …`        | a union: a value of any of its types; `(:T, :U)` inside an expression, and when printed |
 | `:T!`              | the values of T and their twins: `[30]`, `[30!]`             |
 | `:Nil`             | `[]`, and an empty slot: nil                                 |
 | a record type      | `{ … }`, holding its descriptors: `:Style`, `:Proof`, `:Place` |

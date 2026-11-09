@@ -175,7 +175,7 @@ test "types are written as fAB spells them" {
         .{ ":angle", ":Angle" },
         .{ ":twin", ":Number!" },
         .{ ":pair", "[:Tip/:Color]" },
-        .{ ":either", ":Tip, :Color" },
+        .{ ":either", "(:Tip, :Color)" },
     }) |case| {
         var out: std.Io.Writer.Allocating = .init(testing.allocator);
         defer out.deinit();
