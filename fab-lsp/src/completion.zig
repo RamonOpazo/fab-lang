@@ -13,7 +13,10 @@
 //!   &       the classes
 //!   :T      the types; `:` alone after `::` or `:=`
 //!   G.f :   the descriptors applying at the context: the entry's, or the
-//!           owner of its block (`G :style { :`), by the subjects' classes
+//!           owner of its block (`G :style { :`), by the subjects' classes;
+//!           in a record's block, its type's; in a bundle's, any
+//!   :f [    the labels and named values fitting the descriptor's type, or
+//!           the slot's after a `/`; after `:T [x] :=`, fitting `:T`
 
 const std = @import("std");
 const fab = @import("fab_core");
@@ -25,7 +28,7 @@ const Tag = fab.Token.Tag;
 pub fn of(arena: std.mem.Allocator, text: []const u8, base: []const u8, position: Message.Position) error{OutOfMemory}![]const Item {
     var lines = try fab.Lines.init(arena, text);
     const offset = lines.byteOffset(.{ .line = position.line, .character = position.character });
-    const typed = try context(arena, text[0..offset]);
+    const typed = bracket(text[0..offset]) orelse try context(arena, text[0..offset]);
 
     var c = try fab.Compilation.init(arena, base, .{ .warnings = .warn, .ir = .keep });
     const result = try c.analysis();
@@ -47,8 +50,9 @@ pub fn of(arena: std.mem.Allocator, text: []const u8, base: []const u8, position
         .classes => try classes(&out),
         .types => try types(&out, &result.env),
         .descriptors => |at| if (need(&result.ir, at.paths)) |classes_| {
-            try descriptors(&out, &result.env, classes_, at.top);
+            try descriptors(&out, &result.env, classes_, at);
         },
+        .values => |in| try values(&out, &result.env, in),
     }
     return out.items.items;
 }
@@ -56,7 +60,7 @@ pub fn of(arena: std.mem.Allocator, text: []const u8, base: []const u8, position
 /// What the cursor is in: what to offer, the name typed so far, and the
 /// diagram of the statement, if it has one.
 const Typed = struct {
-    what: union(enum) { nothing, parts: []const u8, nodes, edges, diagrams, classes, types, descriptors: At },
+    what: union(enum) { nothing, parts: []const u8, nodes, edges, diagrams, classes, types, descriptors: At, values: In },
     prefix: []const u8 = "",
     zone: ?[]const u8 = null,
 };
@@ -143,8 +147,9 @@ const Path = struct {
 };
 
 /// What a descriptor is written at, and whether at the top level, where a
-/// layer can be opened.
-const At = struct { paths: []const Path, top: bool };
+/// layer can be opened. In a record's block, only its type's descriptors
+/// are offered (`record`, the type's name); in a bundle's, any.
+const At = struct { paths: []const Path, top: bool, record: ?[]const u8 = null, any: bool = false };
 
 /// A block being read: its owner (null at the top level), where its current
 /// entry begins, and how deep in parentheses.
@@ -166,18 +171,35 @@ fn described(arena: std.mem.Allocator, all: Tokens, first: usize, typed: usize, 
     const t: Tokens = .{ .source = all.source, .tags = tags.items, .starts = starts.items, .ends = ends.items };
     const w = tags.items.len;
 
+    // A definition holds descriptors in its block: `:T [x] := {`, a record
+    // of `:T`, described where it is applied, so a diagram; `:b := {`, a
+    // bundle, with no subject.
+    var record: ?[]const u8 = null;
+    var bundle = false;
+    const applied: []const Path = &.{.{ .part = .whole }};
+
     var frames: std.ArrayList(Frame) = .empty;
     try frames.append(arena, .{ .owner = null, .entry = 0 });
     for (0..w) |i| {
         const top = &frames.items[frames.items.len - 1];
         switch (t.tags[i]) {
-            .decl, .defn => if (frames.items.len == 1) return .{ .what = .nothing },
+            .decl => if (frames.items.len == 1) return .{ .what = .nothing },
+            .defn => if (frames.items.len == 1) {
+                if (i == 2 and t.tags[0] == .type_id and t.tags[1] == .val)
+                    record = t.text(0)
+                else if (i == 1 and t.tags[0] == .attr_id)
+                    bundle = true
+                else
+                    return .{ .what = .nothing };
+            },
             .l_par => top.parens += 1,
             .r_par => top.parens -|= 1,
             .comma => if (top.parens == 0) {
                 top.entry = i + 1;
             },
-            .l_cur => {
+            .l_cur => if (frames.items.len == 1 and (record != null or bundle)) {
+                try frames.append(arena, .{ .owner = applied, .entry = i + 1 });
+            } else {
                 const owner = try within(arena, top.owner, try entryContext(arena, t, top.entry, i) orelse return .{ .what = .nothing }) orelse
                     return .{ .what = .nothing };
                 try frames.append(arena, .{ .owner = owner, .entry = i + 1 });
@@ -189,9 +211,17 @@ fn described(arena: std.mem.Allocator, all: Tokens, first: usize, typed: usize, 
         }
     }
     const top = frames.items[frames.items.len - 1];
+    const defined = record != null or bundle;
+    // Before the block, a definition names; in a bundle, nothing is a
+    // subject.
+    if (defined and frames.items.len == 1) return .{ .what = .nothing };
     const context_ = try entryContext(arena, t, top.entry, w) orelse return .{ .what = .nothing };
+    if (bundle and context_.len > 0) return .{ .what = .nothing };
     const paths = try within(arena, top.owner, context_) orelse return .{ .what = .nothing };
-    return .{ .what = .{ .descriptors = .{ .paths = paths, .top = frames.items.len == 1 } }, .prefix = word };
+    return .{
+        .what = .{ .descriptors = .{ .paths = paths, .top = frames.items.len == 1, .record = record, .any = bundle } },
+        .prefix = word,
+    };
 }
 
 /// The context of the entry in tokens [from, to): what comes before its
@@ -327,13 +357,15 @@ fn kindOf(ir: *const fab.Ir, node: fab.Ir.NodeIndex) Classes {
 }
 
 /// The descriptors and bundles whose classes hold the subjects'. A layer,
-/// `:style`, is opened only at the top level.
-fn descriptors(out: *Collector, env: *const Env, classes_: Classes, top: bool) error{OutOfMemory}!void {
+/// `:style`, is opened only at the top level; a record holds its type's.
+fn descriptors(out: *Collector, env: *const Env, classes_: Classes, at: At) error{OutOfMemory}!void {
+    const record: ?Env.TypeIndex = if (at.record) |name| (env.type_table.get(name) orelse return).index else null;
     var it = env.functions.iterator();
     while (it.next()) |entry| {
         const f = entry.value_ptr;
-        if (!classes_.subsetOf(f.classes)) continue;
-        if (!top and f.record == null and !f.bundle and env.isRecord(f.type)) continue;
+        if (!at.any and !classes_.subsetOf(f.classes)) continue;
+        if (!at.top and f.record == null and !f.bundle and env.isRecord(f.type)) continue;
+        if (record) |r| if (f.record != r) continue;
         const detail: []const u8 = if (f.bundle) "bundle" else detail: {
             var w: std.Io.Writer.Allocating = .init(out.arena);
             w.writer.writeAll(":: ") catch return error.OutOfMemory;
@@ -406,6 +438,99 @@ fn types(out: *Collector, env: *const fab.Analyser.Env) error{OutOfMemory}!void 
 
 fn byLabel(_: void, x: Item, y: Item) bool {
     return std.mem.lessThan(u8, x.label, y.label);
+}
+
+// ---------------------------------------------------------------------------
+// Values
+
+/// A bracket being typed: what its value must fit (a descriptor's type, or
+/// a contract's), and which slot the cursor is in.
+const In = struct {
+    descriptor: ?[]const u8 = null,
+    contract: ?[]const u8 = null,
+    /// The slashes before the cursor, inside the bracket.
+    slot: usize,
+};
+
+/// An open bracket touching the cursor, after a descriptor (`:fill [`) or
+/// a contract (`:Color [x] := [`). An open bracket lexes as no value, so it
+/// is read from the text: the last `[` with no `]`, space or grouping
+/// after it. A key, `:lemma.[`, is no value.
+fn bracket(before: []const u8) ?Typed {
+    const open = std.mem.lastIndexOfScalar(u8, before, '[') orelse return null;
+    const inside = before[open + 1 ..];
+    if (std.mem.indexOfAny(u8, inside, "] \t\r\n(),{}") != null) return null;
+    const element = inside[if (std.mem.lastIndexOfScalar(u8, inside, '/')) |s| s + 1 else 0..];
+    const slot = std.mem.count(u8, inside, "/");
+
+    // The token before the bracket, read back over spaces.
+    var end = open;
+    while (end > 0 and (before[end - 1] == ' ' or before[end - 1] == '\t')) end -= 1;
+    var start = end;
+    while (start > 0 and !std.ascii.isWhitespace(before[start - 1])) start -= 1;
+    const word = before[start..end];
+    if (word.len > 1 and word[0] == ':' and std.ascii.isLower(word[1]) and std.mem.indexOfScalar(u8, word, '.') == null)
+        return .{ .what = .{ .values = .{ .descriptor = word, .slot = slot } }, .prefix = element };
+    // `:T [x] := [`
+    if (std.mem.eql(u8, word, ":=")) {
+        var i = start;
+        while (i > 0 and std.ascii.isWhitespace(before[i - 1])) i -= 1;
+        const name_end = i;
+        while (i > 0 and !std.ascii.isWhitespace(before[i - 1])) i -= 1;
+        const name = before[i..name_end];
+        if (name.len < 2 or name[0] != '[') return null;
+        var j = i;
+        while (j > 0 and std.ascii.isWhitespace(before[j - 1])) j -= 1;
+        const type_end = j;
+        while (j > 0 and !std.ascii.isWhitespace(before[j - 1])) j -= 1;
+        const type_name = before[j..type_end];
+        if (type_name.len > 1 and type_name[0] == ':' and std.ascii.isUpper(type_name[1]))
+            return .{ .what = .{ .values = .{ .contract = type_name, .slot = slot } }, .prefix = element };
+    }
+    return null;
+}
+
+/// The labels and named values fitting the bracket: the whole of the type
+/// in its first slot, or the slot's own type.
+fn values(out: *Collector, env: *const Env, in: In) error{OutOfMemory}!void {
+    const expected: Env.TypeIndex = if (in.descriptor) |name|
+        (env.functions.get(name) orelse return).type
+    else
+        (env.type_table.get(in.contract.?) orelse return).index;
+    var it = env.values.iterator();
+    while (it.next()) |entry| {
+        const v = entry.value_ptr;
+        if (v.type == .unknown) continue;
+        const whole = in.slot == 0 and env.fits(v.type, expected);
+        if (!whole and !fitsSlot(env, v.type, expected, in.slot, 8)) continue;
+        // A record has no type, only its structure (statements.md §22.9).
+        const detail: []const u8 = if (v.type == .record) "record" else detail: {
+            var w: std.Io.Writer.Allocating = .init(out.arena);
+            env.writeType(v.type, &w.writer) catch return error.OutOfMemory;
+            break :detail w.written();
+        };
+        const kind = if (v.body == null) Item.Kind.enum_member else Item.Kind.value;
+        try out.add(entry.key_ptr.*, kind, detail);
+    }
+    std.mem.sort(Item, out.items.items, {}, byLabel);
+}
+
+/// Whether `actual` fits slot `k` of a bracket of type `expected`: a
+/// tuple's slot, a list's element, through declarations and unions.
+fn fitsSlot(env: *const Env, actual: Env.TypeIndex, expected: Env.TypeIndex, k: usize, depth: usize) bool {
+    if (depth == 0) return false;
+    return switch (env.get(expected)) {
+        .tuple => |ts| k < ts.len and env.fits(actual, ts[k]),
+        .list => |e| env.fits(actual, e),
+        .twin => |t| fitsSlot(env, actual, t, k, depth - 1),
+        .@"union" => |ts| for (ts) |t| {
+            if (fitsSlot(env, actual, t, k, depth - 1)) break true;
+        } else false,
+        .declared => |id| for (env.declared.items[id].members.items) |m| {
+            if (fitsSlot(env, actual, m, k, depth - 1)) break true;
+        } else false,
+        else => false,
+    };
 }
 
 fn toPosition(lines: *const fab.Lines, offset: u32) Message.Position {

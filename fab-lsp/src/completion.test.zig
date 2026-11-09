@@ -115,3 +115,37 @@ test "a name not yet declared is judged by its sort" {
     try expectOffered("G :: f\nG.g :sh", ":shorten");
     try expectOffered("G :: f\nG.#B :sh", ":shape");
 }
+
+test "values in a bracket: fitting the descriptor's type" {
+    try expectOffered("G :: #A/f\nG.#A :shape [ci", "circle");
+    try expectOffered("G :: f\nG :style { :fill [r", "red");
+    try expectOffered("G :: f\nG :theme [", "base compact dark print");
+    // A tuple: the whole, named values, or the first slot's; after a
+    // slash, the slot's.
+    try expectOffered("G :: f\nG.f :arrow [m", "mapsto mono");
+    try expectOffered("G :: f\nG.f :arrow [/", "dashed dotted double solid triple wavy");
+    try expectOffered("G :: f\nG.f :arrow [>/da", "dashed");
+    try expectOffered("G :: f\nG.f :arrow [>/solid/>", "> >>");
+    // A program's own labels and values.
+    try expectOffered(":Mood :: [calm], [cross]\n:Mood [quiet] := [calm]\n&node :mood :: :Mood\nG :: #A/f\nG.#A :mood [", "calm cross quiet");
+}
+
+test "values in a contract: fitting its type" {
+    try expectOffered(":Color [warn] := [ye", "yellow");
+}
+
+test "no values: a key, a closed bracket, a space inside" {
+    try expectOffered("G :: f\nG.f :arrow [epi] ", "");
+    try expectOffered("G :: f\nG.f :arrow [e pi", "");
+    try expectOffered("G :: f\nG :lemma.[", "");
+}
+
+test "descriptors in a record's block: its type's" {
+    try expectOffered(":Style [x] := { &edge :ar", ":arrow");
+    // No subject: the diagram the theme is applied to.
+    try expectOffered(":Style [x] := { :ca", ":caption");
+    // A bundle has no subject, and holds any descriptor.
+    try expectOffered(":quiet := { :sha", ":shape");
+    try expectOffered(":quiet := { &node :", "");
+    try expectOffered(":Style :: { &node :", "");
+}
