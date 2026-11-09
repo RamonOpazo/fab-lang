@@ -21,7 +21,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 32 };
+const done: Progress = .{ .step = 9, .rule = 33 };
 
 const Progress = struct {
     step: u8,
@@ -1093,7 +1093,7 @@ test "Layers: contexts are subjects" {
     // The top-level shorthand, a class in a diagram, a class everywhere.
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G.g+ :ink [red]\nG.&edge :pen [thin]\n&node :fill [red]\n(G, G.f) :note \"n\"" });
     // `G.f` inside G's block is `f`; braces and groups organise.
-    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { G.f :label \"x\", { g :label \"y\" }, f { :label \"z\" } }" });
+    try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { G.f :label \"x\", { g :label \"y\" }, f { :ink [red] } }" });
     // `@`, a diagram's own node.
     try check(.{ .step = 9, .rule = 31, .source = "T :: @/(id, name)\nT.@ :shape [box]" });
 }
@@ -1151,6 +1151,35 @@ test "Layers: a named node is referenced by its name" {
     try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.+f :label \"x\"", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
     try check(.{ .step = 9, .rule = 32, .source = "T :: @/(id, name)\nT.+id :shape [box]", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
     try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.#A :label \"x\"" });
+}
+
+test "Layers: a node's descriptors apply to its kind" {
+    const knob = ":Style :: { &choice :knob :: :Number, (&start, &end) :dot :: :Color }\n";
+    try check(.{ .step = 9, .rule = 33, .source = knob ++ "G :: a/? +(b, c)\nG.a+ :knob [1]" });
+    try check(.{ .step = 9, .rule = 33, .source = knob ++ "G :: a/#Done b\nG.#Done :knob [1]", .codes = &.{.{ .analysis = .does_not_apply }} });
+    // A null node is a start if no edge arrives at it, else an end.
+    try check(.{ .step = 9, .rule = 33, .source = knob ++ "G :: */a b/*\nG :style { +a :dot [red], b+ :dot [red] }" });
+    try check(.{ .step = 9, .rule = 33, .source = knob ++ "G :: */a b\nG.a+ :dot [red]", .codes = &.{.{ .analysis = .does_not_apply }} });
+    // A class of kinds applies to them, and nodes of every kind take &node's.
+    try check(.{ .step = 9, .rule = 33, .source = "G :: a/? +(b, c)\nG :style { a+ :shape [box], &choice :shape [hexagon] }" });
+}
+
+test "Layers: a node another diagram made is that diagram's" {
+    try check(.{ .step = 9, .rule = 33, .source = "A :: f\nC :: A.f+/g\nC :style { +g :fill [red] }", .codes = &.{.{ .analysis = .another_diagrams_subject }} });
+}
+
+test "Layers: binding made twice" {
+    const g = "G :: f/#Done g\n";
+    try check(.{ .step = 9, .rule = 33, .source = g ++ "G :style { #Done :shape [box], #Done :shape [round] }", .codes = &.{.{ .analysis = .binding_made_twice }} });
+    // A layer is open: a block and the top-level shorthand are one layer.
+    try check(.{ .step = 9, .rule = 33, .source = g ++ "G :style { f :label \"x\" }\nG.f :label \"y\"", .codes = &.{.{ .analysis = .binding_made_twice }} });
+    try check(.{ .step = 9, .rule = 33, .source = g ++ "G :style { (f, f) :label \"x\" }", .codes = &.{.{ .analysis = .binding_made_twice }} });
+    try check(.{ .step = 9, .rule = 33, .source = g ++ "G :style { &node :fill [red] }\nG.&node :fill [blue]", .codes = &.{.{ .analysis = .binding_made_twice }} });
+    // Different contexts overlap freely; different descriptors, different keys.
+    try check(.{ .step = 9, .rule = 33, .source = g ++ "G :style { &node :fill [red], #Done :fill [blue], f :label \"x\", f :ink [red] }\n&node :fill [red]" });
+    const legend = ":Style :: { &zone :legend.[] :: :Label }\n";
+    try check(.{ .step = 9, .rule = 33, .source = legend ++ g ++ "G :style { :legend.[a] \"x\", :legend.[b] \"y\", :legend \"z\", :legend \"w\" }" });
+    try check(.{ .step = 9, .rule = 33, .source = legend ++ g ++ "G :style { :legend.[a] \"x\", :legend.[a] \"y\" }", .codes = &.{.{ .analysis = .binding_made_twice }} });
 }
 
 test "Layers: what is read is checked against :Style" {

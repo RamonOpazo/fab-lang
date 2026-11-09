@@ -582,8 +582,6 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
         const node = @backingInt(node_of[root]);
         if (canonical[node] == null and !uf.class(root).named()) canonical[node] = end;
     }
-    try layers.canonical(a, node_of);
-
     const sources = a.builder.edges.items(.source);
     const targets = a.builder.edges.items(.target);
     for (a.edge_ends.items, sources, targets) |ends, *source, *target| {
@@ -598,6 +596,7 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
         }
     }
     try parallel(a);
+    try layers.check(a, node_of);
 
     // Issues: every error with a subject marks it, warnings and unsupported
     // included; renderers read the severity from the diagnostic.

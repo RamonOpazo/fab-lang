@@ -50,7 +50,8 @@ pub const Reference = struct { token: TokenIndex, subject: Subject };
 /// the end that reached it, if one did.
 pub const Pending = union(enum) {
     subject: Subject,
-    node: struct { elem: u32, end: ?Ir.End, token: TokenIndex },
+    /// Reached in `zone`'s context, at `token`; through `end`, if one.
+    node: struct { elem: u32, end: ?Ir.End, token: TokenIndex, zone: Ir.ZoneIndex },
 };
 
 pub const PendingBinding = struct { subject: Pending, attr: Node.Index, layer: Layer };
@@ -135,11 +136,12 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
 }
 
 /// The classes of what a descriptor is written at: an element's own, or a
-/// class. A node's kind is known once the graph is built (plan step 9c3).
+/// class. A node's are its kind, known once the graph is built, so nodes
+/// are judged then (`check`).
 fn classesOf(subjects: []const Owner) Env.Classes {
     var classes: Env.Classes = .empty;
     for (subjects) |s| switch (s.subject) {
-        .node => classes.insert(.node),
+        .node => {},
         .subject => |subject| switch (subject) {
             .zone => classes.insert(.zone),
             .edge => classes.insert(.edge),
@@ -217,7 +219,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                     .hole => return,
                     .generator => unreachable,
                 };
-                try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = null, .token = main } }, .zone = null }, main);
+                try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = null, .token = main, .zone = zone.index } }, .zone = null }, main);
             },
             .class_id => try class(a, main, zone.index, out),
             .zone_id => if (std.mem.eql(u8, cst.tokenText(main), a.cst.tokenText(zone.token))) {
@@ -241,7 +243,7 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
             const side: Ir.End.Side = if (cst.tag(node) == .prefix) .dom else .cod;
             const elem = if (side == .dom) g.left else g.right;
             const end: Ir.End = .{ .edge = @fromBackingInt(g.index), .side = side };
-            try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = end, .token = edge_token } }, .zone = null }, edge_token);
+            try add(a, out, .{ .subject = .{ .node = .{ .elem = elem, .end = end, .token = edge_token, .zone = zone.index } }, .zone = null }, edge_token);
         },
         // `G.f` inside G's block is `f`; `A.f` is A's to describe.
         .juxtafix => {
@@ -297,15 +299,25 @@ fn notASubject(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
 // ---------------------------------------------------------------------------
 // After the graph
 
-/// Canonical references (plan step 9c2), once every node has its canonical
-/// end: a node reached through an end must be reached through that one, and
-/// a named node only by its name. Each error marks the node.
-pub fn canonical(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
+/// What can be judged only once the graph is built, before errors become
+/// issues, so each marks its element:
+///
+///   canonical references (plan step 9c2): a node reached through an end is
+///   reached through its canonical one, a named node only by its name, and
+///   a node another diagram made is that diagram's to describe;
+///   per element (9c3): a node's descriptors apply to its kind, and each
+///   (element, descriptor, key) is bound once in a layer.
+pub fn check(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
+    const zones = a.builder.nodes.items(.zone);
     const ends = a.builder.nodes.items(.canonical);
     for (a.references.items) |r| switch (r.subject) {
         .node => |n| {
-            const end = n.end orelse continue;
             const node = node_of[a.uf.find(n.elem)];
+            if (zones[@backingInt(node)] != n.zone) {
+                try a.failOn(.another_diagrams_subject, n.token, .{ .elem = n.elem });
+                continue;
+            }
+            const end = n.end orelse continue;
             const tag: Analyser.Error.Tag = if (ends[@backingInt(node)]) |c| blk: {
                 if (c.edge == end.edge and c.side == end.side) continue;
                 break :blk .non_canonical_reference;
@@ -313,6 +325,126 @@ pub fn canonical(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}
             try a.failOn(tag, n.token, .{ .elem = n.elem });
         },
         .subject => {},
+    };
+    try kinds(a, node_of);
+    try twice(a, node_of);
+}
+
+/// A node binding applies to the node's kind: `&choice :knob` not at a
+/// plain node. One error per attribute.
+fn kinds(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
+    const arrives = try a.arena.allocator().alloc(bool, a.builder.nodes.len);
+    @memset(arrives, false);
+    for (a.builder.edges.items(.target)) |t| arrives[@backingInt(t)] = true;
+    var reported: ?Node.Index = null;
+    for (a.bindings.items) |b| {
+        const n = switch (b.subject) {
+            .node => |n| n,
+            .subject => continue,
+        };
+        if (reported == b.attr) continue;
+        const f = a.env.functions.get(a.cst.tokenText(a.cst.mainToken(b.attr))) orelse continue;
+        const node = @backingInt(node_of[a.uf.find(n.elem)]);
+        const kind: Env.Class = switch (a.builder.nodes.items(.kind)[node]) {
+            .plain => .plain,
+            .choice => .choice,
+            .parallel => .parallel,
+            .hole => .hole,
+            // A start is a null node no edge arrives at; an end, one some
+            // edge arrives at.
+            .null_node => if (arrives[node]) .end else .start,
+        };
+        if (f.classes.contains(kind)) continue;
+        reported = b.attr;
+        try a.errors.append(a.gpa, .{
+            .tag = .does_not_apply,
+            .token = a.cst.mainToken(b.attr),
+            .related = if (f.prelude) null else f.token,
+            .subject = .{ .elem = n.elem },
+        });
+    }
+}
+
+/// Each (element, descriptor, key) is bound once in a layer, and two
+/// contexts naming one element are one binding. A table entry with no key
+/// has a fresh one, so it never collides.
+fn twice(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
+    const cst = a.cst;
+    var seen: std.HashMapUnmanaged(Key, Node.Index, KeyContext, std.hash_map.default_max_load_percentage) = .empty;
+    defer seen.deinit(a.gpa);
+    for (a.bindings.items) |b| {
+        const name = cst.tokenText(cst.mainToken(b.attr));
+        const key_token = cst.key(b.attr);
+        if (key_token == null) if (a.env.functions.get(name)) |f| if (f.table) continue;
+        const key: Key = .{
+            .layer = b.layer,
+            .subject = resolve(a, b.subject, node_of),
+            .name = name,
+            .key = if (key_token) |t| cst.tokenText(t) else null,
+        };
+        const gop = try seen.getOrPut(a.gpa, key);
+        if (!gop.found_existing) {
+            gop.value_ptr.* = b.attr;
+            continue;
+        }
+        try a.errors.append(a.gpa, .{
+            .tag = .binding_made_twice,
+            .token = cst.mainToken(b.attr),
+            .related = cst.mainToken(gop.value_ptr.*),
+            .subject = errorSubject(b.subject),
+        });
+    }
+}
+
+const Key = struct { layer: Layer, subject: Subject, name: []const u8, key: ?[]const u8 };
+
+const KeyContext = struct {
+    pub fn hash(_: KeyContext, k: Key) u64 {
+        var h: std.hash.Wyhash = .init(0);
+        h.update(std.mem.asBytes(&k.layer));
+        h.update(@tagName(k.subject));
+        switch (k.subject) {
+            .zone => |z| h.update(std.mem.asBytes(&z)),
+            .edge => |e| h.update(std.mem.asBytes(&e)),
+            .cell => |c| h.update(std.mem.asBytes(&c)),
+            .node => |n| h.update(std.mem.asBytes(&n)),
+            .class => |c| {
+                h.update(std.mem.asBytes(&c.classes.bits.mask));
+                h.update(std.mem.asBytes(&c.zone));
+            },
+        }
+        h.update(k.name);
+        if (k.key) |key| h.update(key);
+        return h.final();
+    }
+
+    pub fn eql(_: KeyContext, x: Key, y: Key) bool {
+        if (x.layer != y.layer or !std.mem.eql(u8, x.name, y.name)) return false;
+        if ((x.key == null) != (y.key == null)) return false;
+        if (x.key) |k| if (!std.mem.eql(u8, k, y.key.?)) return false;
+        if (std.meta.activeTag(x.subject) != std.meta.activeTag(y.subject)) return false;
+        return switch (x.subject) {
+            .zone => |z| z == y.subject.zone,
+            .edge => |e| e == y.subject.edge,
+            .cell => |c| c == y.subject.cell,
+            .node => |n| n == y.subject.node,
+            .class => |c| c.classes.eql(y.subject.class.classes) and c.zone == y.subject.class.zone,
+        };
+    }
+};
+
+/// What an error about a binding marks: its element, or the diagram of a
+/// class in one. A class everywhere marks its statement's diagram.
+fn errorSubject(p: Pending) ?Analyser.Subject {
+    return switch (p) {
+        .node => |n| .{ .elem = n.elem },
+        .subject => |s| switch (s) {
+            .zone => |z| .{ .zone = @backingInt(z) },
+            .edge => |e| .{ .edge = @backingInt(e) },
+            .cell => |c| .{ .cell = @backingInt(c) },
+            .node => null,
+            .class => |c| if (c.zone) |z| .{ .zone = @backingInt(z) } else null,
+        },
     };
 }
 

@@ -133,6 +133,8 @@ pub const Tag = enum(u8) {
     non_canonical_reference,
     /// `G.+f` in `G :: #A/f`: a named node is referenced by its name.
     named_node_referenced_by_end,
+    /// `G.#Done :shape [box]` twice in a layer.
+    binding_made_twice,
     /// `[//]`: an arrow that draws nothing.
     empty_arrow,
     /// `&zone :axiom.[a] :: :Proposition`.

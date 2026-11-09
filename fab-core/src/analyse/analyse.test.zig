@@ -141,7 +141,7 @@ const styles =
 
 test "every description is reported once as unsupported, after its errors" {
     try expectTags(styles ++ "G :: yes, paid\nG :style { yes, paid :label \"yes\" }", &.{ .bare_term_in_record, .unsupported_layer });
-    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\" }\nG.f :label \"y\"", &.{ .unsupported_layer, .unsupported_layer });
+    try expectTags(styles ++ "G :: f\nG :style { f :label \"x\" }\nG :label \"y\"", &.{ .unsupported_layer, .unsupported_layer });
 }
 
 test "a layer's contexts resolve to elements, kept as bindings" {

@@ -319,6 +319,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A name is opted into: a named node (`#A`, `@`) is referenced by its name, never by the end of an edge.",
             .hint = "Use the node's name: `G.#A`.",
         },
+        .binding_made_twice => .{
+            .message = "{} is bound twice here",
+            .explanation = "In a layer, each element takes each descriptor once, and each key of a table once. A layer gathers every description of it, so the two may be far apart; two contexts naming one element are one binding.",
+            .hint = "Keep one of them. A later layer, or a narrower context, may override it instead.",
+        },
         .empty_arrow => .{
             .message = "An empty arrow",
             .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",

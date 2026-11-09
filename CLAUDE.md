@@ -68,7 +68,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | 9c2 done |
+| 9    | Style layer                               | 9c done  |
 | L    | Language server (after 9c, before 9d)     |         |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -206,7 +206,7 @@ Done when every level case passes.
 - **9c. Layers read** (`statements.md` §22.10). A new `analyse/layers.zig`; `Result` gains `bindings` (subject, descriptor, key, value node, layer), which 9d reads, and `references` (a use's token → what it names), which the LSP reads. `:prove` and `:place` contents stay unsupported. In increments:
   - **9c1. Contexts and layers** (done). Contexts resolve to subjects in their diagram: a diagram, `G.f`, `G.f+`/`G.+f`, `G.#X`, `G.@`, `&c`/`G.&c`, groups distributing; relative to the owner in a block; top-level descriptors routed to their record type's layer. A layer is open. Errors: *description at an undeclared context*, *undeclared name in diagram*, *another diagram's subject*, *not a subject*, *element has no parts*. Each descriptor is checked once per entry, against its subjects' classes. *unsupported layer* stays on every description until 9d applies it (read, not drawn, as `unsupported_levels` did in 7a).
   - **9c2. Canonical references** (done), inside `graph()` once canonical ends are computed, each error marking its node: *non-canonical reference*, *named node referenced by an end*.
-  - **9c3. Per element:** *does not apply* by the element's classes, *binding made twice* per (element, descriptor, key) in a layer.
+  - **9c3. Per element** (done), with 9c2 in one pass (`layers.check`): *does not apply* for nodes by their kind (`&start`/`&end` by arrivals), the others judged when read; *binding made twice* per (layer, element or class, descriptor, key), a keyless table entry never colliding; a node another diagram made is *another diagram's subject*.
 - **9d. The cascade.** `format/` becomes `style/`, `Formatter` the `Styler`. Values decoded once, by the analyser: records keep decoded bindings. Computed defaults, `[base]`, themes left to right (a theme's `:theme` includes), the program, then marks. Specificity: element, class in a diagram, narrower class, class; at one rank, the order of definition, errors last (`&node` < kinds < `&canonical` < `&hole`). Tokens resolved in core to RGBA, one step. `kindDefault` and `builtin` go. `Style` typed from `:Style`: unknown labels carried by name, unknown descriptors beside the style; the prelude test covers every descriptor and `:Line`. fab-render adapted to draw what it draws today.
 - **9e. Examples.** Every example's style resolves to a Sheet; corpus rows from the spec's styled examples.
 
