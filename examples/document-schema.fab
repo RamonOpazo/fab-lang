@@ -10,20 +10,20 @@ Tag          :: @/(id/T.#UUID7, label/T.#String)
 Tagging      :: @/(id/T.#UUID7)
 
 Db :: {
-  Membership/(user/User, org/Organization),
-  Project/owner/Organization,
-  Document/(project/Project, author/User),
-  Comment/(document/Document, writer/User, parent/Comment),
-  Tagging/(doc/Document, tag/Tag)
+    Membership/(user/User, org/Organization),
+    Project/owner/Organization,
+    Document/(project/Project, author/User),
+    Comment/(document/Document, writer/User, parent/Comment),
+    Tagging/(doc/Document, tag/Tag)
 }
 
 Db :prove {
-  :kind [schema],
+    :kind [schema],
 
-  :axiom (&node.id :pk, &edge :card [0..*/1]),
-  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
-  :axiom (parent { :nullable, :card [0..*/0..1] }),
-  :axiom (parent document == document)    // a reply is on the same document as its parent
+    :axiom (&node.id :pk, &edge :card [0..*/1]),
+    :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
+    :axiom (parent { :nullable, :card [0..*/0..1] }),
+    :axiom (parent document == document)    // a reply is on the same document as its parent
 }
 
 Db :style { writer :label "author_id" }

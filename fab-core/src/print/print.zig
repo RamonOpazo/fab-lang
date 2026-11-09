@@ -10,14 +10,16 @@
 //!   - Line breaks are the author's: each is kept, a run of blank lines
 //!     becomes one, and the file ends with one line end.
 //!   - A line is indented by what is open at its start, after the closers
-//!     it begins with: two spaces per brace, four per parenthesis, and two
+//!     it begins with: four spaces per brace or parenthesis alike, and two
 //!     fewer when it begins with a comma, so that the item after `, ` lines
 //!     up with the one above:
 //!
-//!       f/? +(
-//!           a b
-//!         , c
-//!       )
+//!       G :: {
+//!           f/? +(
+//!               a b
+//!             , c
+//!           )
+//!       }
 //!
 //!   - A comment stays where it was: at the end of its line, one space
 //!     after the code, or on a line of its own, indented as the code is.
@@ -73,37 +75,29 @@ pub fn program(cst: *const Cst, w: *Writer) Error!void {
         } else {
             var at_start = open;
             var j = i;
-            while (tags[j] == .r_cur or tags[j] == .r_par) : (j += 1) at_start.close(tags[j]);
+            while (tags[j] == .r_cur or tags[j] == .r_par) : (j += 1) {
+                at_start.depth -|= 1;
+            }
             try newLine(w, &breaks, printed, at_start.indent(tag == .comma));
         }
         try w.writeAll(cst.source[starts[i]..ends[i]]);
         printed = true;
         last = i;
         switch (tag) {
-            .l_cur => open.braces += 1,
-            .l_par => open.parens += 1,
-            .r_cur, .r_par => open.close(tag),
+            .l_cur, .l_par => open.depth += 1,
+            .r_cur, .r_par => open.depth -|= 1,
             else => {},
         }
     }
     if (printed) try w.writeByte('\n');
 }
 
-/// What is open: braces and parentheses.
+/// How many braces and parentheses are open: each indents alike.
 const Open = struct {
-    braces: u32 = 0,
-    parens: u32 = 0,
-
-    fn close(o: *Open, tag: Tag) void {
-        switch (tag) {
-            .r_cur => o.braces -|= 1,
-            .r_par => o.parens -|= 1,
-            else => unreachable,
-        }
-    }
+    depth: u32 = 0,
 
     fn indent(o: Open, comma: bool) u32 {
-        const width = 2 * o.braces + 4 * o.parens;
+        const width = 4 * o.depth;
         return if (comma) width -| 2 else width;
     }
 };

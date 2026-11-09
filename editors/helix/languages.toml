@@ -13,7 +13,7 @@ name = "fab"
 scope = "source.fab"
 file-types = ["fab"]
 comment-token = "//"
-indent = { tab-width = 2, unit = "  " }
+indent = { tab-width = 4, unit = "    " }
 language-servers = ["fab"]
 
 [[grammar]]

@@ -72,7 +72,7 @@ test "line breaks are kept, blank lines at most one" {
     try expectPrinted("G :: f\r\nH :: g", "G :: f\nH :: g\n");
 }
 
-test "indentation: two per brace, four per parenthesis, two fewer for a comma" {
+test "indentation: four per brace or parenthesis, two fewer for a comma" {
     try expectPrinted(
         \\G :style {
         \\#A :fill [red],
@@ -80,8 +80,8 @@ test "indentation: two per brace, four per parenthesis, two fewer for a comma" {
         \\}
     ,
         \\G :style {
-        \\  #A :fill [red],
-        \\  f :label "x"
+        \\    #A :fill [red],
+        \\    f :label "x"
         \\}
         \\
     );
@@ -97,16 +97,18 @@ test "indentation: two per brace, four per parenthesis, two fewer for a comma" {
         \\}
     ,
         \\Order :: {
-        \\  */receive validate/? +(
-        \\      yes fork/! +(
-        \\          charge
-        \\        , reserve
-        \\      )! ready
-        \\    , no
-        \\  )
+        \\    */receive validate/? +(
+        \\        yes fork/! +(
+        \\            charge
+        \\          , reserve
+        \\        )! ready
+        \\      , no
+        \\    )
         \\}
         \\
     );
+    // Nested braces, and a closer beginning a line.
+    try expectPrinted("G :style {\n#A {\n:fill [red]\n}\n}", "G :style {\n    #A {\n        :fill [red]\n    }\n}\n");
 }
 
 test "comments stay where they were" {
@@ -119,9 +121,9 @@ test "comments stay where they were" {
         \\}
     ,
         \\G :style {
-        \\  // the start
-        \\  #A :fill [red] // red
-        \\  // the end
+        \\    // the start
+        \\    #A :fill [red] // red
+        \\    // the end
         \\}
         \\
     );
@@ -142,13 +144,13 @@ test "the examples and the prelude print faithfully" {
     // examples/order-fulfilment.fab, already in its layout.
     const order =
         \\Order :: {
-        \\  */receive/#Received validate/? +(
-        \\      yes/#Accepted fork/! +(
-        \\          charge/? +(paid, declined/#Waiting/retry)
-        \\        , reserve/? +(reserved, short/#Backorder/restock)
-        \\      )! ready/#Ready ship/#Shipped close/*
-        \\    , no/#Rejected notify/*
-        \\  )
+        \\    */receive/#Received validate/? +(
+        \\        yes/#Accepted fork/! +(
+        \\            charge/? +(paid, declined/#Waiting/retry)
+        \\          , reserve/? +(reserved, short/#Backorder/restock)
+        \\        )! ready/#Ready ship/#Shipped close/*
+        \\      , no/#Rejected notify/*
+        \\    )
         \\}
         \\
     ;

@@ -41,9 +41,9 @@
 :On     :: [on]
 
 :Shape :: {
-  [box], [round], [circle], [double-circle], [ellipse], [stadium],
-  [diamond], [hexagon], [parallelogram], [cylinder], [document],
-  [bar], [point], [terminal], [bullseye]
+    [box], [round], [circle], [double-circle], [ellipse], [stadium],
+    [diamond], [hexagon], [parallelogram], [cylinder], [document],
+    [bar], [point], [terminal], [bullseye]
 }
 :Line  :: [solid], [dashed], [dotted], [double], [triple], [wavy]
 :Face  :: [regular], [italic], [bold], [bold-italic]
@@ -58,9 +58,9 @@
 // side. Hooks and harpoons curl to one side, so they have twins: ! puts
 // them on the inner side, [?!], [^!].
 :Head :: {
-  [>], [<], [>>], [<<], [|>], [<|], [|],
-  [O], [@], [X], [<>], [<@>],
-  [||], [O|], [|{], [O{], [|O], [}|], [}O]
+    [>], [<], [>>], [<<], [|>], [<|], [|],
+    [O], [@], [X], [<>], [<@>],
+    [||], [O|], [|{], [O{], [|O], [}|], [}O]
 }
 :Hook :: [?], [^]
 :Tip  :: :Head, :Hook!, :Nil
@@ -97,59 +97,59 @@
 
 // Text
 :Style :: {
-  (&node, &edge, &cell, &zone) :label :: :Label,
-  (&node, &edge, &cell, &zone) :font  :: (:Text, :Nil),
-  (&node, &edge, &cell, &zone) :face  :: :Face,
-  (&node, &edge, &cell, &zone) :size  :: :Length,
-  (&node, &edge, &cell, &zone) :ink   :: :Color
+    (&node, &edge, &cell, &zone) :label :: :Label,
+    (&node, &edge, &cell, &zone) :font  :: (:Text, :Nil),
+    (&node, &edge, &cell, &zone) :face  :: :Face,
+    (&node, &edge, &cell, &zone) :size  :: :Length,
+    (&node, &edge, &cell, &zone) :ink   :: :Color
 }
 
 // Lines and fills
 :Style :: {
-  (&node, &zone)               :fill   :: (:Color, :Nil),
-  (&node, &edge, &cell, &zone) :stroke :: (:Color, :Nil),
-  (&node, &edge, &cell, &zone) :pen    :: :Pen,
-  (&node, &zone)               :line   :: (:Line, :Nil)
+    (&node, &zone)               :fill   :: (:Color, :Nil),
+    (&node, &edge, &cell, &zone) :stroke :: (:Color, :Nil),
+    (&node, &edge, &cell, &zone) :pen    :: :Pen,
+    (&node, &zone)               :line   :: (:Line, :Nil)
 }
 
 // Nodes
 :Style :: {
-  &node          :shape   :: (:Shape, :Nil),
-  &node          :width   :: :Length,    // a minimum
-  &node          :height  :: :Length,    // a minimum
-  (&node, &zone) :padding :: :Length,
-  &node          :align   :: :Span,
-  &node          :wrap    :: (:Length, :Nil)
+    &node          :shape   :: (:Shape, :Nil),
+    &node          :width   :: :Length,    // a minimum
+    &node          :height  :: :Length,    // a minimum
+    (&node, &zone) :padding :: :Length,
+    &node          :align   :: :Span,
+    &node          :wrap    :: (:Length, :Nil)
 }
 
 // Edges and cells
 :Style :: {
-  (&edge, &cell) :arrow       :: (:Arrow, :Nil),     // nil: by level
-  (&edge, &cell) :bend        :: (:Facing, :Angle),
-  (&edge, &cell) :label-start :: :Label,
-  (&edge, &cell) :label-end   :: :Label,
-  (&edge, &cell) :label-at    :: (:Span, :Fraction),
-  (&edge, &cell) :side        :: :Side,
-  (&edge, &cell) :shorten     :: :Length
+    (&edge, &cell) :arrow       :: (:Arrow, :Nil),     // nil: by level
+    (&edge, &cell) :bend        :: (:Facing, :Angle),
+    (&edge, &cell) :label-start :: :Label,
+    (&edge, &cell) :label-end   :: :Label,
+    (&edge, &cell) :label-at    :: (:Span, :Fraction),
+    (&edge, &cell) :side        :: :Side,
+    (&edge, &cell) :shorten     :: :Length
 }
 
 // Zones
 :Style :: {
-  &zone :as      :: :As,
-  &zone :caption :: :Label,
-  &zone :theme   :: [:Style],            // applied left to right
-  &zone :marks   :: (:All, :Nil),
-  &zone :cross   :: :Cross,
-  &zone :alt     :: :Text
+    &zone :as      :: :As,
+    &zone :caption :: :Label,
+    &zone :theme   :: [:Style],            // applied left to right
+    &zone :marks   :: (:All, :Nil),
+    &zone :cross   :: :Cross,
+    &zone :alt     :: :Text
 }
 
 // Behaviour. A flag is true when written, false otherwise; :hide! turns
 // it back off in a later layer.
 :Style :: {
-  (&node, &edge, &cell)        :hide :: :Flag,
-  (&node, &edge, &cell, &zone) :note :: :Text,
-  (&node, &edge, &cell, &zone) :link :: :Text,
-  (&node, &edge, &cell)        :step :: (:Number, :Nil)
+    (&node, &edge, &cell)        :hide :: :Flag,
+    (&node, &edge, &cell, &zone) :note :: :Text,
+    (&node, &edge, &cell, &zone) :link :: :Text,
+    (&node, &edge, &cell)        :step :: (:Number, :Nil)
 }
 
 // The layer: a diagram's style, a record applied with the diagram as its
@@ -192,67 +192,67 @@
 // names back.
 
 :Style [base] := {
-  [ink] := [#333333],
-  [soft] := [#555555],
-  [muted] := [#888888],
-  [accent] := [#1f6feb],
-  [error] := [#d1242f],
-  [warning] := [#bf8700],
-  [unsupported] := [#8250df],
+    [ink] := [#333333],
+    [soft] := [#555555],
+    [muted] := [#888888],
+    [accent] := [#1f6feb],
+    [error] := [#d1242f],
+    [warning] := [#bf8700],
+    [unsupported] := [#8250df],
 
-  &node {
-    :label [], :font [], :face [regular], :size [1], :ink [ink],
-    :shape [circle], :fill [], :stroke [ink], :pen [normal], :line [solid],
-    :width [0], :height [0], :padding [0.4], :align [center], :wrap [],
-    :hide!, :note "", :link "", :step []
-  },
-  &choice    { :shape [diamond], :label "" },
-  &parallel  { :shape [bar], :label "" },
-  &start     { :shape [point], :label "" },
-  &end       { :shape [bullseye], :label "" },
-  &hole      :line [dashed],
-  &canonical { :face [italic], :ink [muted] },
+    &node {
+        :label [], :font [], :face [regular], :size [1], :ink [ink],
+        :shape [circle], :fill [], :stroke [ink], :pen [normal], :line [solid],
+        :width [0], :height [0], :padding [0.4], :align [center], :wrap [],
+        :hide!, :note "", :link "", :step []
+    },
+    &choice    { :shape [diamond], :label "" },
+    &parallel  { :shape [bar], :label "" },
+    &start     { :shape [point], :label "" },
+    &end       { :shape [bullseye], :label "" },
+    &hole      :line [dashed],
+    &canonical { :face [italic], :ink [muted] },
 
-  &edge {
-    :label [], :label-start [], :label-end [],
-    :font [], :face [regular], :size [0.85], :ink [soft],
-    :arrow [/solid/>], :stroke [ink], :pen [normal],
-    :bend [0], :label-at [center], :side [outer], :shorten [0],
-    :hide!, :note "", :link "", :step []
-  },
-  &cell {
-    :label [], :label-start [], :label-end [],
-    :font [], :face [regular], :size [0.85], :ink [soft],
-    :arrow [], :stroke [ink], :pen [normal],
-    :bend [0], :label-at [center], :side [outer], :shorten [0],
-    :hide!, :note "", :link "", :step []
-  },
+    &edge {
+        :label [], :label-start [], :label-end [],
+        :font [], :face [regular], :size [0.85], :ink [soft],
+        :arrow [/solid/>], :stroke [ink], :pen [normal],
+        :bend [0], :label-at [center], :side [outer], :shorten [0],
+        :hide!, :note "", :link "", :step []
+    },
+    &cell {
+        :label [], :label-start [], :label-end [],
+        :font [], :face [regular], :size [0.85], :ink [soft],
+        :arrow [], :stroke [ink], :pen [normal],
+        :bend [0], :label-at [center], :side [outer], :shorten [0],
+        :hide!, :note "", :link "", :step []
+    },
 
-  &zone {
-    :label [], :caption [], :font [], :face [regular], :size [1], :ink [ink],
-    :fill [], :stroke [], :pen [normal], :line [solid], :padding [1],
-    :as [cluster], :theme [], :marks [all], :cross [gap],
-    :alt "", :note "", :link ""
-  }
+    &zone {
+        :label [], :caption [], :font [], :face [regular], :size [1], :ink [ink],
+        :fill [], :stroke [], :pen [normal], :line [solid], :padding [1],
+        :as [cluster], :theme [], :marks [all], :cross [gap],
+        :alt "", :note "", :link ""
+    }
 }
 
 // ── 6. Built-in themes ────────────────────────────────────────────────
 
 :Style [dark] := {
-  [ink] := [#dddddd],
-  [soft] := [#aaaaaa],
-  [muted] := [#888888],
-  &zone :fill [#1e1e1e]
+    [ink] := [#dddddd],
+    [soft] := [#aaaaaa],
+    [muted] := [#888888],
+    &zone :fill [#1e1e1e]
 }
 
 :Style [print] := {
-  [ink] := [#000000],
-  [soft] := [#000000],
-  [muted] := [#555555],
-  [accent] := [#000000]
+    [ink] := [#000000],
+    [soft] := [#000000],
+    [muted] := [#555555],
+    [accent] := [#000000]
 }
 
 :Style [compact] := {
-  &node :padding [0.2],
-  &zone :padding [0.5]
+    &node :padding [0.2],
+    &zone :padding [0.5]
 }
