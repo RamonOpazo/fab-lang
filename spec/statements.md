@@ -1241,3 +1241,15 @@ Settles what the style pass hands renderers (plan steps 9d3–9d5, 10), before i
 - The schema in JSON or TOML: a second source of truth, or an export mistaken for one; TOML needs a parser outside Zig's standard library.
 - Unresolved layers handed to renderers, for SVG's cascade to resolve: CSS's cascade is not fAB's (specificity ranks, themes in order, tokens per diagram, marks last, computed defaults), and each renderer would emulate it, differently.
 - A fully resolved style per element: what the author shared by classes would be repeated on every element, in memory, in JSON, in SVG.
+
+### 22.13 The Sheet in JSON; names without sigils, 2026-11-09
+
+Settles JSON version 2 (plan step 9d5b): the Sheet beside the IR.
+
+**Names are written without sigils.** A sigil tells sorts apart in the source, where every name shares one stream of text: `#A` is a node, `&node` a class, `:label` a descriptor, `[circle]` a label. In JSON a name's place already says its sort, a node's name in `"nodes"`, a class in `"classes"`, a descriptor as a key of `"style"`, so the sigil says nothing more: the node `#A` is `"name": "A"`, as the edge `f` is `"f"` and the diagram `G` is `"G"`. Diagnostics keep them, since their prose quotes the source.
+
+**The Sheet beside the IR.** `"sheet"` follows `"ir"`, null when the IR is. It holds the rules, `{zone, classes, style}`, and each table's elements, indexed as the IR's, `{rule, style, mark}`, with an element's `"style"` only its own entries, merged over its rule's as `Sheet.style` does; and the tokens, `[base]`'s and each diagram's, resolved. A style maps a descriptor to `{layer, value}`, in `:Style`'s order: the layer (`computed`, `base`, `theme`, `program`, `mark`) is what a renderer reads to report what it does not draw.
+
+**Values tagged by shape,** JSON's own types where they cannot be confused: nil `null`, a flag `true` or `false`, elements an array; then `{"text"}`, `{"math"}`, `{"label", "inverted"}`, `{"color": "#rrggbbaa"}` (always eight digits), `{"number": "0.85"}` (its normal form, §22.11), `{"range": [lo, hi]}` (`hi` null when open). No record reaches the Sheet while `:theme` is the only descriptor taking one; `:prove` and `:place` (step 11) decide how theirs are written.
+
+**Rejected.** Keys with their sigils (`":label"`, `"#A"`): `style[":label"]` instead of `style.label`, for nothing a reader needs. A value's layer inside its object: nil and flags are JSON scalars and cannot carry it. Colours with the alpha only when not opaque, as the dumps write them: two forms for every reader to parse.

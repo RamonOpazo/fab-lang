@@ -28,12 +28,17 @@ fn expectContains(haystack: []const u8, needle: []const u8) !void {
     }
 }
 
-test "a valid program, in full" {
+/// The document up to its sheet: status, diagnostics and IR.
+fn beforeSheet(doc: []const u8) []const u8 {
+    return doc[0 .. std.mem.indexOf(u8, doc, ",\"sheet\":") orelse doc.len];
+}
+
+test "a valid program, its IR in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(
-        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","own":null,"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}}
-    , doc);
+        \\{"version":2,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","own":null,"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
+    , beforeSheet(doc));
 }
 
 test "cells name their sides by kind, with their direction" {
@@ -54,7 +59,7 @@ test "a broken program: diagnostics, holes and issues" {
         \\{"kind":"hole","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}
     );
     try expectContains(doc,
-        \\"issues":[{"subject":{"node":2},"diagnostic":0}]}}
+        \\"issues":[{"subject":{"node":2},"diagnostic":0}]},"sheet":
     );
 }
 
@@ -62,7 +67,7 @@ test "a withheld IR is null" {
     const doc = try document("G :: f g/+k h", strict);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"status\":\"error\"");
-    try testing.expect(std.mem.endsWith(u8, doc, ",\"ir\":null}"));
+    try testing.expect(std.mem.endsWith(u8, doc, ",\"ir\":null,\"sheet\":null}"));
 }
 
 test "issues point into the document's diagnostics, after the syntax ones" {
@@ -90,8 +95,65 @@ test "tokens" {
     defer out.deinit();
     try json.writeTokens(&c, &out.writer);
     try testing.expectEqualStrings(
-        \\{"version":1,"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
+        \\{"version":2,"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
     , out.written());
+}
+
+test "names are written without sigils" {
+    const doc = try document("G :: #A/f\nG :style { #A :fill [#ff0000] }", strict);
+    defer testing.allocator.free(doc);
+    try expectContains(doc, "{\"kind\":\"plain\",\"name\":\"A\",");
+    try expectContains(doc, "\"classes\":[\"node\",\"plain\"]");
+    try expectContains(doc, "\"fill\":{\"layer\":\"program\",\"value\":{\"color\":\"#ff0000ff\"}}");
+}
+
+test "the sheet: rules shared, an element's own entries, layers, values by shape" {
+    const doc = try document(
+        \\G :: #A/f g
+        \\G :style { :theme [dark], &edge :size [1.5], #A :fill [#ff000080], #A :hide, f :arrow [?!/dashed/>], f :label $x_1$ }
+    , strict);
+    defer testing.allocator.free(doc);
+    // The edges' rule: what [base], the theme and the class binding make.
+    try expectContains(doc, "{\"zone\":0,\"classes\":[\"edge\"],\"style\":{\"label\":{\"layer\":\"base\",\"value\":null},");
+    try expectContains(doc, "\"size\":{\"layer\":\"program\",\"value\":{\"number\":\"1.5\"}}");
+    try expectContains(doc, "\"layer\":\"theme\"");
+    // Each element: its rule, and only its own entries.
+    try expectContains(doc, "\"style\":{\"label\":{\"layer\":\"computed\",\"value\":{\"text\":\"A\"}},\"fill\":{\"layer\":\"program\",\"value\":{\"color\":\"#ff000080\"}},");
+    try expectContains(doc, "\"hide\":{\"layer\":\"program\",\"value\":true}},\"mark\":null}");
+    try expectContains(doc, "\"label\":{\"layer\":\"program\",\"value\":{\"math\":\"x_1\"}}");
+    try expectContains(doc, "\"arrow\":{\"layer\":\"program\",\"value\":[{\"label\":\"?\",\"inverted\":true},{\"label\":\"dashed\",\"inverted\":false},{\"label\":\">\",\"inverted\":false}]}");
+    // Nil is null; :theme is no element's style.
+    try expectContains(doc, "\"caption\":{\"layer\":\"base\",\"value\":null}");
+    try testing.expect(std.mem.indexOf(u8, doc, "\"theme\":{") == null);
+    // The tokens: [base]'s, and G's after its theme.
+    try expectContains(doc, "\"tokens\":{\"base\":{\"ink\":{\"color\":\"#333333ff\"}");
+}
+
+test "marks are the last layer, and every element's mark is written" {
+    const doc = try document("G :: f g/+k h", preview);
+    defer testing.allocator.free(doc);
+    try expectContains(doc, "\"stroke\":{\"layer\":\"mark\",\"value\":{\"color\":\"#d1242fff\"}}},\"mark\":\"error\"}");
+}
+
+test "every example's sheet is indexed as its IR" {
+    for (@import("examples").all) |example| {
+        const name, const source = example;
+        const doc = try document(source, preview);
+        defer testing.allocator.free(doc);
+        const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, doc, .{});
+        defer parsed.deinit();
+        const root = parsed.value.object;
+        const ir = root.get("ir").?.object;
+        const sheet = root.get("sheet").?.object;
+        const rules = sheet.get("rules").?.array.items.len;
+        errdefer std.debug.print("\nin {s}\n", .{name});
+        inline for (.{ "nodes", "edges", "cells", "zones" }) |table| {
+            const elements = sheet.get(table).?.array.items;
+            try testing.expectEqual(ir.get(table).?.array.items.len, elements.len);
+            for (elements) |e| try testing.expect(e.object.get("rule").?.integer < rules);
+        }
+        try testing.expectEqual(ir.get("zones").?.array.items.len, sheet.get("tokens").?.object.get("zones").?.array.items.len);
+    }
 }
 
 test "positions: lines, and UTF-16 characters" {

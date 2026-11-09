@@ -4,12 +4,17 @@
 //! IR can be rebuilt from it. Views of the diagram (SVG, DOT, tikz-cd, …) are
 //! not made here; they belong to renderers and transpilers.
 //!
-//! Format, version 1. A compilation:
+//! Names are written without sigils (statements.md §22.13): where a name
+//! stands says its sort, so the node `#A` is "A", the class `&node` "node",
+//! the descriptor `:label` "label". Diagnostics quote the source as written.
 //!
-//!   { "version": 1,
+//! Format, version 2. A compilation:
+//!
+//!   { "version": 2,
 //!     "status": "ok" | "warning" | "promoted" | "error",
 //!     "diagnostics": [Diagnostic],
-//!     "ir": IR | null }               null when the tolerance withholds it
+//!     "ir": IR | null,                null when the tolerance withholds it
+//!     "sheet": Sheet | null }         null when "ir" is
 //!
 //!   Diagnostic:
 //!     { "code": "edge_declared_twice",
@@ -29,7 +34,7 @@
 //!   IR: the tables of Ir.zig. Every reference is an index into a table.
 //!     { "zones": [{"name": "G", "own": null | node, "placeholder": false}],
 //!       "nodes": [{"kind": "plain" | "choice" | "parallel" | "null_node" | "hole",
-//!                  "name": null | "#A", "zone": zone,
+//!                  "name": null | "A", "zone": zone,
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
 //!       "edges": [{"name": "f", "source": node, "target": node,
 //!                  "directed": true, "zone": zone}],
@@ -40,9 +45,29 @@
 //!       "issues": [{"subject": {"node" | "edge" | "cell" | "zone": index},
 //!                   "diagnostic": index into "diagnostics"}] }
 //!
+//!   Sheet: every element's style, resolved (statements.md §22.12). A rule
+//!   holds what a diagram's set of classes makes; an element names its rule
+//!   and holds only its own entries, which win over the rule's.
+//!     { "rules": [{"zone": zone, "classes": ["node", "plain"], "style": Style}],
+//!       "nodes" | "edges" | "cells" | "zones":
+//!               [{"rule": rule, "style": Style,
+//!                 "mark": null | "unsupported" | "warning" | "error"}],
+//!                                       indexed as the IR's tables
+//!       "tokens": {"base": {"ink": Value, …}, "zones": [{"ink": Value, …}]} }
+//!
+//!   Style: descriptors in :Style's order, each with the layer that bound it.
+//!     { "label": {"layer": "computed" | "base" | "theme" | "program" | "mark",
+//!                 "value": Value}, … }
+//!
+//!   Value:
+//!     null | true | false | [Value]            nil, a flag, elements
+//!     {"text": "…"}  {"math": "…"}  {"color": "#rrggbbaa"}
+//!     {"number": "0.85"}  {"range": ["1", "2" | null]}    normal forms
+//!     {"label": "circle", "inverted": false}
+//!
 //! Tokens, for syntax highlighting:
 //!
-//!   { "version": 1, "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
+//!   { "version": 2, "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
 //!
 //! Strings are UTF-8. Bytes in the source that are not valid UTF-8 are
 //! written as U+FFFD.
@@ -54,10 +79,13 @@ const Compilation = @import("../compile/Compilation.zig");
 const Diagnostic = @import("../compile/Diagnostic.zig");
 const messages = @import("../compile/messages.zig");
 const Lines = @import("../compile/Lines.zig");
+const Sheet = @import("../style/Sheet.zig");
+const decoded = @import("../analyse/decoded.zig");
+const Decimal = @import("../analyse/Decimal.zig");
 
 const Writer = std.Io.Writer;
 
-pub const version = 1;
+pub const version = 2;
 
 pub const Error = Writer.Error || error{OutOfMemory};
 
@@ -78,6 +106,8 @@ pub fn writeCompilation(c: *Compilation, w: *Writer) Error!void {
     }
     try w.writeAll("],\"ir\":");
     if (ir) |graph| try writeIr(c, graph, w) else try w.writeAll("null");
+    try w.writeAll(",\"sheet\":");
+    if (try c.sheet()) |s| try writeSheet(s, w) else try w.writeAll("null");
     try w.writeByte('}');
 }
 
@@ -146,7 +176,7 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         try w.writeAll("{\"kind\":");
         try string(w, @tagName(node.kind));
         try w.writeAll(",\"name\":");
-        if (node.name) |name| try string(w, ir.string(name)) else try w.writeAll("null");
+        if (node.name) |name| try string(w, unsigiled(ir.string(name))) else try w.writeAll("null");
         try w.print(",\"zone\":{d},\"canonical\":", .{@backingInt(node.zone)});
         if (node.canonical) |end| {
             try w.print("{{\"edge\":{d},\"side\":\"{s}\"}}", .{ @backingInt(end.edge), @tagName(end.side) });
@@ -191,6 +221,127 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         try w.print("{{\"subject\":{{\"{s}\":{d}}},\"diagnostic\":{d}}}", .{ kind, index, try c.diagnosticIndex(issue) });
     }
     try w.writeAll("]}");
+}
+
+fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
+    try w.writeAll("{\"rules\":[");
+    for (s.rules, 0..) |r, i| {
+        if (i > 0) try w.writeByte(',');
+        try w.print("{{\"zone\":{d},\"classes\":[", .{@backingInt(r.zone)});
+        var it = r.classes.iterator();
+        var first = true;
+        while (it.next()) |class| : (first = false) {
+            if (!first) try w.writeByte(',');
+            try string(w, @tagName(class));
+        }
+        try w.writeAll("],\"style\":");
+        try writeStyle(s, s.slice(r.entries), w);
+        try w.writeByte('}');
+    }
+    try w.writeByte(']');
+    inline for (.{ "nodes", "edges", "cells", "zones" }) |table| {
+        try w.print(",\"{s}\":[", .{table});
+        for (@field(s.elements, table), 0..) |e, i| {
+            if (i > 0) try w.writeByte(',');
+            try w.print("{{\"rule\":{d},\"style\":", .{@backingInt(e.rule)});
+            try writeStyle(s, s.slice(e.own), w);
+            try w.writeAll(",\"mark\":");
+            if (e.mark) |m| try string(w, @tagName(m)) else try w.writeAll("null");
+            try w.writeByte('}');
+        }
+        try w.writeByte(']');
+    }
+    try w.writeAll(",\"tokens\":{\"base\":");
+    try writeTokenMap(s.base_tokens, w);
+    try w.writeAll(",\"zones\":[");
+    for (s.tokens, 0..) |tokens, i| {
+        if (i > 0) try w.writeByte(',');
+        try writeTokenMap(tokens, w);
+    }
+    try w.writeAll("]}}");
+}
+
+fn writeStyle(s: *const Sheet, entries: []const Sheet.Entry, w: *Writer) Writer.Error!void {
+    try w.writeByte('{');
+    for (entries, 0..) |e, i| {
+        if (i > 0) try w.writeByte(',');
+        try string(w, unsigiled(s.descriptors[@backingInt(e.descriptor)]));
+        try w.writeAll(":{\"layer\":");
+        try string(w, @tagName(e.layer));
+        try w.writeAll(",\"value\":");
+        try writeValue(e.value, w);
+        try w.writeByte('}');
+    }
+    try w.writeByte('}');
+}
+
+fn writeTokenMap(tokens: []const decoded.Token, w: *Writer) Writer.Error!void {
+    try w.writeByte('{');
+    for (tokens, 0..) |t, i| {
+        if (i > 0) try w.writeByte(',');
+        try string(w, t.label);
+        try w.writeByte(':');
+        try writeValue(t.value, w);
+    }
+    try w.writeByte('}');
+}
+
+/// A value, tagged by its shape (statements.md §22.13).
+fn writeValue(v: decoded.Value, w: *Writer) Writer.Error!void {
+    switch (v) {
+        .nil => try w.writeAll("null"),
+        .flag => |on| try w.print("{}", .{on}),
+        .text => |t| {
+            try w.writeAll("{\"text\":");
+            try string(w, t);
+            try w.writeByte('}');
+        },
+        .math => |m| {
+            try w.writeAll("{\"math\":");
+            try string(w, m);
+            try w.writeByte('}');
+        },
+        .color => |c| try w.print("{{\"color\":\"#{x:0>2}{x:0>2}{x:0>2}{x:0>2}\"}}", .{ c.r, c.g, c.b, c.a }),
+        .number => |n| {
+            try w.writeAll("{\"number\":");
+            try number(n, w);
+            try w.writeByte('}');
+        },
+        .range => |r| {
+            try w.writeAll("{\"range\":[");
+            try number(r.lo, w);
+            try w.writeByte(',');
+            if (r.hi) |hi| try number(hi, w) else try w.writeAll("null");
+            try w.writeAll("]}");
+        },
+        .label => |l| {
+            try w.writeAll("{\"label\":");
+            try string(w, l.name);
+            try w.print(",\"inverted\":{}}}", .{l.inverted});
+        },
+        .elements => |es| {
+            try w.writeByte('[');
+            for (es, 0..) |e, i| {
+                if (i > 0) try w.writeByte(',');
+                try writeValue(e, w);
+            }
+            try w.writeByte(']');
+        },
+        // Only `:theme` takes a record, and it is no element's style.
+        .record => unreachable,
+    }
+}
+
+/// A number in its normal form, as a string: `"0.85"`.
+fn number(n: Decimal, w: *Writer) Writer.Error!void {
+    try w.writeByte('"');
+    try n.format(w);
+    try w.writeByte('"');
+}
+
+/// A name as JSON writes it: `#A` is "A", `:label` "label".
+fn unsigiled(name: []const u8) []const u8 {
+    return if (name.len > 0 and (name[0] == '#' or name[0] == ':')) name[1..] else name;
 }
 
 /// A cell's side: `{"edge": 3}`.
