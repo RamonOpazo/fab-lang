@@ -3,6 +3,7 @@
 //!   fab render <file> [options]          draw the diagram
 //!   fab check <file> [options]           diagnostics only
 //!   fab show tokens|cst|ir <file> [options]
+//!   fab fmt <file> [-w | --check]        the program in its canonical layout
 //!   fab lsp                              the language server
 //!
 //! The command is always the first word, so a file may have any name:
@@ -40,8 +41,12 @@ pub const Command = struct {
     watch: bool = false,
     /// Render only: render to a temporary page and open it.
     preview: bool = false,
+    /// `fmt` only: print the program formatted, write it back to its file
+    /// (`-w`), or only say whether it is formatted (`--check`).
+    fmt: Fmt = .print,
 
-    pub const Action = enum { render, check, show };
+    pub const Action = enum { render, check, show, fmt };
+    pub const Fmt = enum { print, write, check };
     pub const Stage = enum { tokens, cst, ir };
     pub const Verbosity = enum { quiet, brief, full };
 
@@ -154,6 +159,8 @@ pub fn parse(args: []const []const u8) Parsed {
         c.stage = std.meta.stringToEnum(Command.Stage, args[1]) orelse
             return usage("unknown stage; expected tokens, cst or ir", args[1]);
         i = 2;
+    } else if (std.mem.eql(u8, first, "fmt")) {
+        c.action = .fmt;
     } else if (std.mem.eql(u8, first, "lsp")) {
         // Editors may pass `--stdio`, the only transport there is.
         for (args[1..]) |arg| {
@@ -166,7 +173,7 @@ pub fn parse(args: []const []const u8) Parsed {
     } else if (std.mem.eql(u8, first, "--version")) {
         return .version;
     } else if (first.len > 1 and first[0] == '-') {
-        return usage("expected a command first: render, check, show or lsp", first);
+        return usage("expected a command first: render, check, show, fmt or lsp", first);
     } else {
         return usageHint("expected a command first", first, "to draw it, run `fab render <file>`");
     }
@@ -174,6 +181,7 @@ pub fn parse(args: []const []const u8) Parsed {
     var input: ?[]const u8 = null;
     var format: ?Command.Format = null;
     var engine: ?Command.Engine = null;
+    var fmt: ?Command.Fmt = null;
     var options_done = false;
 
     while (i < args.len) : (i += 1) {
@@ -216,6 +224,12 @@ pub fn parse(args: []const []const u8) Parsed {
             c.watch = true;
         } else if (std.mem.eql(u8, arg, "--preview")) {
             c.preview = true;
+        } else if (eql(arg, "-w", "--write")) {
+            if (fmt == .check) return usage("`-w` and `--check` can't go together", null);
+            fmt = .write;
+        } else if (std.mem.eql(u8, arg, "--check")) {
+            if (fmt == .write) return usage("`-w` and `--check` can't go together", null);
+            fmt = .check;
         } else {
             return usage("unknown option", arg);
         }
@@ -232,6 +246,11 @@ pub fn parse(args: []const []const u8) Parsed {
         if (c.preview) return usage("`--preview` applies to `render` only", null);
     }
     if (c.action != .show and c.json) return usageHint("`--json` applies to `show` only", null, "render with `-f json` instead");
+    if (fmt) |f| {
+        if (c.action != .fmt) return usage(if (f == .write) "`-w` applies to `fmt` only" else "`--check` applies to `fmt` only", null);
+        if (f == .write and std.mem.eql(u8, c.input, "-")) return usageHint("`-w` writes back to a file, not standard input", null, "leave out `-w` to print the result");
+        c.fmt = f;
+    }
     if (c.watch and std.mem.eql(u8, c.input, "-")) return usage("`--watch` needs a file, not standard input", null);
     if (c.preview and c.output != null and std.mem.eql(u8, c.output.?, "-")) {
         return usage("`--preview` writes a page to open; it can't go to standard output", null);
@@ -287,6 +306,8 @@ pub const help =
     \\  fab render <file> [options]             draw the diagram
     \\  fab check <file> [options]              report problems only
     \\  fab show tokens|cst|ir <file> [options] show a stage of compilation
+    \\  fab fmt <file> [options]                print the program in its
+    \\                                          canonical layout
     \\  fab lsp                                 the language server, over
     \\                                          standard input and output
     \\
@@ -310,6 +331,12 @@ pub const help =
     \\Showing:
     \\  --json                 machine-readable output (tokens and ir)
     \\
+    \\Formatting:
+    \\  -w, --write            write the result back to the file, if it
+    \\                         changed, instead of printing it
+    \\  --check                print nothing; exit 1 if the file is not
+    \\                         formatted
+    \\
     \\Everywhere:
     \\  --strict               no output when there are errors, and
     \\                         warnings count as errors
@@ -319,8 +346,9 @@ pub const help =
     \\  -h, --help             show this help
     \\  --version              show the version
     \\
-    \\Exit codes: 0 no errors, 1 the program has errors, 2 the command
-    \\could not run (bad usage, unreadable file).
+    \\Exit codes: 0 no errors, 1 the program has errors (or, for
+    \\`fmt --check`, is not formatted), 2 the command could not run (bad
+    \\usage, unreadable file).
     \\
 ;
 

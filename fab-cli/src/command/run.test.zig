@@ -180,3 +180,43 @@ test "output paths" {
     try testing.expectEqual(@as(?[]const u8, null), try path(a, &.{ "render", "-" }));
     try testing.expectEqualStrings("README.svg", (try path(a, &.{ "render", "README" })).?);
 }
+
+test "fmt: the program in its canonical layout" {
+    const printed = try runArgs(&.{ "fmt", "x.fab" }, "G   ::  f/g h // a path\nLong :: k");
+    defer printed.deinit();
+    try testing.expectEqual(@as(u8, 0), printed.code);
+    try testing.expectEqualStrings("G    :: f/g h  // a path\nLong :: k\n", printed.out);
+    try testing.expectEqualStrings("", printed.err);
+}
+
+test "fmt -w: the result only when it changed" {
+    const changed = try runArgs(&.{ "fmt", "-w", "x.fab" }, "G   :: f");
+    defer changed.deinit();
+    try testing.expect(changed.produced);
+    try testing.expectEqualStrings("G :: f\n", changed.out);
+    const same = try runArgs(&.{ "fmt", "-w", "x.fab" }, "G :: f\n");
+    defer same.deinit();
+    try testing.expect(!same.produced);
+    try testing.expectEqualStrings("", same.out);
+}
+
+test "fmt --check: exit code 1 when not formatted, and nothing printed" {
+    const bad = try runArgs(&.{ "fmt", "--check", "x.fab" }, "G   :: f");
+    defer bad.deinit();
+    try testing.expectEqual(@as(u8, 1), bad.code);
+    try testing.expectEqualStrings("", bad.out);
+    try testing.expectEqualStrings("x.fab: not formatted\n", bad.err);
+    const good = try runArgs(&.{ "fmt", "--check", "x.fab" }, "G :: f\n");
+    defer good.deinit();
+    try testing.expectEqual(@as(u8, 0), good.code);
+    try testing.expectEqualStrings("", good.err);
+}
+
+test "fmt: a program with syntax errors is reported, not printed" {
+    const broken = try runArgs(&.{ "fmt", "x.fab", "--no-color" }, "G :: f ,, g");
+    defer broken.deinit();
+    try testing.expectEqual(@as(u8, 1), broken.code);
+    try testing.expectEqualStrings("", broken.out);
+    try testing.expect(std.mem.indexOf(u8, broken.err, "x.fab") != null);
+    try testing.expect(!broken.produced);
+}

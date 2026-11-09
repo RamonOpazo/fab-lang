@@ -11,6 +11,7 @@ pub const navigation = @import("navigation.zig");
 pub const hover = @import("hover.zig");
 pub const rename = @import("rename.zig");
 pub const completion = @import("completion.zig");
+pub const formatting = @import("formatting.zig");
 
 test {
     _ = Server;
@@ -22,4 +23,5 @@ test {
     _ = hover;
     _ = rename;
     _ = completion;
+    _ = formatting;
 }

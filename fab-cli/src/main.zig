@@ -131,6 +131,16 @@ fn attempt(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, command: Ar
     defer gpa.free(source);
     const label = if (std.mem.eql(u8, command.input, "-")) "<stdin>" else command.input;
 
+    if (command.action == .fmt and command.fmt == .write) {
+        var formatted: Io.Writer.Allocating = .init(gpa);
+        defer formatted.deinit();
+        const outcome = try run.run(gpa, command, source, label, &formatted.writer, err);
+        if (outcome.produced) Io.Dir.cwd().writeFile(io, .{ .sub_path = command.input, .data = formatted.written() }) catch |e| {
+            try err.print("fab: cannot write {s}: {s}\n", .{ command.input, @errorName(e) });
+            return 2;
+        };
+        return outcome.code;
+    }
     if (command.action != .render) {
         const outcome = try run.run(gpa, command, source, label, out, err);
         return outcome.code;

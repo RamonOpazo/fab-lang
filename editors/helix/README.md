@@ -18,6 +18,8 @@
 
 Arch installs Helix as `helix`, not `hx`.
 
-Diagnostics show inline and under `space d`. Helix ignores semantic tokens:
+Diagnostics show inline and under `space d`. `:format` lays the file out as
+`fab fmt` does; to format on save, add `auto-format = true` to the
+`[[language]]` entry. Helix ignores semantic tokens:
 it colours only through Tree-sitter. After changing `grammar.js`, run
 `make tree-sitter` and `hx --grammar build` again.

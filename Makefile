@@ -5,6 +5,8 @@
 #   make examples     check every example, then draw it to SVG (Graphviz)
 #   make install      install `fab` (release) into $(PREFIX)/bin
 #   make test-tree-sitter   the editors' grammar (needs Node; not in `test`)
+#   make fmt          format the Zig sources, the examples and the prelude
+#   make fmt-check    check they are formatted (zig fmt, then `fab fmt`)
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
 # each one, in dependency order: fab-core, then fab-render and fab-lsp, then
@@ -131,15 +133,20 @@ check-graphviz:
 
 ## Housekeeping
 
-fmt:
+# The fAB sources: the examples and the prelude, formatted by `fab fmt`.
+FAB_SOURCES := $(EXAMPLES) fab-core/src/prelude.fab
+
+fmt: build
 	@for p in $(PACKAGES); do \
 		(cd $$p && $(ZIG) fmt build.zig src $$( [ -d test ] && echo test )) || exit 1; \
 	done
+	@for f in $(FAB_SOURCES); do $(FAB) fmt -w "$$f" || exit 1; done
 
-fmt-check:
+fmt-check: build
 	@for p in $(PACKAGES); do \
 		(cd $$p && $(ZIG) fmt --check build.zig src $$( [ -d test ] && echo test )) || exit 1; \
 	done
+	@status=0; for f in $(FAB_SOURCES); do $(FAB) fmt --check "$$f" || status=1; done; exit $$status
 
 clean:
 	@for p in $(PACKAGES); do \

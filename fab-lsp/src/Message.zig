@@ -28,6 +28,8 @@ pub const SemanticTokensParams = struct { textDocument: DocumentId };
 /// A place in a document: definition, references, highlights.
 pub const PositionParams = struct { textDocument: DocumentId, position: Position };
 pub const RenameParams = struct { textDocument: DocumentId, position: Position, newName: []const u8 };
+/// Its `options` (tab size, spaces) are ignored: the layout is fAB's own.
+pub const FormattingParams = struct { textDocument: DocumentId };
 pub const ReferenceParams = struct {
     textDocument: DocumentId,
     position: Position,
@@ -82,6 +84,7 @@ pub const InitializeResult = struct {
         hoverProvider: bool = true,
         renameProvider: struct { prepareProvider: bool = true } = .{},
         completionProvider: struct { triggerCharacters: []const []const u8 = &.{ ".", "#", "&", ":" } } = .{},
+        documentFormattingProvider: bool = true,
     },
     serverInfo: struct { name: []const u8 = "fab", version: []const u8 },
 };

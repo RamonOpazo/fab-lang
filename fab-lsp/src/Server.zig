@@ -15,6 +15,7 @@ const navigation = @import("navigation.zig");
 const hover = @import("hover.zig");
 const rename = @import("rename.zig");
 const completion = @import("completion.zig");
+const formatting = @import("formatting.zig");
 const fab = @import("fab_core");
 
 const Server = @This();
@@ -185,6 +186,17 @@ pub fn handle(s: *Server, body: []const u8, out: *Io.Writer) Error!void {
             return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument and a position");
         const doc = s.documents.get(p.textDocument.uri) orelse return respond(arena, out, i, &[_]Message.CompletionItem{});
         return respond(arena, out, i, try completion.of(arena, doc.text, doc.last_good orelse doc.text, p.position));
+    }
+
+    if (std.mem.eql(u8, method, "textDocument/formatting")) {
+        const i = id orelse return;
+        const p = params(Message.FormattingParams, arena, envelope.params) orelse
+            return fail(arena, out, i, Message.Code.invalid_params, "expected a textDocument");
+        const doc = s.documents.get(p.textDocument.uri) orelse return respond(arena, out, i, null);
+        return switch (try formatting.of(arena, doc.text)) {
+            .edits => |edits| respond(arena, out, i, edits),
+            .refused => |why| fail(arena, out, i, Message.Code.request_failed, why),
+        };
     }
 
     // Requests must be answered; unknown notifications are ignored.

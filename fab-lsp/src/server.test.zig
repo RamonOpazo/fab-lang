@@ -292,3 +292,35 @@ test "completion keeps the names of the last text with no syntax errors" {
     try std.testing.expectEqualStrings("f", items[0].object.get("label").?.string);
     try std.testing.expectEqualStrings("g", items[1].object.get("label").?.string);
 }
+
+test "formatting answers with one edit, none, or a refusal" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","version":1,"text":"G   ::  f"}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///b.fab","version":1,"text":"G :: f\n"}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///c.fab","version":1,"text":"G :: f ,, g"}}}
+    );
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","id":11,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///a.fab"},"options":{"tabSize":2,"insertSpaces":true}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":12,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///b.fab"},"options":{"tabSize":4,"insertSpaces":true}}}
+    );
+    try s.send(
+        \\{"jsonrpc":"2.0","id":13,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///c.fab"},"options":{"tabSize":4,"insertSpaces":true}}}
+    );
+    const got = try s.received(arena.allocator());
+    try std.testing.expectEqualStrings("G :: f\n", field(got[0], &.{"result"}).?.array.items[0].object.get("newText").?.string);
+    try std.testing.expectEqual(0, field(got[1], &.{"result"}).?.array.items.len);
+    try std.testing.expectEqual(-32803, field(got[2], &.{ "error", "code" }).?.integer);
+}

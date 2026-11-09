@@ -15,7 +15,9 @@ pub const Outcome = struct {
     /// 0: no errors. 1: the program has errors. 2: the command could not run.
     code: u8,
     /// For rendering: whether `out` holds a result to be written. Never true
-    /// for a program with errors under `--strict`.
+    /// for a program with errors under `--strict`. For `fmt -w`: whether
+    /// `out` holds the program formatted, to be written back, since it
+    /// changed.
     produced: bool = false,
     /// For rendering: `out` holds DOT, which Graphviz must turn into this
     /// format before it is written. Null when `out` is the result itself.
@@ -34,6 +36,34 @@ pub fn run(gpa: std.mem.Allocator, command: Command, source: []const u8, label: 
     const options: report.Options = .{ .verbosity = command.verbosity, .color = command.color, .path = label };
 
     switch (command.action) {
+        .fmt => {
+            // Only the syntax runs: a program is formatted from its tree.
+            const tree = try c.cst();
+            if (tree.errors.len > 0) {
+                try report.write(err, c.source, c.diags.items, options);
+                return .{ .code = 1 };
+            }
+            var formatted: Writer.Allocating = .init(gpa);
+            defer formatted.deinit();
+            fab.print.program(gpa, tree, &formatted.writer) catch |e| switch (e) {
+                error.SyntaxError => unreachable, // checked above
+                error.OutOfMemory => return error.OutOfMemory,
+                error.WriteFailed => return error.OutOfMemory, // an allocating writer fails only so
+            };
+            const same = std.mem.eql(u8, formatted.written(), source);
+            switch (command.fmt) {
+                .print => try out.writeAll(formatted.written()),
+                .write => if (!same) {
+                    try out.writeAll(formatted.written());
+                    return .{ .code = 0, .produced = true };
+                },
+                .check => if (!same) {
+                    try err.print("{s}: not formatted\n", .{label});
+                    return .{ .code = 1 };
+                },
+            }
+            return .{ .code = 0 };
+        },
         .check => {
             try report.write(err, c.source, try c.diagnostics(), options);
             return .{ .code = try exitCode(&c) };

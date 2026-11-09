@@ -149,3 +149,17 @@ test "every other mistake is reported" {
     try expectUsage(&.{ "render", "x.fab", "--preview", "-o", "-" }, "standard output");
     try expectUsage(&.{ "render", "x.fab", "-o", "out.gif" }, "extension");
 }
+
+test "fmt prints, writes back with -w or --write, or checks" {
+    try testing.expectEqual(Command.Fmt.print, (try command(&.{ "fmt", "x.fab" })).fmt);
+    try testing.expectEqual(Command.Fmt.write, (try command(&.{ "fmt", "-w", "x.fab" })).fmt);
+    try testing.expectEqual(Command.Fmt.write, (try command(&.{ "fmt", "x.fab", "--write" })).fmt);
+    try testing.expectEqual(Command.Fmt.check, (try command(&.{ "fmt", "--check", "x.fab" })).fmt);
+    try testing.expectEqual(Command.Action.fmt, (try command(&.{ "fmt", "-" })).action);
+    try expectUsage(&.{ "fmt", "-w", "--check", "x.fab" }, "can't go together");
+    try expectUsage(&.{ "fmt", "--check", "--write", "x.fab" }, "can't go together");
+    try expectUsage(&.{ "fmt", "-w", "-" }, "not standard input");
+    try expectUsage(&.{ "check", "-w", "x.fab" }, "`-w` applies to `fmt` only");
+    try expectUsage(&.{ "render", "--check", "x.fab" }, "`--check` applies to `fmt` only");
+    try expectUsage(&.{ "fmt", "-o", "y.fab", "x.fab" }, "`-o` applies to `render` only");
+}
