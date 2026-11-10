@@ -22,10 +22,18 @@
 //!     one node, `z{z}`, a square holding ✕: Graphviz has no square crossed
 //!     corner to corner (statements.md §18). Its identifier is not `n…`, so
 //!     no edge reaches it, and the law counts it apart.
-//!   - A framed zone that owns no node (Db, whose edges all join other
-//!     diagrams' nodes) is a cluster around one invisible point, `a{z}`, so
-//!     its frame, name and caption still show; its edges stay at the top
-//!     level (statements.md §20). Unframed, it writes nothing.
+//!   - A diagram's cluster is inside its first container's (statements.md
+//!     §23.2), so clusters nest along the containment tree; a flat diagram's
+//!     nodes are in the cluster around it, if any.
+//!   - A node standing for a diagram drawn as a cluster is an invisible
+//!     point inside that cluster, and an edge to it stops at the border
+//!     (`compound=true`, `ltail`, `lhead`), unless its other end is inside
+//!     the cluster, where Graphviz can't clip. A flat diagram's node is an
+//!     ordinary node, labelled with the diagram's name.
+//!   - A framed cluster with nothing in it (Db, whose edges all join other
+//!     diagrams' nodes) holds one invisible point, `a{z}`, so its frame,
+//!     name and caption still show; its edges stay at the top level
+//!     (statements.md §20). Unframed, it writes nothing.
 //!   - A caption ("unsupported") makes the cluster's label an HTML label: the
 //!     one place DOT needs two kinds of text in one label.
 //!
@@ -74,55 +82,34 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
         l.* = try reader.read(.{ .zone = zone }, zone);
     }
 
-    const defaults = reader.defaults;
     try w.writeAll("digraph {\n");
-    try writeHeader(defaults, w);
-    const circle = circleSize(nodes);
+    try writeHeader(reader.defaults, w);
 
-    // 1. Nodes, zone by zone, each inside its owner's cluster.
-    for (zones, ir.zones.items(.placeholder), 0..) |look, placeholder, z| {
-        const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
-        if (placeholder) {
-            try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(look, zone, defaults, w, notes);
-            try writePlaceholder(look, z, defaults, w);
-            try w.writeAll("  }\n");
-            continue;
-        }
-        var owns_nodes = false;
-        for (node_zone) |owner| owns_nodes = owns_nodes or owner == zone;
-        if (!owns_nodes) {
-            if (!look.framed() or look.as == .flat) continue;
-            try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(look, zone, defaults, w, notes);
-            try w.print("    a{d} [label=\"\", shape=point, width=0.01, height=0.01, style=\"invis\"]\n", .{z});
-            try w.writeAll("  }\n");
-            continue;
-        }
+    var layout: Layout = try .init(gpa, ir, zones);
+    defer layout.deinit(gpa);
+    const out: Out = .{
+        .ir = ir,
+        .layout = &layout,
+        .nodes = nodes,
+        .zones = zones,
+        .defaults = reader.defaults,
+        .circle = circleSize(nodes),
+        .w = w,
+        .notes = notes,
+    };
 
-        const grouped = look.as != .flat;
-        if (look.as == .node or look.as == .table) try notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone } });
-
-        const indent = if (grouped) "    " else "  ";
-        if (grouped) {
-            try w.print("  subgraph cluster_{d} {{\n", .{z});
-            try writeClusterAttrs(look, zone, defaults, w, notes);
-        }
-        for (node_zone, 0..) |owner, n| {
-            if (owner != zone) continue;
-            try w.print("{s}n{d}", .{ indent, n });
-            const index: fab.Ir.NodeIndex = @fromBackingInt(@as(u32, @intCast(n)));
-            const sizes: Sizes = .{ .circle = circle, .branches = branches(ir, index) };
-            try writeNodeAttrs(nodes[n], index, sizes, defaults, w, notes);
-            try w.writeAll("\n");
-        }
-        if (grouped) try w.writeAll("  }\n");
+    // 1. Nodes, zone by zone, each inside its owner's cluster, and each
+    // member's cluster inside its container's.
+    for (ir.zones.items(.container), 0..) |container, z| {
+        if (container == null) try out.zone(@fromBackingInt(@as(u32, @intCast(z))), 1);
     }
 
-    // 2. Edges, at the top level, so they place no node.
+    // 2. Edges, at the top level, so they place no node. One reaching a
+    // diagram's node stops at its border.
     for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), edges, 0..) |s, t, directed, look, e| {
         try w.print("  n{d} -> n{d}", .{ @backingInt(s), @backingInt(t) });
-        try writeEdgeAttrs(look, directed, @fromBackingInt(@as(u32, @intCast(e))), defaults, w, notes);
+        const clip: Clip = .{ .tail = layout.clip(s, t), .head = layout.clip(t, s) };
+        try writeEdgeAttrs(look, directed, clip, @fromBackingInt(@as(u32, @intCast(e))), reader.defaults, w, notes);
         try w.writeAll("\n");
     }
 
@@ -133,6 +120,141 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
         try notes.add(.{ .tag = .cell_not_drawn, .subject = .{ .cell = @fromBackingInt(@as(u32, @intCast(c))) } });
     }
 }
+
+// ---------------------------------------------------------------------------
+// Where each thing is drawn
+
+/// Which cluster holds what. A diagram's cluster is inside its first
+/// container's (statements.md §23.2), and a flat diagram's nodes are in the
+/// cluster around it, if any.
+const Layout = struct {
+    ir: *const fab.Ir,
+    /// Per zone: whether it is a cluster (not `:as flat`, or a placeholder).
+    grouped: []bool,
+    /// Per zone: whether anything is written for it.
+    written: []bool,
+    /// Per zone: a framed cluster with nothing in it holds an invisible
+    /// point, `a{z}`, so its frame, name and caption still show.
+    anchor: []bool,
+
+    fn init(gpa: std.mem.Allocator, ir: *const fab.Ir, zones: []const Look) error{OutOfMemory}!Layout {
+        const grouped = try gpa.alloc(bool, zones.len);
+        errdefer gpa.free(grouped);
+        const written = try gpa.alloc(bool, zones.len);
+        errdefer gpa.free(written);
+        const anchor = try gpa.alloc(bool, zones.len);
+        errdefer gpa.free(anchor);
+        const placeholder = ir.zones.items(.placeholder);
+        for (grouped, zones, placeholder) |*g, look, p| g.* = p or look.as != .flat;
+
+        var l: Layout = .{ .ir = ir, .grouped = grouped, .written = written, .anchor = anchor };
+        // A diagram names only diagrams declared before it, so its members
+        // are settled before it is.
+        for (zones, 0..) |look, z| {
+            const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
+            var content = placeholder[z];
+            for (0..ir.nodes.len) |n| content = content or l.home(@fromBackingInt(@as(u32, @intCast(n)))) == zone;
+            for (ir.members.items(.member)) |m| content = content or (l.heldBy(m) == zone and written[@backingInt(m)]);
+            const framed = grouped[z] and look.framed();
+            written[z] = content or framed;
+            anchor[z] = framed and !content;
+        }
+        return l;
+    }
+
+    fn deinit(l: *Layout, gpa: std.mem.Allocator) void {
+        gpa.free(l.grouped);
+        gpa.free(l.written);
+        gpa.free(l.anchor);
+    }
+
+    /// The container that draws `m` inside it.
+    fn heldBy(l: *const Layout, m: fab.Ir.ZoneIndex) ?fab.Ir.ZoneIndex {
+        return l.ir.zones.items(.container)[@backingInt(m)];
+    }
+
+    /// The node of a diagram drawn as a cluster: the cluster stands for it.
+    fn standsFor(l: *const Layout, n: fab.Ir.NodeIndex) ?fab.Ir.ZoneIndex {
+        const d = l.ir.nodes.items(.diagram)[@backingInt(n)] orelse return null;
+        return if (l.grouped[@backingInt(d)]) d else null;
+    }
+
+    /// The zone whose part of the output writes `n`: its diagram's, for a
+    /// node standing for one, so edges reach that cluster; else its owner's.
+    fn home(l: *const Layout, n: fab.Ir.NodeIndex) fab.Ir.ZoneIndex {
+        return l.standsFor(n) orelse l.ir.nodes.items(.zone)[@backingInt(n)];
+    }
+
+    /// The cluster an edge end at `n` stops at, unless the other end, `other`,
+    /// is inside it, where Graphviz can't clip.
+    fn clip(l: *const Layout, n: fab.Ir.NodeIndex, other: fab.Ir.NodeIndex) ?u32 {
+        const d = l.standsFor(n) orelse return null;
+        var z: ?fab.Ir.ZoneIndex = l.home(other);
+        while (z) |inside| : (z = l.heldBy(inside)) if (inside == d) return null;
+        return @backingInt(d);
+    }
+};
+
+/// The clusters an edge stops at, `ltail` and `lhead`.
+const Clip = struct { tail: ?u32, head: ?u32 };
+
+/// What step 1 writes with.
+const Out = struct {
+    ir: *const fab.Ir,
+    layout: *const Layout,
+    nodes: []const Look,
+    zones: []const Look,
+    defaults: Defaults,
+    circle: f32,
+    w: *Writer,
+    notes: *Note.List,
+
+    /// A zone at `depth` (two spaces each): its cluster, its nodes, then its
+    /// members, each the same way.
+    fn zone(o: *const Out, zone_index: fab.Ir.ZoneIndex, depth: usize) Error!void {
+        const z = @backingInt(zone_index);
+        if (!o.layout.written[z]) return;
+        const look = o.zones[z];
+        const w = o.w;
+        const grouped = o.layout.grouped[z];
+        const inner = depth + @intFromBool(grouped);
+        if (grouped) {
+            try w.splatByteAll(' ', 2 * depth);
+            try w.print("subgraph cluster_{d} {{\n", .{z});
+            try writeClusterAttrs(look, zone_index, inner, o.defaults, w, o.notes);
+        }
+        if (o.ir.zones.items(.placeholder)[z]) {
+            try writePlaceholder(look, z, inner, o.defaults, w);
+        } else {
+            if (grouped and (look.as == .node or look.as == .table)) try o.notes.add(.{ .tag = .zone_drawn_as_cluster, .subject = .{ .zone = zone_index } });
+            if (o.layout.anchor[z]) {
+                try w.splatByteAll(' ', 2 * inner);
+                try w.print("a{d} [label=\"\", shape=point, width=0.01, height=0.01, style=\"invis\"]\n", .{z});
+            }
+            for (0..o.ir.nodes.len) |n| {
+                const index: fab.Ir.NodeIndex = @fromBackingInt(@as(u32, @intCast(n)));
+                if (o.layout.home(index) != zone_index) continue;
+                try w.splatByteAll(' ', 2 * inner);
+                try w.print("n{d}", .{n});
+                if (o.layout.standsFor(index) != null) {
+                    // The cluster is the node; edges clip at its border.
+                    try w.writeAll(" [label=\"\", shape=point, width=0.01, height=0.01, style=\"invis\"]");
+                } else {
+                    const sizes: Sizes = .{ .circle = o.circle, .branches = branches(o.ir, index) };
+                    try writeNodeAttrs(o.nodes[n], index, sizes, o.defaults, w, o.notes);
+                }
+                try w.writeAll("\n");
+            }
+            for (o.ir.members.items(.container), o.ir.members.items(.member)) |c, m| {
+                if (c == zone_index and o.layout.heldBy(m) == zone_index) try o.zone(m, inner);
+            }
+        }
+        if (grouped) {
+            try w.splatByteAll(' ', 2 * depth);
+            try w.writeAll("}\n");
+        }
+    }
+};
 
 // ---------------------------------------------------------------------------
 // What Graphviz draws, read from the Sheet
@@ -317,7 +439,7 @@ fn tokenColor(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, name: []const u8) ?Rg
 
 /// Graph-wide defaults, so that each node and edge lists only what differs.
 fn writeHeader(d: Defaults, w: *Writer) Writer.Error!void {
-    try w.print("  graph [fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ Theme.font, hex(d.ink) });
+    try w.print("  graph [compound=true, fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ Theme.font, hex(d.ink) });
     try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", color=\"{f}\"]\n", .{ Theme.font, hex(d.ink), hex(d.ink) });
     try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"{f}\", color=\"{f}\", arrowsize=0.6]\n", .{ Theme.font, hex(d.soft), hex(d.ink) });
 }
@@ -519,10 +641,18 @@ fn writeNodeAttrs(look: Look, n: fab.Ir.NodeIndex, sizes: Sizes, d: Defaults, w:
     try a.end();
 }
 
-fn writeEdgeAttrs(look: Look, directed: bool, e: fab.Ir.EdgeIndex, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
+fn writeEdgeAttrs(look: Look, directed: bool, clip: Clip, e: fab.Ir.EdgeIndex, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
     var a: Attrs = .begin(w);
     try a.text("label", look.label);
     if (!directed) try a.raw("dir", "none");
+    if (clip.tail) |z| {
+        try a.sep();
+        try w.print("ltail=cluster_{d}", .{z});
+    }
+    if (clip.head) |z| {
+        try a.sep();
+        try w.print("lhead=cluster_{d}", .{z});
+    }
     if (look.font()) |f| try a.text("fontname", f);
     if (look.ink) |c| try a.colorUnless("fontcolor", c, d.soft);
     if (look.line == .double or look.line == .triple) {
@@ -540,13 +670,26 @@ fn writeEdgeAttrs(look: Look, directed: bool, e: fab.Ir.EdgeIndex, d: Defaults, 
     try a.end();
 }
 
-fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
+/// A cluster's attributes, at `depth`. Inside another cluster (`depth` past
+/// the first), each is written out even when it is the default: a DOT
+/// subgraph inherits its parent's, so a member would wear its container's
+/// name, border and fill.
+fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, depth: usize, d: Defaults, w: *Writer, notes: *Note.List) Error!void {
+    const nested = depth > 2;
     if (!look.framed()) {
         // Groups the nodes for layout, draws nothing.
-        try w.writeAll("    peripheries=0\n");
+        try w.splatByteAll(' ', 2 * depth);
+        try w.writeAll("peripheries=0\n");
+        if (nested) {
+            try w.splatByteAll(' ', 2 * depth);
+            try w.writeAll("label=\"\"\n");
+            try w.splatByteAll(' ', 2 * depth);
+            try w.writeAll("style=\"\"\n");
+        }
         return;
     }
-    try w.writeAll("    label=");
+    try w.splatByteAll(' ', 2 * depth);
+    try w.writeAll("label=");
     if (look.caption) |caption| {
         // `<<font …>unsupported</font><br/>G>`: the caption above the name.
         try w.writeAll("<<font point-size=\"9\"");
@@ -560,18 +703,28 @@ fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, d: Defaults, w: *Writer
         try quoted(w, look.label);
     }
     try w.writeByte('\n');
+    try w.splatByteAll(' ', 2 * depth);
     if (look.stroke) |c| {
-        try w.print("    pencolor=\"{f}\"\n", .{hex(c)});
+        try w.print("pencolor=\"{f}\"\n", .{hex(c)});
+        if (nested) {
+            try w.splatByteAll(' ', 2 * depth);
+            try w.writeAll("peripheries=1\n");
+        }
     } else {
-        try w.writeAll("    peripheries=0\n");
+        try w.writeAll("peripheries=0\n");
     }
-    if (look.ink) |c| if (!std.meta.eql(c, d.ink)) try w.print("    fontcolor=\"{f}\"\n", .{hex(c)});
+    const ink = look.ink orelse d.ink;
+    if (nested or !std.meta.eql(ink, d.ink)) {
+        try w.splatByteAll(' ', 2 * depth);
+        try w.print("fontcolor=\"{f}\"\n", .{hex(ink)});
+    }
     var flags: [2][]const u8 = undefined;
     var count: usize = 0;
     if (look.fill) |c| {
         flags[count] = "filled";
         count += 1;
-        try w.print("    fillcolor=\"{f}\"\n", .{hex(c)});
+        try w.splatByteAll(' ', 2 * depth);
+        try w.print("fillcolor=\"{f}\"\n", .{hex(c)});
     }
     if (look.line) |line| switch (line) {
         .dashed, .dotted => {
@@ -581,8 +734,9 @@ fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, d: Defaults, w: *Writer
         .wavy => try notes.add(.{ .tag = .wavy_line_drawn_solid, .subject = .{ .zone = zone } }),
         .solid, .double, .triple => {},
     };
-    if (count > 0) {
-        try w.writeAll("    style=\"");
+    if (count > 0 or nested) {
+        try w.splatByteAll(' ', 2 * depth);
+        try w.writeAll("style=\"");
         for (flags[0..count], 0..) |name, i| {
             if (i > 0) try w.writeByte(',');
             try w.writeAll(name);
@@ -592,9 +746,10 @@ fn writeClusterAttrs(look: Look, zone: fab.Ir.ZoneIndex, d: Defaults, w: *Writer
 }
 
 /// The one node of a placeholder: a square holding ✕, in the frame's colour.
-fn writePlaceholder(look: Look, z: usize, d: Defaults, w: *Writer) Writer.Error!void {
+fn writePlaceholder(look: Look, z: usize, depth: usize, d: Defaults, w: *Writer) Writer.Error!void {
     const c = look.stroke orelse d.ink;
-    try w.print("    z{d} [label=\"✕\", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16", .{z});
+    try w.splatByteAll(' ', 2 * depth);
+    try w.print("z{d} [label=\"✕\", shape=square, width=0.30, height=0.30, fixedsize=true, fontsize=16", .{z});
     try w.print(", color=\"{f}\", fontcolor=\"{f}\"]\n", .{ hex(c), hex(c) });
 }
 

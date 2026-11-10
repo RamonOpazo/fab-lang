@@ -35,7 +35,7 @@ fn render(sheet: *const fab.Sheet) !Output {
 
 /// Every file starts with these defaults, so goldens show only the body.
 const header =
-    \\  graph [fontname="Helvetica", fontsize=11, fontcolor="#333333", nodesep=0.45, ranksep=0.45, pad=0.2]
+    \\  graph [compound=true, fontname="Helvetica", fontsize=11, fontcolor="#333333", nodesep=0.45, ranksep=0.45, pad=0.2]
     \\  node [fontname="Helvetica", fontsize=11, fontcolor="#333333", color="#333333"]
     \\  edge [fontname="Helvetica", fontsize=9, fontcolor="#555555", color="#333333", arrowsize=0.6]
     \\
@@ -306,6 +306,81 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
     try testing.expect(std.mem.indexOf(u8, o.dot, "n0 -> n1 [label=\"f\", color=\"#bf8700\"]") != null);
 }
 
+test "a diagram held by another is a cluster inside it, and edges stop at its border" {
+    // A and B are Db's members (statements.md §23.2): their clusters nest in
+    // Db's, and their nodes in Db are points inside them, which h and k
+    // reach through the border.
+    try expectDot("A :: */f\nB :: */g\nDb :: A/h/B, k/A",
+        \\  subgraph cluster_2 {
+        \\    peripheries=0
+        \\    n6 [label="+k", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    subgraph cluster_0 {
+        \\      peripheries=0
+        \\      label=""
+        \\      style=""
+        \\      n0 [label="", shape=circle, width=0.14, height=0.14, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\      n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\      n4 [label="", shape=point, width=0.01, height=0.01, style="invis"]
+        \\    }
+        \\    subgraph cluster_1 {
+        \\      peripheries=0
+        \\      label=""
+        \\      style=""
+        \\      n2 [label="", shape=circle, width=0.14, height=0.14, fixedsize=true, fillcolor="#333333", style="filled"]
+        \\      n3 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\      n5 [label="", shape=point, width=0.01, height=0.01, style="invis"]
+        \\    }
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\  n2 -> n3 [label="g"]
+        \\  n4 -> n5 [label="h", ltail=cluster_0, lhead=cluster_1]
+        \\  n6 -> n4 [label="k", lhead=cluster_0]
+        \\}
+        \\
+    );
+}
+
+test "a member's cluster writes every attribute, or it would wear its container's" {
+    var c = try fab.Compilation.init(testing.allocator, "A :: f\nB :: A\nA :style { :marks [], :stroke [#ff0000] }\nB :style { :marks [], :fill [#00ff00], :line [dashed] }", preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    try expectBody(
+        \\  subgraph cluster_1 {
+        \\    label="B"
+        \\    peripheries=0
+        \\    fillcolor="#00ff00"
+        \\    style="filled,dashed"
+        \\    subgraph cluster_0 {
+        \\      label="A"
+        \\      pencolor="#ff0000"
+        \\      peripheries=1
+        \\      fontcolor="#333333"
+        \\      style=""
+        \\      n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\      n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\      n2 [label="", shape=point, width=0.01, height=0.01, style="invis"]
+        \\    }
+        \\  }
+        \\  n0 -> n1 [label="f"]
+        \\}
+        \\
+    , o.dot);
+}
+
+test "an edge from inside a diagram to its node is not clipped; a flat diagram's node is drawn" {
+    // f+ is inside A's cluster, where Graphviz can't clip; B is flat, so its
+    // node in C is an ordinary node, labelled with its name.
+    var c = try fab.Compilation.init(testing.allocator, "A :: f\nB :: g\nC :: A.f+/h/A, k/B\nB :style { :marks [], :as [flat] }", preview);
+    defer c.deinit();
+    var o = try render((try c.sheet()).?);
+    defer o.deinit();
+    try testing.expect(std.mem.indexOf(u8, o.dot, "[label=\"h\"]") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "[label=\"k\"]") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "[label=\"B\", shape=") != null);
+    try testing.expect(std.mem.indexOf(u8, o.dot, "cluster_1") == null);
+}
+
 test "a marked diagram that owns no node still shows its frame" {
     // Db's edge joins two of A's nodes; its unsupported proof marks Db.
     try expectDot("A :: f g\nDb :: A.g+/h/A.+f\nDb :prove { :kind [schema] }",
@@ -432,18 +507,21 @@ test "lines: triple, as three parallel lines" {
 
 /// What a DOT file written by write() says about the graph.
 const Read = struct {
-    /// Per node, in order: the cluster it was declared in, if any.
-    nodes: std.ArrayList(?u32) = .empty,
+    /// Per node, by index: the cluster it was declared in, if any.
+    nodes: std.AutoHashMapUnmanaged(u32, ?u32) = .empty,
+    /// Per cluster: the cluster it was declared in, if any.
+    clusters: std.AutoHashMapUnmanaged(u32, ?u32) = .empty,
     /// Per placeholder `z{z}`: its zone, and the cluster it was declared in.
     placeholders: std.ArrayList(struct { u32, u32 }) = .empty,
-    /// Per anchor `a{z}` of a framed zone with no nodes: the same.
+    /// Per anchor `a{z}` of a framed zone with nothing in it: the same.
     anchors: std.ArrayList(struct { u32, u32 }) = .empty,
     edges: std.ArrayList(Edge) = .empty,
 
-    const Edge = struct { source: u32, target: u32, directed: bool, label: []const u8 };
+    const Edge = struct { source: u32, target: u32, directed: bool, label: []const u8, tail: ?u32, head: ?u32 };
 
     fn deinit(r: *Read) void {
         r.nodes.deinit(testing.allocator);
+        r.clusters.deinit(testing.allocator);
         r.edges.deinit(testing.allocator);
         r.placeholders.deinit(testing.allocator);
         r.anchors.deinit(testing.allocator);
@@ -456,20 +534,26 @@ fn readDot(dot: []const u8) !Read {
     const gpa = testing.allocator;
     var r: Read = .{};
     errdefer r.deinit();
-    var cluster: ?u32 = null;
+    var open: std.ArrayList(u32) = .empty;
+    defer open.deinit(gpa);
     var edges_started = false;
 
     if (!std.mem.startsWith(u8, dot, "digraph {\n" ++ header)) return error.BadHeader;
     var lines = std.mem.splitScalar(u8, dot[("digraph {\n" ++ header).len..], '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " ");
+        // Each line is indented by what is open around it.
+        const depth = open.items.len + @intFromBool(!std.mem.eql(u8, line, "}"));
+        if (line.len > 0 and raw.len - line.len != 2 * depth) return error.BadIndentation;
+        const cluster: ?u32 = if (open.items.len > 0) open.items[open.items.len - 1] else null;
         if (std.mem.eql(u8, line, "}")) {
-            if (cluster == null) break;
-            cluster = null;
+            if (open.pop() == null) break;
         } else if (std.mem.startsWith(u8, line, "subgraph cluster_")) {
-            if (cluster != null or edges_started) return error.MisplacedCluster;
+            if (edges_started) return error.MisplacedCluster;
             const rest = line["subgraph cluster_".len..];
-            cluster = try std.fmt.parseInt(u32, rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.BadCluster], 10);
+            const z = try std.fmt.parseInt(u32, rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.BadCluster], 10);
+            if ((try r.clusters.fetchPut(gpa, z, cluster)) != null) return error.ClusterTwice;
+            try open.append(gpa, z);
         } else if (std.mem.startsWith(u8, line, "n")) {
             const ident_end = std.mem.indexOfAny(u8, line, " [") orelse line.len;
             const first = try std.fmt.parseInt(u32, line[1..ident_end], 10);
@@ -484,11 +568,12 @@ fn readDot(dot: []const u8) !Read {
                     .target = try std.fmt.parseInt(u32, t_text[0..t_end], 10),
                     .directed = std.mem.indexOf(u8, rest, "dir=none") == null,
                     .label = attr(rest, "label") orelse return error.EdgeWithoutLabel,
+                    .tail = try clusterAttr(rest, "ltail"),
+                    .head = try clusterAttr(rest, "lhead"),
                 });
             } else {
                 if (edges_started) return error.NodeAfterEdges;
-                if (first != r.nodes.items.len) return error.NodesOutOfOrder;
-                try r.nodes.append(gpa, cluster);
+                if ((try r.nodes.fetchPut(gpa, first, cluster)) != null) return error.NodeTwice;
             }
         } else if (std.mem.startsWith(u8, line, "z") or std.mem.startsWith(u8, line, "a")) {
             const c = cluster orelse return error.MarkOutsideCluster;
@@ -500,8 +585,19 @@ fn readDot(dot: []const u8) !Read {
         }
         // Otherwise a cluster attribute line.
     }
+    if (open.items.len > 0) return error.ClusterNotClosed;
     if (lines.next()) |trailing| if (trailing.len != 0) return error.TrailingText;
     return r;
+}
+
+/// `key=cluster_{z}` in an edge's attribute list: z.
+fn clusterAttr(list: []const u8, key: []const u8) !?u32 {
+    const at = std.mem.indexOf(u8, list, key) orelse return null;
+    const rest = list[at + key.len ..];
+    if (!std.mem.startsWith(u8, rest, "=cluster_")) return error.BadClip;
+    const digits = rest["=cluster_".len..];
+    const end = std.mem.indexOfAny(u8, digits, ",]") orelse return error.BadClip;
+    return try std.fmt.parseInt(u32, digits[0..end], 10);
 }
 
 /// The raw (escaped) value of `key="..."` in an attribute list.
@@ -521,6 +617,70 @@ fn attr(list: []const u8, key: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Where the law expects each thing, from the IR and the Sheet alone.
+const Expected = struct {
+    ir: *const fab.Ir,
+    grouped: []bool,
+    written: []bool,
+    anchor: []bool,
+
+    fn init(sheet: *const fab.Sheet) !Expected {
+        const gpa = testing.allocator;
+        const ir = sheet.ir;
+        const n = ir.zones.len;
+        const e: Expected = .{ .ir = ir, .grouped = try gpa.alloc(bool, n), .written = try gpa.alloc(bool, n), .anchor = try gpa.alloc(bool, n) };
+        for (0..n) |z| {
+            const v = sheet.style(.{ .zone = @fromBackingInt(@as(u32, @intCast(z))) });
+            const as = v.label(enum { flat, cluster, node, table }, sheet.descriptor(":as").?);
+            const placeholder = ir.zones.items(.placeholder)[z];
+            e.grouped[z] = placeholder or !(as == .value and as.value == .flat);
+            const framed = e.grouped[z] and (v.color(sheet.descriptor(":stroke").?) != null or v.color(sheet.descriptor(":fill").?) != null);
+            // Members come first: a diagram names only earlier ones.
+            var content = placeholder;
+            for (ir.nodes.items(.zone), ir.nodes.items(.diagram)) |owner, diagram| {
+                const home = if (diagram) |d| (if (e.grouped[@backingInt(d)]) d else owner) else owner;
+                content = content or @backingInt(home) == z;
+            }
+            for (ir.zones.items(.container), 0..) |c, m| {
+                if (c != null and @backingInt(c.?) == z and e.written[m]) content = true;
+            }
+            e.written[z] = content or framed;
+            e.anchor[z] = framed and !content;
+        }
+        return e;
+    }
+
+    fn deinit(e: Expected) void {
+        testing.allocator.free(e.grouped);
+        testing.allocator.free(e.written);
+        testing.allocator.free(e.anchor);
+    }
+
+    /// The innermost cluster around `zone`'s contents: its own, or its
+    /// containers'.
+    fn around(e: Expected, zone: ?fab.Ir.ZoneIndex) ?u32 {
+        var z = zone;
+        while (z) |inside| : (z = e.ir.zones.items(.container)[@backingInt(inside)]) {
+            if (e.grouped[@backingInt(inside)]) return @backingInt(inside);
+        }
+        return null;
+    }
+
+    fn standsFor(e: Expected, diagram: ?fab.Ir.ZoneIndex) ?fab.Ir.ZoneIndex {
+        const d = diagram orelse return null;
+        return if (e.grouped[@backingInt(d)]) d else null;
+    }
+
+    fn clip(e: Expected, n: fab.Ir.NodeIndex, other: fab.Ir.NodeIndex) ?u32 {
+        const d = e.standsFor(e.ir.nodes.items(.diagram)[@backingInt(n)]) orelse return null;
+        const o = @backingInt(other);
+        const start = e.standsFor(e.ir.nodes.items(.diagram)[o]) orelse e.ir.nodes.items(.zone)[o];
+        var z: ?fab.Ir.ZoneIndex = start;
+        while (z) |inside| : (z = e.ir.zones.items(.container)[@backingInt(inside)]) if (inside == d) return null;
+        return @backingInt(d);
+    }
+};
+
 fn expectLaw(source: []const u8) !void {
     var c = try fab.Compilation.init(testing.allocator, source, preview);
     defer c.deinit();
@@ -534,20 +694,36 @@ fn expectLaw(source: []const u8) !void {
     };
     defer r.deinit();
 
-    // Nodes: the same set, each in its owning zone's cluster.
-    try testing.expectEqual(ir.nodes.len, r.nodes.items.len);
-    for (ir.nodes.items(.zone), r.nodes.items) |zone, cluster| {
-        const as = sheet.style(.{ .zone = zone }).label(enum { flat, cluster, node, table }, sheet.descriptor(":as").?);
-        const expected: ?u32 = if (as == .value and as.value == .flat) null else @backingInt(zone);
-        try testing.expectEqual(expected, cluster);
+    const zones = try Expected.init(sheet);
+    defer zones.deinit();
+
+    // Clusters: each inside its first container's, or around it.
+    for (0..ir.zones.len) |z| {
+        const read = r.clusters.get(@intCast(z));
+        if (!zones.written[z] or !zones.grouped[z]) {
+            try testing.expectEqual(null, read);
+            continue;
+        }
+        try testing.expectEqual(@as(??u32, zones.around(ir.zones.items(.container)[z])), read);
     }
-    // Edges: the same multiset, in order, with ends, direction and label.
+    // Nodes: the same set, each in its owning zone's cluster, or in its
+    // diagram's when it stands for one drawn as a cluster.
+    try testing.expectEqual(ir.nodes.len, r.nodes.count());
+    for (ir.nodes.items(.zone), ir.nodes.items(.diagram), 0..) |zone, diagram, n| {
+        const expected = if (zones.standsFor(diagram)) |d| @backingInt(d) else zones.around(zone);
+        try testing.expectEqual(@as(??u32, expected), r.nodes.get(@intCast(n)));
+    }
+    // Edges: the same multiset, in order, with ends, direction and label;
+    // an end at a diagram's node stops at its cluster, unless the other end
+    // is inside it.
     try testing.expectEqual(ir.edges.len, r.edges.items.len);
     for (ir.edges.items(.source), ir.edges.items(.target), ir.edges.items(.directed), r.edges.items, 0..) |s, t, d, e, i| {
         const label = sheet.style(.{ .edge = @fromBackingInt(@as(u32, @intCast(i))) }).text(sheet.descriptor(":label").?).?;
         try testing.expectEqual(@backingInt(s), e.source);
         try testing.expectEqual(@backingInt(t), e.target);
         try testing.expectEqual(d, e.directed);
+        try testing.expectEqual(zones.clip(s, t), e.tail);
+        try testing.expectEqual(zones.clip(t, s), e.head);
         var escaped: std.Io.Writer.Allocating = .init(testing.allocator);
         defer escaped.deinit();
         try to_dot.quoted(&escaped.writer, label);
@@ -564,18 +740,11 @@ fn expectLaw(source: []const u8) !void {
         try testing.expectEqual(1, found);
     }
     try testing.expectEqual(expected_placeholders, r.placeholders.items.len);
-    // One anchor per framed zone that owns no node, so its mark shows.
+    // One anchor per framed cluster with nothing else in it, so its frame
+    // shows.
     var expected_anchors: usize = 0;
     for (0..ir.zones.len) |z| {
-        const zone: fab.Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
-        const v = sheet.style(.{ .zone = zone });
-        const as = v.label(enum { flat, cluster, node, table }, sheet.descriptor(":as").?);
-        const flat = as == .value and as.value == .flat;
-        const framed = v.color(sheet.descriptor(":stroke").?) != null or v.color(sheet.descriptor(":fill").?) != null;
-        if (ir.zones.items(.placeholder)[z] or flat or !framed) continue;
-        var owns = false;
-        for (ir.nodes.items(.zone)) |owner| owns = owns or owner == zone;
-        if (owns) continue;
+        if (!zones.anchor[z]) continue;
         expected_anchors += 1;
         var found: usize = 0;
         for (r.anchors.items) |p| found += @intFromBool(p[0] == z and p[1] == z);
@@ -625,8 +794,10 @@ pub const spec_programs = [_][]const u8{
     "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
     "G :: f\nH :: g /k\nreview :: a b",
-    "A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
-    "T :: #UUID7, #String\nUser :: @/(id/T.#UUID7, name/T.#String)",
+    "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
+    "A :: */f\nB :: */g\nDb :: A/h/B\nRepo :: Db, A/k/#X\nOuter :: Repo, Db/m",
+    "A :: f\nB :: A/g/A, A.f+/h/A",
+    "T :: #UUID7, #String\nUser :: */(id/T.#UUID7, name/T.#String)",
     \\Order :: {
     \\  */receive/#Received validate/? +(
     \\      yes/#Accepted fork/! +(
