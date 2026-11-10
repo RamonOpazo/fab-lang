@@ -8,6 +8,10 @@ const testing = std.testing;
 const Compilation = @import("../compile/Compilation.zig");
 const json = @import("json.zig");
 const Lines = @import("../compile/Lines.zig");
+const build = @import("../version.zig");
+
+/// Every output starts so: the format, then the build.
+const head = "{\"format\":1,\"version\":\"" ++ build.string ++ "\",";
 
 const strict: Compilation.Tolerance = .{ .warnings = .promote, .ir = .withhold };
 const preview: Compilation.Tolerance = .{ .warnings = .warn, .ir = .keep };
@@ -36,8 +40,8 @@ fn beforeSheet(doc: []const u8) []const u8 {
 test "a valid program, its IR in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
-    try testing.expectEqualStrings(
-        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","container":null,"members":[],"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
+    try testing.expectEqualStrings(head ++
+        \\"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","container":null,"members":[],"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
     , beforeSheet(doc));
 }
 
@@ -105,8 +109,8 @@ test "tokens" {
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
     try json.writeTokens(&c, &out.writer);
-    try testing.expectEqualStrings(
-        \\{"version":1,"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
+    try testing.expectEqualStrings(head ++
+        \\"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
     , out.written());
 }
 

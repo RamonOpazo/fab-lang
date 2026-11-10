@@ -2,7 +2,7 @@
 //! Re-exported as `Analyser.Error`.
 
 const std = @import("std");
-const builtin = @import("builtin");
+const build_options = @import("build_options");
 const Cst = @import("../parse/Cst.zig");
 const Subject = @import("Analyser.zig").Subject;
 
@@ -281,11 +281,19 @@ pub const Tag = enum(u8) {
 /// tags are plain errors; only their message says they are reserved.
 pub const Severity = enum { warning, @"error", unsupported };
 
-// Unsupported never ships (statements.md §15): a release build refuses to
-// compile while any unsupported tag remains.
+/// Whether some tag is unsupported: the compiler has not caught up with the
+/// spec, and the build is marked `incomplete` (release.md §2).
+pub const incomplete = blk: {
+    for (std.enums.values(Tag)) |tag| if (tag.severity() == .unsupported) break :blk true;
+    break :blk false;
+};
+
+// Only a dev build may admit unsupported constructs (release.md §2): a
+// stable build refuses to compile while any unsupported tag remains, in any
+// optimisation mode.
 comptime {
-    if (builtin.mode != .debug) for (std.enums.values(Tag)) |tag| {
+    if (build_options.stable) for (std.enums.values(Tag)) |tag| {
         if (tag.severity() == .unsupported)
-            @compileError("unsupported construct in a release build: " ++ @tagName(tag));
+            @compileError("unsupported construct in a stable build: " ++ @tagName(tag));
     };
 }

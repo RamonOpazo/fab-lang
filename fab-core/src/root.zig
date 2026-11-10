@@ -18,6 +18,12 @@ pub const Lines = @import("compile/Lines.zig");
 pub const json = @import("emit/json.zig");
 pub const print = @import("print/print.zig");
 
+/// The build's version (release.md §1–2): `0.1.0`, or
+/// `0.1.0-dev.97+e3ee815[.dirty][.incomplete]`.
+pub const version = @import("version.zig").string;
+/// A tagged commit, built clean: it admits no unsupported construct.
+pub const stable = @import("version.zig").stable;
+
 test {
     std.testing.refAllDecls(@This());
 }

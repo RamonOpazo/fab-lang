@@ -93,7 +93,7 @@ test "render to DOT: written here, nothing left for Graphviz to do" {
     try testing.expectEqual(@as(u8, 0), r.code);
     try testing.expect(r.produced);
     try testing.expectEqual(@as(?Args.Command.Format, null), r.graphviz);
-    try testing.expect(std.mem.startsWith(u8, r.out, "digraph {\n"));
+    try testing.expect(std.mem.startsWith(u8, r.out, "// fab " ++ @import("fab_core").version ++ "\ndigraph {\n"));
     try testing.expect(std.mem.indexOf(u8, r.out, "n0 [label=\"A\"") != null);
     try testing.expectEqualStrings("", r.err);
 }
@@ -102,7 +102,7 @@ test "render with graphviz to an image: DOT here, the image from the host" {
     const r = try runArgs(&.{ "render", "x.fab", "-e", "graphviz", "-o", "x.png" }, "G :: f");
     defer r.deinit();
     try testing.expectEqual(@as(?Args.Command.Format, .png), r.graphviz);
-    try testing.expect(std.mem.startsWith(u8, r.out, "digraph {\n"));
+    try testing.expect(std.mem.startsWith(u8, r.out, "// fab " ++ @import("fab_core").version ++ "\ndigraph {\n"));
 }
 
 test "render with graphviz: errors keep the drawing, unless strict" {

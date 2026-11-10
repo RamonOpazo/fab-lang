@@ -82,7 +82,8 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
         l.* = try reader.read(.{ .zone = zone }, zone);
     }
 
-    try w.writeAll("digraph {\n");
+    // What made it (release.md §2).
+    try w.print("// fab {s}\ndigraph {{\n", .{fab.version});
     try writeHeader(reader.defaults, w);
 
     var layout: Layout = try .init(gpa, ir, zones);

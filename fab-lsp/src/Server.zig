@@ -20,7 +20,7 @@ const fab = @import("fab_core");
 
 const Server = @This();
 
-pub const version = "0.0.0";
+pub const version = fab.version;
 
 pub const Error = Io.Writer.Error || error{OutOfMemory};
 

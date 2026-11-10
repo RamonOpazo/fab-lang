@@ -54,7 +54,7 @@ test "a prelude name's definition is in the prelude's file, if there is one" {
     const source = "G :: f\nG.f :label \"x\"";
     const l = (try navigation.definition(arena.allocator(), doc(source), at(1, 5))).?;
     try testing.expectEqualStrings(prelude_uri, l.uri);
-    try testing.expectEqualStrings(":label", try textOf(fab.Compilation.prelude_source, l.range));
+    try testing.expectEqualStrings(":label", try textOf(navigation.prelude_file, l.range));
 
     var without = doc(source);
     without.prelude_uri = null;

@@ -11,7 +11,8 @@
 //! Format, version 1. It stays 1 while the language is being formalised,
 //! however the format changes (release.md §3). A compilation:
 //!
-//!   { "version": 1,
+//!   { "format": 1,
+//!     "version": "0.1.0-dev.97+e3ee815",   the build (release.md §2)
 //!     "status": "ok" | "warning" | "promoted" | "error",
 //!     "diagnostics": [Diagnostic],
 //!     "ir": IR | null,                null when the tolerance withholds it
@@ -75,7 +76,7 @@
 //!
 //! Tokens, for syntax highlighting:
 //!
-//!   { "version": 1, "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
+//!   { "format": 1, "version": "…", "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
 //!
 //! Strings are UTF-8. Bytes in the source that are not valid UTF-8 are
 //! written as U+FFFD.
@@ -90,6 +91,7 @@ const Lines = @import("../compile/Lines.zig");
 const Sheet = @import("../style/Sheet.zig");
 const decoded = @import("../analyse/decoded.zig");
 const Decimal = @import("../analyse/Decimal.zig");
+const build = @import("../version.zig");
 
 const Writer = std.Io.Writer;
 
@@ -105,7 +107,7 @@ pub fn writeCompilation(c: *Compilation, w: *Writer) Error!void {
     var lines = try Lines.init(c.gpa, c.source);
     defer lines.deinit(c.gpa);
 
-    try w.print("{{\"version\":{d},\"status\":", .{version});
+    try w.print("{{\"format\":{d},\"version\":\"{s}\",\"status\":", .{ version, build.string });
     try string(w, @tagName(status));
     try w.writeAll(",\"diagnostics\":[");
     for (diagnostics, 0..) |d, i| {
@@ -125,7 +127,7 @@ pub fn writeTokens(c: *Compilation, w: *Writer) Error!void {
     var lines = try Lines.init(c.gpa, c.source);
     defer lines.deinit(c.gpa);
 
-    try w.print("{{\"version\":{d},\"tokens\":[", .{version});
+    try w.print("{{\"format\":{d},\"version\":\"{s}\",\"tokens\":[", .{ version, build.string });
     for (tokens.items(.tag), tokens.items(.start), tokens.items(.end), 0..) |tag, start, end, i| {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"tag\":");

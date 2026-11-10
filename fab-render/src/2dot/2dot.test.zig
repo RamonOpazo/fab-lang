@@ -33,6 +33,9 @@ fn render(sheet: *const fab.Sheet) !Output {
     return .{ .dot = try out.toOwnedSlice(), .notes = notes };
 }
 
+/// Every file names what made it (release.md §2), then opens the graph.
+const prologue = "// fab " ++ fab.version ++ "\ndigraph {\n";
+
 /// Every file starts with these defaults, so goldens show only the body.
 const header =
     \\  graph [compound=true, fontname="Helvetica", fontsize=11, fontcolor="#333333", nodesep=0.45, ranksep=0.45, pad=0.2]
@@ -50,7 +53,7 @@ fn expectDot(source: []const u8, body: []const u8) !void {
 }
 
 fn expectBody(body: []const u8, dot: []const u8) !void {
-    const start = "digraph {\n" ++ header;
+    const start = prologue ++ header;
     try testing.expect(std.mem.startsWith(u8, dot, start));
     try testing.expectEqualStrings(body, dot[start.len..]);
 }
@@ -538,8 +541,8 @@ fn readDot(dot: []const u8) !Read {
     defer open.deinit(gpa);
     var edges_started = false;
 
-    if (!std.mem.startsWith(u8, dot, "digraph {\n" ++ header)) return error.BadHeader;
-    var lines = std.mem.splitScalar(u8, dot[("digraph {\n" ++ header).len..], '\n');
+    if (!std.mem.startsWith(u8, dot, prologue ++ header)) return error.BadHeader;
+    var lines = std.mem.splitScalar(u8, dot[(prologue ++ header).len..], '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " ");
         // Each line is indented by what is open around it.

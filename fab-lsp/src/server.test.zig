@@ -60,6 +60,7 @@ test "initialize answers with the capabilities" {
     try std.testing.expectEqual(1, field(got[0], &.{ "result", "capabilities", "textDocumentSync" }).?.integer);
     try std.testing.expect(field(got[0], &.{ "result", "capabilities", "semanticTokensProvider", "legend", "tokenTypes" }) != null);
     try std.testing.expectEqualStrings("fab", field(got[0], &.{ "result", "serverInfo", "name" }).?.string);
+    try std.testing.expectEqualStrings(@import("fab_core").version, field(got[0], &.{ "result", "serverInfo", "version" }).?.string);
 }
 
 test "a request before initialize is refused" {

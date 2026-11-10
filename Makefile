@@ -28,14 +28,14 @@ OPTIMIZE ?= ReleaseSafe
 # In dependency order.
 PACKAGES := fab-core fab-render fab-lsp fab-cli
 
-.PHONY: all build test test-core test-render test-lsp test-cli examples \
+.PHONY: all build test test-versions test-core test-render test-lsp test-cli examples \
         tree-sitter test-tree-sitter release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
-	@echo "Targets: build test test-core test-render test-lsp test-cli examples release install"
+	@echo "Targets: build test test-versions test-core test-render test-lsp test-cli examples release install"
 	@echo "         tree-sitter test-tree-sitter uninstall fmt fmt-check check-graphviz clean help"
 
 ## Building
@@ -48,7 +48,17 @@ build:
 
 ## Testing
 
-test: test-core test-render test-lsp test-cli
+test: test-versions test-core test-render test-lsp test-cli
+
+# One version, written once (release.md §3): fab-core's manifest holds it,
+# and Zig wants it in the other three too, so they must say the same.
+test-versions:
+	@echo "==> test versions"
+	@want=$$(sed -n 's/^ *\.version = "\(.*\)",$$/\1/p' fab-core/build.zig.zon); \
+	for p in $(PACKAGES); do \
+		got=$$(sed -n 's/^ *\.version = "\(.*\)",$$/\1/p' $$p/build.zig.zon); \
+		[ "$$got" = "$$want" ] || { echo "$$p/build.zig.zon: version $$got, but fab-core's is $$want"; exit 1; }; \
+	done; echo "all at $$want"
 
 test-core:
 	@echo "==> test fab-core"

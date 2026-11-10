@@ -92,12 +92,22 @@ pub fn definition(arena: std.mem.Allocator, doc: Document, position: Message.Pos
     return try locate(arena, &ctx, doc, site);
 }
 
+/// The prelude's file, which `fab lsp` writes for the editor to open
+/// (`prelude_uri`): a comment naming the build, then the prelude. A span in
+/// the prelude lies `prelude_comment.len` bytes further in the file.
+pub const prelude_file = prelude_comment ++ fab.Compilation.prelude_source;
+
+const prelude_comment =
+    "// The prelude of fab " ++ fab.version ++ ", read before every program.\n" ++
+    "// Written by `fab lsp` at each start, for the editor: editing it changes nothing.\n\n";
+
 fn locate(arena: std.mem.Allocator, ctx: *Context, doc: Document, site: Reference.Site) error{OutOfMemory}!?Message.Location {
     const span = try ctx.c.definitionSpan(site);
     if (!site.prelude) return .{ .uri = doc.uri, .range = ctx.range(span.start, span.end) };
     const uri = doc.prelude_uri orelse return null;
-    var lines = try fab.Lines.init(arena, fab.Compilation.prelude_source);
-    return .{ .uri = uri, .range = rangeIn(&lines, span.start, span.end) };
+    var lines = try fab.Lines.init(arena, prelude_file);
+    const shift: u32 = prelude_comment.len;
+    return .{ .uri = uri, .range = rangeIn(&lines, span.start + shift, span.end + shift) };
 }
 
 /// Every use of the name at `position` in the document; with

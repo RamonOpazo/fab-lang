@@ -30,20 +30,20 @@ The scheme is Zig's own (`0.14.0-dev.3445+6c3cbb0c8`), which is semantic version
 
 - `fab --version`: `fab 0.1.0-dev.96+4b0aaa8.incomplete`;
 - the language server's `serverInfo.version`, so editors show it;
-- the JSON output, a top-level `"version"`, beside the format's;
+- the JSON output, a top-level `"version"`, beside the format's own, `"format"` (`{"format": 1, "version": "0.1.0-dev.96+4b0aaa8.incomplete", …}`);
 - generated files, as a comment naming their generator (`// fab 0.1.0-dev.96+4b0aaa8.incomplete` in DOT), so a drawing tells what made it.
 
 The optimisation mode is not part of the version, as in Zig.
 
 ## 3. One version, written once
 
-The version worked towards is written once, and the build makes the rest: it asks git for the last tag, the count since it, the commit and whether the tree is clean, and gives the result to the code as a compile-time constant. Every place that shows a version reads that constant: today `0.0.0` is written seven times (four `build.zig.zon`, `fab-cli/src/main.zig`, `fab-lsp/src/Server.zig` and the server's `serverInfo`).
+The version worked towards is written once, and the build makes the rest: it asks git for the last tag, the count since it, the commit and whether the tree is clean, and gives the result to the code as a compile-time constant. Every place that shows a version reads that constant. (Before, `0.0.0` was written seven times: four `build.zig.zon`, `fab-cli/src/main.zig`, `fab-lsp/src/Server.zig` and the server's `serverInfo`.)
 
 A tagged build checks that its tag and the written version agree, and refuses to build if they don't.
 
-**The JSON format's own version is 1, and stays 1 while the language is being formalised,** whatever changes in the format meanwhile: its consumers follow the compiler's version until then. Counting format versions starts once the language is formalised. (It had reached 2 with the Sheet, `statements.md` §22.13, and 3 with `@` removed, §23.1, before this was settled.)
+**The JSON format's own version, `"format"`, is 1, and stays 1 while the language is being formalised,** whatever changes in the format meanwhile: its consumers follow the compiler's version until then. Counting format versions starts once the language is formalised. (It had reached 2 with the Sheet, `statements.md` §22.13, and 3 with `@` removed, §23.1, before this was settled.)
 
-**Zig's own tooling does it.** fab-core's `build.zig.zon` holds the version written (`.version = "0.1.0"`). fab-core's `build.zig` reads it (`@import("build.zig.zon").version`), runs `git describe` (`b.runAllowFail`), as Zig's own build does, and hands the full version to the code through build options (`b.addOptions()`), with whether the build is incomplete; fab-core exports both, `fab.version`. fab-render, fab-lsp and fab-cli read them from fab-core, which they depend on already. Zig requires a version in every manifest, so the other three hold the same literal, and a check in `make test` fails when any differs.
+**Zig's own tooling does it.** fab-core's `build.zig.zon` holds the version written (`.version = "0.1.0"`). fab-core's `build.zig` reads it (`@import("build.zig.zon").version`), runs `git describe` (`b.runFallible`), as Zig's own build does, and hands the full version to the code through build options (`b.addOptions()`), with whether the build is incomplete; fab-core exports both, `fab.version`. fab-render, fab-lsp and fab-cli read them from fab-core, which they depend on already. Zig requires a version in every manifest, so the other three hold the same literal, and a check in `make test` fails when any differs.
 
 As elsewhere: Cargo hands `Cargo.toml`'s version to the code (`CARGO_PKG_VERSION`), and Python reads `pyproject.toml`'s from the installed package's metadata, or derives it from git tags (`setuptools-scm`), as `git describe` does here.
 

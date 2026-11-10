@@ -13,7 +13,7 @@ const run = fab_cli.run;
 const fab_lsp = @import("fab_lsp");
 const fab_core = @import("fab_core");
 
-const version = "0.0.0";
+const version = fab_core.version;
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -85,9 +85,9 @@ fn lsp(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, env: *const std
 }
 
 /// The prelude, written where an editor can open it, as a file URI: a
-/// definition in the prelude lands there. In `$XDG_CACHE_HOME/fab`, or
-/// `~/.cache/fab`, and written at every start, so it is always this
-/// compiler's. Null when there is nowhere to write it: navigation then
+/// definition in the prelude lands there. `prelude.fab` in
+/// `$XDG_CACHE_HOME/fab`, or `~/.cache/fab`, written at every start, so it
+/// is always this compiler's; its first line names the build. Null when there is nowhere to write it: navigation then
 /// stops at the program.
 fn preludeUri(io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.Map) ?[]const u8 {
     const xdg = env.get("XDG_CACHE_HOME") orelse "";
@@ -98,8 +98,8 @@ fn preludeUri(io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.
     else
         return null;
     Io.Dir.cwd().createDirPath(io, dir) catch return null;
-    const path = std.fmt.allocPrint(arena, "{s}/prelude-{s}.fab", .{ dir, version }) catch return null;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = fab_core.Compilation.prelude_source }) catch return null;
+    const path = std.fmt.allocPrint(arena, "{s}/prelude.fab", .{dir}) catch return null;
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = fab_lsp.navigation.prelude_file }) catch return null;
     return fileUri(arena, path) catch null;
 }
 
