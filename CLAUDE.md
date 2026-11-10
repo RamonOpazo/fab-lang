@@ -74,7 +74,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 6    | IR, JSON, renderer for level 1; examples  | done    |
 | 7    | Levels (before 6)                         | done    |
 | 8    | Definitions and values                    | done    |
-| 9    | Style layer                               | 9d5 done |
+| 9    | Style layer                               | done    |
 | L    | Language server (after 9c, before 9d)     | done     |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | V    | Versions (`release.md`)                   | done    |
@@ -231,7 +231,7 @@ Done when every level case passes.
     Done when every example draws as before and the JSON tests pass at version 2.
 - **9e. Examples.** Every example's style resolves to a Sheet (it does: only unsupported proofs and Graphviz notes remain); corpus rows from the spec's styled examples. In increments:
   - **9e1. The Sheet's dump** (done). `Sheet.dump`, in `Ir.dump`'s shape: per zone its style, the tokens it rebinds unlike `[base]`, then its nodes (`n{i}`), edges and cells by name, each listing in `:Style`'s order the entries a theme, the program or a mark gave it, with that layer; `[base]` left out unless `.base` asks (`DumpOptions`, off by default), the computed always, and an element with nothing to show not written. Values as fAB writes them (`decoded.write`, which the decode tests share): `[]` for nil and an empty slot in a list (`[/dashed/>]`), `[box]`, `[#123456]`, `[0.85]`; a flag as its descriptor, `hide` or `hide!`. Conformance cases gain `.sheet`, compared as `.ir`.
-  - **9e2. The rows.** The spec's six styled examples (the block example with its definitions); a block and its expanded form give the same Sheet; the cascade's rules as the spec states them: themes < classes < elements < marks, a diagram's own tokens, the containers' layers beneath a member's own (R5), a top-level class above a container's. `done` moves to 9e.
+  - **9e2. The rows** (done). The spec's six styled examples (the block example with its definitions); a block and its expanded form give the same Sheet; the cascade's rules as the spec states them: themes < classes < elements < marks, a diagram's own tokens, the containers' layers beneath a member's own (R5), a top-level class above a container's. `done` moves to 9e.
 
 **L. Language server** (`fab-lsp/`), moved before the cascade so styles and renders are iterated with it. Depends on fab-core only, and on no library outside Zig's standard one (the project stays independent): JSON-RPC over stdio with `std.json`, message types written by hand; the whole document recompiled on each change. Positions in UTF-16. In increments:
 - **L1** (done). The loop and documents; diagnostics (`related` as `relatedInformation`, *unsupported* as information); semantic tokens by sort. fab-lsp is a library without I/O (`Server.handle`: one message in, framed messages out; `Transport` the `Content-Length` framing); `fab lsp` in fab-cli owns the standard streams. Editors in `editors/`: Helix, and Zed through a small Rust extension that starts `fab lsp` from the PATH.
