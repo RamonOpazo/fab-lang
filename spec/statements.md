@@ -578,7 +578,7 @@ Decided while designing the analyser (plan step 5). Some programs have no meanin
 - **Every program has a meaning or a diagnostic.** There is nothing in between: no undefined behaviour, and no implementation-defined meaning.
 - **Reserved: the spec has not decided.** A construct whose meaning is an open question, such as declaring a node (`#User :: …`) or an edge (`review :: …`), is an error, marked *reserved* in the spec's error tables and listed under Open questions. Rejecting it is forward compatible: lifting an error never breaks a program, while changing an accepted meaning would. The message says the meaning is open, so the user knows the program is not wrong, only early. Reserved errors may ship; they are the language's answer until the spec decides.
 - **Unsupported: the compiler has not caught up.** A construct the spec defines and the compiler does not implement yet, such as levels above the first or the contents of a definition, is reported with its own severity, `unsupported`. It is not an error about the program, so it never changes the status or the exit code, is never promoted, and the IR is still handed out, with the skipped parts left out rather than marked as holes, since nothing in them failed. It is reported once per skipped construct (a level, a definition), never once per element inside it.
-- **Unsupported never ships.** It is scaffolding for the plan: each unsupported diagnostic names the step that removes it, and the spec never mentions one. A release build refuses to compile while any remains, so no released compiler skips part of a valid program.
+- **Unsupported never ships.** It is scaffolding for the plan: each unsupported diagnostic names the step that removes it, and the spec never mentions one. A stable build refuses to compile while any remains, so no released compiler skips part of a valid program; a dev build admits them, marked `incomplete` (§22.16).
 
 ### 15.2 Rejected
 
@@ -1277,3 +1277,11 @@ States in the spec what the prelude already said (`prelude.fab`, `:Label` and `[
 Nil means one thing everywhere: no layer binds a value, so what lies below shows through, the computation where there is one (`:label`, a cell's `:arrow`), else nothing (`:fill []`).
 
 **Rejected.** `[]` as no text: `[]` and `""` would say the same, and a later layer would have no way back to the computed name; `""` says no text in text's own terms. An unframed diagram nameless: a label left to its default would be dropped by the renderer, against the Sheet, which holds it.
+
+### 22.16 Unsupported in dev builds, 2026-11-10
+
+Amends §15's *unsupported never ships* (`release.md` §2). The rule was that a release build refuses to compile while any unsupported tag remains; "release" meant an optimised build, so no optimised compiler could exist before step 11, and the editor ran a debug one, 15–20 times slower (`profile.md`, F8).
+
+**Decided.** The refusal belongs to a *stable* build, the one a tag names (`release.md` §1), in any optimisation mode. A dev build admits unsupported constructs in any mode, and is marked `incomplete` in its version's build metadata, wherever it names itself. What ships is stable, so unsupported still never ships.
+
+**Rejected.** A build option to admit them (`-Ddev`): a choice anyone could make, giving an optimised build that names itself like a stable one.

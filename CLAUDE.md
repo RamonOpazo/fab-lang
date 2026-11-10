@@ -7,7 +7,7 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 - **The user writes the code; Claude teaches and reviews.** Claude writes no implementation code unless asked. Claude does write and edit documents: the spec, the decision notes, the grammar and this file. Each plan step is reviewed before the next one starts.
 - **The spec leads.** When code and spec disagree, the code changes. When the spec is wrong or unclear, fix the spec first, record the reason in a decision note, then change the code.
 - **Equations are open.** The proof layer writes them `==` and `~=`, and these operators are settled. What equations mean is not, so don't redesign them unless asked.
-- **No commits** unless the user asks.
+- **No commits** unless the user asks. Commits follow Conventional Commits, `type(scope): subject (step N).` (`release.md` §5).
 
 ## Layout
 
@@ -36,6 +36,8 @@ Each package is a plain Zig project that depends only on the ones above it. fAB 
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
 | `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November); §22.10 layers read; §22.11 the cascade: ties, exact numbers, tokens in a diagram's own layer; §22.12 the prelude the only schema, the Sheet of values in rules and elements, renderers declaring what they draw; §22.13 the Sheet in JSON, names without sigils; §22.14 base rules, shared by every diagram; §22.15 a label's three values (10 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
+| `profile.md`     | Performance note, 10 November: method, measurements, findings (F1–F8), goals (G1–G5; hard and soft targets, none blocking yet) and the bench |
+| `release.md`     | Decision note, 10 November: stable and dev builds, versions in Zig's style (`0.1.0-dev.N+HASH[.dirty][.incomplete]`), one version written once, advancing below and from 1.0.0, Conventional Commits and the changelog |
 
 ## Commands
 
@@ -75,6 +77,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 9    | Style layer                               | 9d5 done |
 | L    | Language server (after 9c, before 9d)     | done     |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
+| V    | Versions (`release.md`)                   |         |
+| P    | Performance: the bench, F1–F6 (`profile.md`) | waits: stable releases only |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
 | 12   | CLI, README, examples, docs               |         |
@@ -244,6 +248,10 @@ Done when every level case passes.
   - **L4d** (done). `fab fmt x.fab` prints the program formatted; `-w`/`--write` writes it back when it changed, `--check` prints nothing and exits 1 when it isn't formatted; syntax errors are reported, exit 1. `make fmt` and `make fmt-check` cover the examples and the prelude beside the Zig sources. `textDocument/formatting` (`formatting.zig`): one edit replacing the whole document, none when formatted, refused (-32803) while it has syntax errors; the editor's options are ignored.
 
 **T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension reading this repository's subdirectory at a commit (`path`, accepted by Zed 1.27).
+
+**V. Versions** (`release.md`). The version worked towards, `0.1.0`, written in fab-core's `build.zig.zon`; fab-core's `build.zig` reads it, asks git for the rest (`dev.N`, the commit, `.dirty`) and gives it to the code through build options, with `.incomplete` when a dev build admits unsupported tags, which a stable build refuses (`statements.md` §22.16); fab-core exports `fab.version`, which the other packages read. Shown by `fab --version`, the server's `serverInfo`, the JSON's `"version"` and generated files' comments. The other three `build.zig.zon` hold the same literal, checked in `make test`. The release procedure, the artifact and the changelog (after 0.1.0) wait for the first release.
+
+**P. Performance** (`profile.md`). Waits: performance is not a goal of the work towards 0.1.0, and the bench runs only for a stable release that asks for it. `bench/`, a Zig package over fab-core and fab-render: generated families and a 2,000-line document, in-process medians, exact peak memory through a counting allocator, G1–G3 checked and reported, none blocking; `make bench`. Then the findings, each a measured change: F1 cell references, F2 Graphviz's two scans, F6 `show tokens`, then F3 the cascade's full rules, F4 the union-find's memory, F5 the reference sort. Profiling stays by hand.
 
 **10. Renderer.** fab-render realises the Sheet: arrows, ends, `:bend`, `:side`, theme tokens. fAB's own renderer declares every descriptor and label of `:Style`, checked against the prelude by a test (`statements.md` §22.12); SVG writes a CSS class per rule.
 
