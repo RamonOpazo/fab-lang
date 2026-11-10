@@ -1341,7 +1341,7 @@ G :style { :label "Lorem" }     // the same, in its block
 | `*/+(f, g)` | *not on exactly one end* | a slash between two nodes; write `*/(f, g)` |
 | a lone `*`, `f/*/g`, `*/f/g` | *not on exactly one end* | unchanged: no end, or both sides |
 | `k f/*, j/f+` | *reference to a null node* | unchanged: private |
-| `*/(a, b) h` | *nothing to join* | unchanged: `*` exposes nothing |
+| `h */(a, b)` | *nothing to join* | unchanged: `*` exposes nothing |
 
 **Categorically,** `+(a, b, c)` and `*/(a, b, c)` are the same graph, a wedge: three edges from one node. They differ in the interface. A pinch's apex stays open: `h +(a, b)` attaches to it, and relations reach it as `+a`. A null apex is sealed: anonymous, out of reach in relations, drawn as a dot. Definitions still name it through an edge (`+a :label "row"`).
 

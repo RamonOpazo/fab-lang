@@ -122,7 +122,6 @@ primary
     | ZONE_ID
     | CLASS_ID
     | TYPE_ID
-    | AT
     | STAR
     | QUID
     | BANG
@@ -146,9 +145,10 @@ primary
 #                                  an empty element is nil: [] is nil;
 #                                  type names make it a type: [:Tip/:Stroke/:Tip]
 #
-#   SLASH /   PLUS +   QUID ?   BANG !   STAR *   AT @   DOT .   BAR |
+#   SLASH /   PLUS +   QUID ?   BANG !   STAR *   DOT .    BAR |
 #   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )
 #   L_CUR {   R_CUR }  EOL      EOF
 #
 # Name bodies: letters, digits, _, ' and non-ASCII. Trivia: // comments,
-# spaces, tabs, carriage returns. Anything else is INVALID.
+# spaces, tabs, carriage returns. Anything else is INVALID, @ among it
+# (statements.md §23.1: free for later).

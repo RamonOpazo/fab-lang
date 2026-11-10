@@ -134,7 +134,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** zones.
 
 | Attribute | Applies to | Values                                          | Default                                                                                                                                                                         |
 | --------- | ---------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:label`  | N E C Z    | text, math                                      | node: its name without `#`, the own node `@` its diagram's name, else its canonical end; edge, cell: its name; zone: its name. Marks (`&choice` `&parallel` `&start` `&end`) have no label unless `:label` gives one |
+| `:label`  | N E C Z    | text, math                                      | node: its name without `#`, a diagram's node its diagram's name, else its canonical end; edge, cell: its name; zone: its name. Marks (`&choice` `&parallel` `&start` `&end`) have no label unless `:label` gives one |
 | `:font`   | N E C Z    | text (a font name)                              | theme                                                                                                                                                                           |
 | `:face`   | N E C Z    | `[regular]` `[italic]` `[bold]` `[bold-italic]` | `[regular]`; `[italic]` for `&canonical`                                                                                                                                        |
 | `:size`   | N E C Z    | length                                          | theme (edge and cell labels smaller than node labels)                                                                                                                           |
@@ -377,7 +377,7 @@ A token binds a value of its own type: `[ink] := [#dddddd]`. Any label may be bo
 
 - **The base theme is `[base]`,** in the prelude: the kind defaults (section 6), every other default of section 4 that is a value, and the tokens.
 - **It always applies,** first. It is never removed, only overridden.
-- **Computed defaults sit below it.** A node's label (its name, its diagram's name for `@`, else its canonical end), a cell's arrow by its level, one circle diameter per diagram: these depend on the element, so no value states them, and the style pass fills them in. `[base]` binds them to nil, `[]`, which leaves them to the computation (`:label []`, a cell's `:arrow []`); the prelude names them in comments. Nil elsewhere is nothing there: `:fill []`, a zone's `:stroke []`.
+- **Computed defaults sit below it.** A node's label (its name, its diagram's name for a diagram's node, else its canonical end), a cell's arrow by its level, one circle diameter per diagram: these depend on the element, so no value states them, and the style pass fills them in. `[base]` binds them to nil, `[]`, which leaves them to the computation (`:label []`, a cell's `:arrow []`); the prelude names them in comments. Nil elsewhere is nothing there: `:fill []`, a zone's `:stroke []`.
 - **Together they bind every attribute for every kind.** So the cascade always ends in a value: mathematically, the style is a **total** function on elements and attributes, and themes and programs only override parts of it. "Missing value" is never a state a renderer has to handle.
 
 ### 7.3 Composition

@@ -125,10 +125,10 @@ B :: h/A.+f        // h ends at dom(f) of A
 B :: h/(A.+f)      // the same, easier to read
 ```
 
-- The referenced diagram must be declared earlier, just as references inside a diagram point left. A diagram is not earlier than itself: it names its own node with `@`, never by its name.
-- In relations, `.` reaches a node: an end (`A.+f`, `A.f+`), a named node (`A.#X`) or the own node (`A.@`, the same as `A`). Another diagram's edge is its own, so `A.f g` is an error; style and proofs name it freely (`User.email :uk`).
+- The referenced diagram must be declared earlier, just as references inside a diagram point left. A diagram is not earlier than itself, so its relations never name it.
+- In relations, `.` reaches a node: an end (`A.+f`, `A.f+`) or a named node (`A.#X`). The diagram itself is `A` (see Diagrams as nodes). Another diagram's edge is its own, so `A.f g` is an error; style and proofs name it freely (`User.email :uk`).
 - Only ends A exposes can be referenced: never a null node's end, and only ends on A's boundary once the header defines one.
-- A cross reference makes B share a node with A. When B is drawn, A appears inside it as a cluster with its own style; B styles only its own subjects, including edges that reach into A.
+- A cross reference makes B share a node with A, and nothing more: B does not hold A, and A is drawn where it is held, or on its own. B styles only its own subjects, including edges that reach into A.
 
 ## Composition
 
@@ -196,7 +196,7 @@ Db :: {
 | `+f/g/f+`      | g : dom(f) → cod(f), parallel to f     |
 | `*/f`, `f/*`   | f starts at a null node; f ends at one |
 
-- **The sides are nodes:** named nodes (`#A`), the diagram's own node `@`, diagram names, references to ends (`+f`, `f+`) and `*`. Named nodes, `@`, diagram names and `*` need nothing before them; a reference needs its edge declared earlier.
+- **The sides are nodes:** named nodes (`#A`), diagram names, references to ends (`+f`, `f+`) and `*`. Named nodes and `*` need nothing before them, a diagram name its diagram declared earlier, and a reference its edge declared earlier.
 - **A node continues with a space.** `receive/#Received validate` is a path through Received, and `g/+f h` continues from dom(f). With a slash instead, `receive/#Received/validate` would be a cycle.
 - **Two notations, one graph.** `f, +f/g/f+` is `+(f, g)+`, and `a/#N b` is `a #N/b`. Both are legal, and each puts a different thing first.
 
@@ -287,7 +287,7 @@ When a space joins two sides, the node they meet at carries what each side bring
 | ------------------------------------------------------------- | ----------------------------- |
 | a free end, or a `+` pinch                                    | nothing                       |
 | on the right only: `f/?`, `f/!`, or a `?` or `!` pinch        | its kind                      |
-| an end attached by `/` to a named node, `@` or a diagram name | that name, and the kind plain |
+| an end attached by `/` to a named node or a diagram name      | that name, and the kind plain |
 
 A null node never meets anything: `*` exposes nothing (see Interfaces).
 
@@ -309,18 +309,21 @@ Mathematically, the labels form a partial commutative monoid with "nothing" as i
 
 ### Null nodes: `*`
 
-`*` is a node with no name. It behaves like `#A` with one difference: it is **private to one edge end**. Each `*` is a fresh null node, attached with `/`, and holds exactly one end.
+`*` is a node with no name. It behaves like `#A` with one difference: it is **private to one term**. Each `*` is a fresh null node, attached with `/`, and holds the ends on the side of the term it touches: a start if they leave it, a stop if they arrive.
 
 ```
 G :: */f g h/*              // a path from a start to a stop
 G :: (*/f, */g)+ h          // two starts, joined at +h
-G :: (*/f f1, */g g1)+      // two starts, two paths, one end
+G :: */(f, g)               // one start, two edges leaving it
+G :: f/? +(yes, no)/*       // a decision, both outcomes ending at one stop
 ```
 
 - **A node, so a slash.** `* f`, `*f` and `f *` are errors.
-- **Exactly one end.** `*/(f, g)`, `(f, g)/*`, `*/+(f, g)` and `f/*/g` are errors: each would make one null node hold several ends. Write `(*/f, */g)`. A lone `*` holds none, and is an error too.
-- **Private.** Nothing glues to a null node and nothing refers to it: `k f/*, j/f+` is an error. Definitions still name it through its edge, as `+f` or `f+`.
-- **It leaves the interface:** `f/*` exposes nothing on its right, so `f/* g` is "nothing to join".
+- **One side.** `*/` distributes over a group as `#A/` does, and every free end it reaches lands on the one null node; closed branches are skipped, as when ends are counted. A null node holding ends on both sides would be neither a start nor a stop: `f/*/g` and `*/f/g` (in a cycle) are errors, and so is a lone `*`, which holds none. `*/+(f, g)` puts `/` between two nodes; write `*/(f, g)`.
+- **Private.** Nothing glues to a null node and nothing refers to it: `k f/*, j/f+` is an error. Definitions still name it through an edge, as `+f` or `f+`.
+- **It leaves the interface:** `f/*` exposes nothing on its right, so `f/* g` is "nothing to join", and so is `h */(f, g)` on its left.
+
+`+(f, g)` and `*/(f, g)` are the same graph, two edges from one node. They differ in the interface: a pinch's node stays open, and `h +(f, g)` attaches to it; a null node is sealed, and drawn as a dot.
 
 ## Interfaces
 
@@ -336,12 +339,12 @@ Every term has a left side and a right side. Each side holds what a neighbour ca
 | `#A/f`, `+f/g`                     | A; dom(f)                                                         | cod(f); cod(g)          |
 | `f/#B`, `g/f+`                     | dom(f); dom(g)                                                    | B; cod(f)               |
 | `#A/f/#B`                          | A                                                                 | B                       |
-| `*/f`                              | nothing                                                           | cod(f)                  |
-| `f/*`                              | dom(f)                                                            | nothing                 |
+| `*/f`, `*/(f, g)`                  | nothing                                                           | cod(f); cod(f), cod(g)  |
+| `f/*`, `(f, g)/*`                  | dom(f); dom(f), dom(g)                                            | nothing                 |
 | `f/?`, `f/!`                       | dom(f)                                                            | cod(f), with its kind   |
 | `f/`                               | dom(f)                                                            | cod(f)                  |
 | a cycle: `f/g`, `f/f`, `#A/f/#B/g` | its start: dom(f); A                                              | nothing                 |
-| `#A`, `@`, `User` alone            | a lone node: it may stand as a whole branch, never beside a space |                         |
+| `#A`, `User` alone                 | a lone node: it may stand as a whole branch, never beside a space |                         |
 
 - **One to one.** `f (g, h)` and `(f, g) h` are errors: pinch the group, `f +(g, h)`, `(f, g)+ h`.
 - **Ending a branch.** A branch ends with `*` (a stop) or with a cycle, and then exposes nothing on that side. Those branches are skipped when ends are counted, so `(f/*, g) h` attaches h to g only; it warns, because the space reads as joining the group. Write `f/*, g h`. A cycle still exposes its start on the left, so a pinch gathers it: in `f/? +(b/b, e)`, b loops on the decision. A branch that ends on a node (`k/+f`, `x/#Done`) still exposes that node.
@@ -374,21 +377,19 @@ G :: #X/(g1, f/#P, g2), #P/(p1/g1+, p2/g2+)
 G :: #X/(g1, f, g2), f+/(p1/g1+, p2/g2+)
 ```
 
-**The diagram's own node.** `@` is a node term marking the node that stands for the diagram itself. Like `*` it takes a slash; unlike `*` it is shared, and can hold any number of ends. A diagram has one `@`, and writing it again glues to it.
+**Diagrams as nodes.** In relations, an uppercase name is a node term: the diagram it names, as one node of the diagram that writes it. That node stands for the whole, and never enters the named diagram's own graph. Like `#A`, it takes a slash, and repeated names glue.
 
 ```
-User :: @/(id/T.#UUID7, created_at/T.#DTZ, name/T.#String)
+Db   :: Document/owner/User           // owner : Document → User, between the two diagrams
+Repo :: Master, FeatureOne, FeatureTwo // three diagrams held, and no edge
 ```
 
-`@/( … )` distributes: every attribute is an edge from User's own node to a type.
+- **Naming a diagram includes it.** Alone, the name holds the diagram and adds nothing; attached by a slash, it holds it too, and the edge reaches the diagram as a whole.
+- **A reference to a part includes nothing:** `B :: h/A.+f` shares a node with A, and B does not hold A.
+- **Members.** A diagram is a member of each diagram that names it. Clusters form a tree, so a diagram is drawn inside the *first* diagram that names it, and styled from there (see Each diagram styles itself); its nodes still belong to it.
+- **Drawn by its motif.** By default a member is a cluster, a zone with a graph of its own, and an edge to it reaches the cluster's border. `:as` draws it otherwise: as one node, or as a table.
 
-**Diagrams as nodes.** In relations, an uppercase name is a node term: the diagram it names, attached at its `@`. Like `#A`, it takes a slash, and repeated names glue.
-
-```
-Db :: Document/owner/User    // owner : Document.@ → User.@
-```
-
-When drawn, User and Document appear inside Db as clusters, each with its own style. Using a diagram without an `@` as a node is an error. This is the move cells make, one level up: there edges become nodes, here diagrams do.
+A diagram whose objects are diagrams is the move cells make, one level up: there edges become nodes, here diagrams do. An edge between two members is a morphism between diagrams, whose kind (a foreign key, a call, a functor) the proof says.
 
 ### Schemas
 
@@ -396,8 +397,8 @@ A database schema is a category presented by a graph and path equations, as in c
 
 | Schema      | fAB                                                                                       |
 | ----------- | ----------------------------------------------------------------------------------------- |
-| Table       | A diagram with an `@` node                                                                |
-| Column      | An edge from `@` to a type                                                                |
+| Table       | A diagram of one start, its row: `*/( … )`                                                |
+| Column      | An edge from the row to a type                                                            |
 | Type        | A named node in a shared types diagram                                                    |
 | Foreign key | An edge from the table holding it to the table it references, in the diagram joining them |
 | Primary key | `:pk` on a column: the key, mono (injective), one per table                               |
@@ -583,7 +584,7 @@ The contexts of descriptions are the things a style, a proof or a placement talk
 | a class                      | `&name`                            | `&node :shape [circle]`, `G.&edge :pen [thin]`      |
 | several subjects             | a group                            | `(yes, paid) :label "yes"`                           |
 
-**Canonical references.** A node is addressed only through its canonical reference: its name if it has one (`#A`, `@`), and otherwise the first end that created it, in reading order. In `f g`, the middle node is `f+`, never `+g`. In `+(f h, g k)+`, the canonical references are `+f` (the pinched start), `f+`, `g+` and `f h`'s end `h+` (the pinched end); `+g`, `+h`, `+k` and `k+` are rejected.
+**Canonical references.** A node is addressed only through its canonical reference: its name if it has one (`#A`), and otherwise the first end that created it, in reading order. In `f g`, the middle node is `f+`, never `+g`. In `+(f h, g k)+`, the canonical references are `+f` (the pinched start), `f+`, `g+` and `f h`'s end `h+` (the pinched end); `+g`, `+h`, `+k` and `k+` are rejected.
 
 **Classes carry the sigil `&`,** and are qualified with `.` like anything else: `G.&edge` is every edge inside G. A class is a marked name, so no words are reserved; an edge may be called `edge`, and `G.edge` means exactly that edge.
 
@@ -607,7 +608,7 @@ Classes of one rank apply in the order they are defined, the later winning, and 
 
 Specificity orders bindings within a layer of style; layers compose on top (see Style layer, Themes).
 
-**Each diagram styles itself.** When C references A, A is drawn inside C as a cluster, and keeps its own style. C styles only C's own subjects, including C's edges that reach into A.
+**Each diagram styles itself, and its members' classes.** C's bindings of elements name only C's own subjects, including C's edges that reach into A. C's classes, tokens and themes reach its members too, beneath their own layers: a member is styled by `[base]`, then the diagrams holding it, outermost first, then itself. So `Repo :style { &node :shape [point] }` draws every branch's commits as points, and a branch can still bind its own. A diagram held by several is styled from the first, where it is drawn.
 
 ## Style layer
 
@@ -635,7 +636,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** diagrams.
 
 | Attribute | Applies to | Values                                           | Default                                                                                                                                                  |
 | --------- | ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:label`  | N E C Z    | text, math, `[]`                                 | `[]`, computed: a node's name without `#`, the own node `@` its diagram's name, else its canonical end; an edge's, a cell's or a diagram's name. `""` for choices, parallels, starts and ends |
+| `:label`  | N E C Z    | text, math, `[]`                                 | `[]`, computed: a node's name without `#`, a diagram's node its diagram's name, else its canonical end; an edge's, a cell's or a diagram's name. `""` for choices, parallels, starts and ends |
 | `:font`   | N E C Z    | text (a font name)                               | theme                                                                                                                                                    |
 | `:face`   | N E C Z    | `[regular]` `[italic]` `[bold]` `[bold-italic]`  | `[regular]`; `[italic]` for `&canonical`                                                                                                                 |
 | `:size`   | N E C Z    | length: the size of the lettering, and only that | theme; edge and cell labels smaller                                                                                                                      |
@@ -649,11 +650,11 @@ f :label "Lorem"   // the text Lorem; math the same, $\sigma$
 f :label ""        // no text
 ```
 
-- **`[]`, nil, is the computed name.** The name is computed below `[base]` (see Themes), wherever the cascade leaves `:label` nil: a named node is its name without `#` (`#Valid` is Valid), `@` is its diagram's name, any other node is its canonical end (`f+`, `+f`), and an edge, a cell or a diagram is its name.
+- **`[]`, nil, is the computed name.** The name is computed below `[base]` (see Themes), wherever the cascade leaves `:label` nil: a named node is its name without `#` (`#Valid` is Valid), any other node is its canonical end (`f+`, `+f`), and an edge, a cell or a diagram is its name.
 - **`""` is no text,** written on purpose. `[base]` gives choices, parallels, starts and ends `:label ""`, since each is a shape that says what it is; `&choice :label []` gives their computed names back.
 - **Text or math is drawn as written.**
 - **A label is drawn whenever it holds text,** whatever else is drawn: a diagram shows its name framed or not (`:label ""` hides it), and a node, its label, whatever its shape.
-- **`&canonical`** is a node whose label is its canonical end: unnamed, not `@`, and with its label nil once every layer but `&canonical`'s own is applied. So `validate+ :label "Valid?"` is not canonical, and drawn upright.
+- **`&canonical`** is a node whose label is its canonical end: unnamed, and with its label nil once every layer but `&canonical`'s own is applied. So `validate+ :label "Valid?"` is not canonical, and drawn upright.
 
 ### Nodes
 
@@ -697,7 +698,7 @@ An edge has no `:line`: its line is part of `:arrow`.
 | `:marks`                    | `[all]` `[]`                                     | `[all]`: draw marks from the proof layer, such as ⌟ |
 | `:cross`                    | `[gap]` `[plain]`                                    | `[gap]`                                             |
 
-A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit. Its name is drawn either way, as its `:label`; `:label ""` hides it. `table` draws the edges leaving `@` as rows inside the frame, each showing the edge's label and its target.
+A diagram is drawn framed only if it has a `:stroke` or a `:fill`: borders are always explicit. Its name is drawn either way, as its `:label`; `:label ""` hides it. `table` draws the edges leaving the diagram's start, its row, as rows inside the frame, each showing the edge's label and its target.
 
 **Foreign-key rows.** In a schema, each foreign key leaving a table drawn `[table]` is a row of that table too. Its default label is the edge's name, `_`, and the name of the key it references: `parent` referencing `Comment.id` is drawn `parent_id`. Its type is the type of the target's key. Its arrow leaves the row and ends at the target's key row. The label is the column's name; `:label` overrides it: `writer :label "author_id"`.
 
@@ -894,7 +895,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Class in a diagram's declaration   | `G :: &node f`                               | Classes are contexts of descriptions and signatures only         |
 | Levels in a naming or a record     | `:x := a \| b`, `G :style { a \| b }`        | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
-| Reserved: node or edge declared    | `#User :: @/(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
+| Reserved: node or edge declared    | `#User :: */(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
 | Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]` or `:descriptor` |
 | Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
 | Description with no context        | `:fill [red]` at the top level               | A context is left out only inside a block, where it is the owner |
@@ -912,20 +913,20 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Self-reference outside `f/f`      | `(f g)/f`                                       | A loop needs a single edge on the left                                     |
 | Redundant self-attachment         | `f/+f`                                          | Same graph as `f/f`                                                        |
 | Vacuous self-attachment           | `f/f+`                                          | Glues an end to itself                                                     |
-| `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`, `#A/#B/` | `/` needs an edge between its sides                                        |
+| `/` between nodes only            | `+g/+f`, `#A/#B`, `#A/?`, `f/#A/#B/g`, `#A/#B/`, `*/+(f, g)` | `/` needs an edge between its sides                                        |
 | Slash between two groups          | `(f, g)/(h, k)`                                 | Gluing many ends to many is a collapse nobody wrote; pinch one side: `(f, g)+/(h, k)` |
 | Trailing `/` not on a chain       | `(f, g)/`, `(f g)/`, `#B/`                      | A trailing `/` makes a chain's edges undirected: `f/ g/`, `f/g/`          |
 | Cycle that does not close         | `#A/f/#B/g/#C`, `+f/m/n/g+`                     | A chain of two or more edges ends where it began                           |
 | Reference not declared            | `+k/g`, `gg/α/g` with k, gg undeclared          | A reference needs its edge declared before it                              |
 | Forward reference                 | `+f/g f`                                        | References point left only                                                 |
-| Node beside a space               | `#A f`, `* f`, `@ (…)`, `f User`                | A node is attached to an edge with `/`                                     |
+| Node beside a space               | `#A f`, `* f`, `#A (…)`, `f User`               | A node is attached to an edge with `/`                                     |
 | Ends don't match                  | `f (g, h)`, `(f, g) h`, `(a, b) (c, d)`         | A space joins one end to one end; pinch the group: `f +(g, h)`             |
-| Nothing to join                   | `f/g h`, `f/* g`, `(f/*)/g`                     | One side exposes nothing; write `,` for separate pieces                    |
+| Nothing to join                   | `f/g h`, `f/* g`, `(f/*)/g`, `#A/(*/f)`         | One side exposes nothing; write `,` for separate pieces                    |
 | Warning: a space reaches one branch of several | `(f/*, g) h`, `(f, #A) g`, `+(g/*, h) k` | The other branches expose nothing there; move the step into the branch: `f/*, g h` |
 | Pinch of declared edges           | `f g, h k, +(f, h)`                             | A pinch with several branches declares them                                |
 | Pinched edge beside a space       | `f? (g, h)`, `k +f`, `f+ g`                     | A pinched single edge is a node; to pinch the group, move the marker: `f/? +(g, h)` |
 | Single edge pinched on both sides | `+f+`, `+(f)+`                                  | A pinched edge is one node; it has one side                                |
-| Pinch of a node                   | `+#A`, `#A?`, `(@)+`                            | A pinch merges the ends of a group; a node has none: attach it with `/`    |
+| Pinch of a node                   | `+#A`, `#A?`, `(User)+`                         | A pinch merges the ends of a group; a node has none: attach it with `/`    |
 | Pinch of nothing                  | `(f/*, g/*)+`                                   | Every branch exposes nothing on that side                                  |
 | Warning: pinch of one end         | `+(f, #A)`, `(a, b/b)! k`                       | The pinch merges one end with nothing; write the pieces apart: `a/! k, b/b` |
 | Kind on the left                  | `?(g, h)`, `!f`, `?/f`, `f/?/g`                 | A kind is written where flow arrives: `f/?`, `(a, b)?`                     |
@@ -937,8 +938,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Marker touching both sides        | `f+(g, h)`, `(a, b)!(c, d)`                     | Write `f +(g, h)` or `(a, b)! +(c, d)`                                     |
 | Kinds disagree                    | `(a/?, b/!)+`, `validate/? #Valid/yes`          | A node has one kind, and a named node is plain                             |
 | Two names for one node            | `a/#A #B/b`                                     | One node, one name                                                         |
-| Reference to a null node          | `k f/*, j/f+`                                   | A null node is private to its edge end                                     |
-| `*` not on exactly one end        | `*`, `*/(f, g)`, `(f, g)/*`, `*/+(f, g)`, `f/*/g` | A null node holds exactly one edge end; write `(*/f, */g)`                 |
+| Reference to a null node          | `k f/*, j/f+`                                   | A null node is private to its term                                         |
+| `*` not on one side               | `*`, `f/*/g`, `*/f/g`                           | A null node is a start or a stop: it holds the ends of one side of one term |
 | Both ends null                    | `*/f/*`                                         | An edge from nothing to nothing says nothing                               |
 | Tight operator touching nothing   | `f / g`, `+ f`                                  | A tight operator attaches to what it touches                               |
 | Atoms touching                    | `f(g)`, `*f`, `#A(f)`                           | Only `/` joins what touches; write a space for a path, or `/` to attach    |
@@ -999,7 +1000,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Key not taken                       | `:fill.[a] [red]`                        | Only a table's descriptor takes a key; an entry without one has a fresh key          |
 | Key malformed                       | `:legend.[] "x"`, `:legend.[a/b] "x"`   | A key is one name; an entry with no key leaves the slot off                          |
 | Description at an undeclared context | `G :style { … }` before `G ::`         | A description comes after what it talks about                                        |
-| Not a subject                       | `f g :label "x"`, `+(f, g)+ :label "x"` | A context names elements: names, ends, `#X`, `@`, classes, groups of them            |
+| Not a subject                       | `f g :label "x"`, `+(f, g)+ :label "x"` | A context names elements: names, ends, `#X`, classes, groups of them            |
 | Element has no parts                | `G :style { #Done { f :label "x" } }`   | Inside an element's or a class's block, only the owner is described                  |
 | Unknown class                       | `&nodes`                                 | Classes are built in, or defined                                                     |
 | Attributes side by side             | `f :label "x" :bend [inner]`             | An entry has one attribute; several go in braces: `f { :label "x", :bend [inner] }`  |
@@ -1014,7 +1015,7 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Direction word                         | `:side [left]`                                             | Styles never name a direction on the page                    |
 | Relational value                       | a style value that names `g`                               | Placement belongs in `:place`                                |
 | Non-canonical reference                | `+g :label …` in `f g`                                     | Label the node through `f+`, the end that created it         |
-| Another diagram's subject              | `A.+f` styled from C                                       | Each diagram styles itself                                   |
+| Another diagram's subject              | `A.+f` styled from C                                       | Each diagram binds its own elements; its classes reach its members |
 | Empty arrow                            | `[//]`                                                     | An arrow draws something; to draw no edge, `:hide` it        |
 | Unknown line word or end               | `[/zigzag/>]`, `[/solid/%]`                                | Lines are words from a fixed list; ends from the glyph table |
 | Not invertible                         | `[/solid/>!]`, `:size [2!]`, `:fill!`, `:terminal!`        | `!` names a twin, and only a type with twins (`T!`) has one  |
@@ -1026,10 +1027,9 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | -------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | Node named twice                             | `a/#A #B/b`                                                  | One node, one name                                                                |
 | Named node referenced by an end              | `+f :label …` where dom(f) is `#A`                           | A named node is referenced by its name                                            |
-| Diagram without `@` used as a node           | `Db :: T/owns/User`                                          | Only a diagram with an own node can attach                                        |
 | Undeclared name in another diagram           | `T.#UUDI7`, `A.+k`                                           | Names never come into existence by being mentioned                                |
-| Diagram not declared before                  | `B :: h/A.+f` before `A ::`, `G :: G/f`                      | References point left; a diagram names its own node with `@`                      |
-| Another diagram's edge in relations          | `A.f g`, `A.(f, g)`                                          | `.` reaches a node: `A.f+`, `A.#X`, `A.@`                                         |
+| Diagram not declared before                  | `B :: h/A.+f` before `A ::`, `G :: G/f`                      | References point left; a diagram never names itself                               |
+| Another diagram's edge in relations          | `A.f g`, `A.(f, g)`                                          | `.` reaches a node: `A.f+`, `A.#X`; the diagram itself is `A`                     |
 | Foreign key to a table without a key         | an edge to `Tag` with no `Tag.… :pk`                         | A foreign key references the target's key                                         |
 | Reference to a column that is not a key      | `(author, User.name) :refs`, `User.name` not `:uk`           | A foreign key references a key                                                    |
 | `:refs` without a foreign key and its target | `(author, Tag.label) :refs` where `author` goes to User      | The group pairs one foreign key with a key of its target                          |
@@ -1120,14 +1120,14 @@ Users belong to organizations through memberships, projects belong to organizati
 ```
 T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
 
-User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
-Organization :: @/(id/T.#UUID7, name/T.#String)
-Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
-Project      :: @/(id/T.#UUID7, name/T.#String)
-Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
-Comment      :: @/(id/T.#UUID7, text/T.#Text)
-Tag          :: @/(id/T.#UUID7, label/T.#String)
-Tagging      :: @/(id/T.#UUID7)
+User         :: */(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+Organization :: */(id/T.#UUID7, name/T.#String)
+Membership   :: */(id/T.#UUID7, admin/T.#Bool)
+Project      :: */(id/T.#UUID7, name/T.#String)
+Document     :: */(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+Comment      :: */(id/T.#UUID7, text/T.#Text)
+Tag          :: */(id/T.#UUID7, label/T.#String)
+Tagging      :: */id/T.#UUID7
 
 Db :: {
     Membership/(user/User, org/Organization),
@@ -1152,7 +1152,8 @@ User :style { :label "users", :fill [muted] }
 
 - Every foreign key goes from the table holding it to the table it references, so foreign keys compose like functions, and `parent document == document` is a real path equation: both sides go from Comment to Document.
 - Tables hold only their own columns. Each foreign key is one edge in Db, drawn as a row of its table: `document` is the row `document_id`, with its arrow to `Document.id`.
-- Each table is a fan out of its `@`, and each table's foreign keys fan out of its diagram name; `/` distributes over the group, so every column and every foreign key lands on a written node.
+- Each table is a fan out of one sealed start, its row, and each table's foreign keys fan out of its diagram name; `/` distributes over the group, so every column lands on the row and every foreign key on a diagram.
+- Db holds the tables it names, so its frame surrounds them and its proof reads them. T, reached only through `T.#UUID7`, is drawn beside Db, not in it.
 - `Comment/(…, parent/Comment)` is a self-reference: the repeated name glues, so `parent` is a loop on one cluster.
 - Foreign keys share Db's scope, so Comment's author is `writer`, labelled `author_id` for its column.
 - Membership and Tagging are join tables; many-to-many relationships are two many-to-one foreign keys. No arrow styles are written: the crow's feet come from `:card`.
@@ -1239,9 +1240,9 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 **Structure**
 
-- **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures; labels and signatures declare vocabulary, not structure. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: @/(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
+- **Declaring nodes and edges.** Zones, nodes and edges are the only declarable structures; labels and signatures declare vocabulary, not structure. A proposed reading: a declaration says "this has a graph inside it". A declared node (`#User :: */(id, name)`) is a graph inside a point: a composite state, or a table, which could replace `:as [node]` and `:as [table]`. A declared edge (`review :: check approve`) is a graph along an arrow: a subprocess, whose inner ends must match the edge's ends.
 - **The header.** Its syntax, its boundary, which further descriptors it holds, and the command line's flag to force a rule on files that opted out (`statements.md` §22.7).
-- **Diagram composition.** How one diagram is used inside another, through its boundary.
+- **Diagram composition.** A diagram is held by naming it (see Diagrams as nodes); how an edge reaches into a held diagram through its boundary, rather than to the whole, is open.
 - **What a flow could draw of its cells,** if anything, and how many levels stay readable.
 - **How a category draws `?` and `!`.** They are declared the same way in every diagram; what a category shows of them is the renderer's to decide.
 - **Well-structuredness.** Whether to warn on a `!` fork with no matching `!` join, especially inside a loop, where tokens multiply without bound.

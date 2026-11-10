@@ -457,16 +457,42 @@ test "Relations: nothing to join after a group of a stop" {
     try check(.{ .step = 5, .rule = 2, .source = "G :: (f/*) g", .codes = &.{.{ .analysis = .nothing_to_join }} });
 }
 
-test "Relations: * beside a group" {
-    try check(.{ .step = 5, .rule = 2, .source = "G :: */(f, g)", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+test "Relations: * beside a group (statements.md §23.3)" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: */(f, g)", .ir =
+        \\zone G
+        \\  node n0 null_node canon +f
+        \\  node n1 canon f+
+        \\  node n2 canon g+
+        \\  edge f n0 -> n1
+        \\  edge g n0 -> n2
+        \\
+    });
+    try check(.{ .step = 5, .rule = 2, .source = "G :: */(f, g h, k/*)" });
 }
 
-test "Relations: a group beside *" {
-    try check(.{ .step = 5, .rule = 2, .source = "G :: (f, g)/*", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+test "Relations: a group beside * (statements.md §23.3)" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: (f, g)/*", .ir =
+        \\zone G
+        \\  node n0 canon +f
+        \\  node n1 null_node canon f+
+        \\  node n2 canon +g
+        \\  edge f n0 -> n1
+        \\  edge g n2 -> n1
+        \\
+    });
+    try check(.{ .step = 5, .rule = 2, .source = "G :: f/? +(yes, no)/*" });
 }
 
 test "Relations: * beside a pinch" {
-    try check(.{ .step = 5, .rule = 2, .source = "G :: */+(f, g)", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+    try check(.{ .step = 5, .rule = 2, .source = "G :: */+(f, g)", .codes = &.{.{ .analysis = .slash_between_nodes }} });
+}
+
+test "Relations: * beside a group exposing nothing" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: */(*/f)", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: nothing to join before a start of a group" {
+    try check(.{ .step = 5, .rule = 2, .source = "G :: h */(f, g)", .codes = &.{.{ .analysis = .nothing_to_join }} });
 }
 
 test "Relations: warning, a space reaches one branch past a stop" {
@@ -494,6 +520,11 @@ test "Relations: nothing to join at a slash, after a stop" {
 
 test "Relations: nothing to join at a slash, after a cycle" {
     try check(.{ .step = 5, .rule = 3, .source = "G :: (f/g)/h", .codes = &.{.{ .analysis = .nothing_to_join }} });
+}
+
+test "Relations: nothing to join at a slash, a node before a start (statements.md §23.4)" {
+    try check(.{ .step = 5, .rule = 3, .source = "G :: #X/(*/f g)", .codes = &.{.{ .analysis = .nothing_to_join }} });
+    try check(.{ .step = 5, .rule = 3, .source = "G :: g/(f/*)/#X", .codes = &.{.{ .analysis = .nothing_to_join }} });
 }
 
 test "Undirected: a cycle" {
@@ -1405,15 +1436,15 @@ test "Relations: both ends null" {
 }
 
 test "Relations: a lone null node" {
-    try check(.{ .step = 5, .rule = 1, .source = "G :: *", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+    try check(.{ .step = 5, .rule = 1, .source = "G :: *", .codes = &.{.{ .analysis = .null_not_on_one_side }} });
 }
 
 test "Relations: a null node between edges" {
-    try check(.{ .step = 5, .rule = 1, .source = "G :: f/*/g", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+    try check(.{ .step = 5, .rule = 1, .source = "G :: f/*/g", .codes = &.{.{ .analysis = .null_not_on_one_side }} });
 }
 
 test "Relations: a null node in a cycle" {
-    try check(.{ .step = 5, .rule = 1, .source = "G :: */f/g", .codes = &.{.{ .analysis = .null_not_on_one_end }} });
+    try check(.{ .step = 5, .rule = 1, .source = "G :: */f/g", .codes = &.{.{ .analysis = .null_not_on_one_side }} });
 }
 
 test "Relations: a kind pinching on the left" {

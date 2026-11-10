@@ -434,10 +434,10 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A null node is a start or a stop. An edge from nothing to nothing says nothing.",
             .hint = "Keep one end: `*/f` or `f/*`.",
         },
-        .null_not_on_one_end => .{
-            .message = "{} does not hold exactly one end",
-            .explanation = "A null node is private to one edge end: it starts one edge or stops one. Alone it holds none; inside a chain or a cycle it would hold two.",
-            .hint = "Put `*` at the outer end of a single edge: `*/f`, `f/*`; for several, `(*/f, */g)`.",
+        .null_not_on_one_side => .{
+            .message = "{} is not on one side",
+            .explanation = "A null node is a start or a stop: it holds the ends on one side of one term. Alone it holds none; inside a chain or a cycle it would hold ends on both sides.",
+            .hint = "Put `*` at the outer end of a single edge or a group: `*/f`, `*/(f, g)`, `(f, g)/*`.",
         },
         .kind_on_the_left => .{
             .message = "The kind {} is on the left",

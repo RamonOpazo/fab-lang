@@ -91,7 +91,7 @@ fn term(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             .class_id => try a.failTerm(.class_in_zone_declaration, node, main),
             .str, .math, .val => try a.failTerm(.value_in_zone_declaration, node, main),
             .type_id => try a.failTerm(.type_in_zone_declaration, node, main),
-            .star => try a.failTerm(.null_not_on_one_end, node, main),
+            .star => try a.failTerm(.null_not_on_one_side, node, main),
             .quid, .bang => try a.failTerm(.lone_kind, node, main),
             else => {},
         },
@@ -184,7 +184,7 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     for (links, 0..) |link, i| {
         const token = cst.mainToken(link);
         if (sort.isLeaf(cst, link, .star)) {
-            if ((i != 0 and i != last) or edges > 1) try a.failTerm(.null_not_on_one_end, link, token);
+            if ((i != 0 and i != last) or edges > 1) try a.failTerm(.null_not_on_one_side, link, token);
         } else if (sort.isLeaf(cst, link, .quid) or sort.isLeaf(cst, link, .bang)) {
             if (i != last) {
                 try a.failTerm(.kind_on_the_left, link, token);

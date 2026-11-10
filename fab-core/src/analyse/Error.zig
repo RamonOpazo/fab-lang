@@ -159,7 +159,7 @@ pub const Tag = enum(u8) {
     /// `*/f/*`.
     both_ends_null,
     /// `*`, `f/*/g`, `*/f/g`; with rule 2, `*/(f, g)`, `*/+(f, g)`.
-    null_not_on_one_end,
+    null_not_on_one_side,
     /// `?(g, h)`, `!f`, `?/f`, `f/?/g`.
     kind_on_the_left,
     /// `f/g/?`.

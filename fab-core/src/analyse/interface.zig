@@ -173,8 +173,8 @@ fn pinchCount(a: *Analyser, node: Node.Index, side: ?Side) error{OutOfMemory}!bo
 
 /// `a/b/…`. One edge exposes what is beside it: a node, nothing beside `*`,
 /// or its own side. Two or more close a cycle, which exposes its start on the
-/// left and nothing on the right. The side beside `*` is exactly one free
-/// end. Between edges, a `/` glues one to several: never nothing, never
+/// left and nothing on the right. The side beside `*` is free ends, one or
+/// more. Between edges, a `/` glues one to several: never nothing, never
 /// several to several. A trailing `/` belongs to the chain, and undirects
 /// its edges: each must be a single edge.
 fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
@@ -210,11 +210,12 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
             const before = unwrap(cst, all[i - 1], false);
             if (isFreeStar(a, before) and !try nullEnd(a, t.left(), before)) unknown = true;
             if (isFreeStar(a, link) and !try nullEnd(a, prev.right(), link)) unknown = true;
-            if (!try slash(a, node, prev, t, cst.lastToken(all[i - 1]) + 1)) return hole;
+            if (!try slash(a, node, beside(a, before, prev), beside(a, link, t), cst.lastToken(all[i - 1]) + 1)) return hole;
         }
         prev = t;
     }
-    if (edges > 1 and !try slash(a, node, prev, first, cst.lastToken(all[last - 1]) + 1)) return hole;
+    const closing = unwrap(cst, all[last], trailing);
+    if (edges > 1 and !try slash(a, node, beside(a, closing, prev), beside(a, all[0], first), cst.lastToken(all[last - 1]) + 1)) return hole;
     if (unknown or edges == 0) return hole;
     if (edges > 1) return .{ .sides = .{ .left = one_node, .right = nothing } };
     return .{ .sides = .{
@@ -223,8 +224,16 @@ fn closedChain(a: *Analyser, node: Node.Index) error{OutOfMemory}!Type {
     } };
 }
 
-/// A `/` between two edge terms glues one to one or more; a node beside it
-/// has no sides to count. Reports and fails the chain if not.
+/// A link as a `/` sees it: a node is one node on either side, so a node
+/// beside a term exposing nothing is nothing to join (`#X/(*/f)`). `*` is
+/// left to `nullEnd`, which reports it.
+fn beside(a: *Analyser, link: Node.Index, t: Type) Type {
+    if (t != .node or sort.isLeaf(a.cst, link, .star)) return t;
+    return .{ .sides = .{ .left = one_node, .right = one_node } };
+}
+
+/// A `/` between two terms glues one to one or more; a `*` beside it has
+/// no sides to count. Reports and fails the chain if not.
 fn slash(a: *Analyser, chain: Node.Index, left: Type, right: Type, token: TokenIndex) error{OutOfMemory}!bool {
     const l = left.right() orelse return true;
     const r = right.left() orelse return true;
@@ -257,10 +266,13 @@ fn isFreeStar(a: *Analyser, link: Node.Index) bool {
     return sort.isLeaf(a.cst, link, .star) and !a.failed.isSet(@backingInt(link));
 }
 
-/// Whether the side beside a `*` is exactly one free end; reports it if not.
+/// Whether the side beside a `*` is free ends, one or more, which it holds
+/// (statements.md §23.3); reports it if not. A node there, a pinch's, is a
+/// `/` between nodes: `*/+(f, g)`.
 fn nullEnd(a: *Analyser, side: ?Side, star: Node.Index) error{OutOfMemory}!bool {
     const s = side orelse return true;
-    if (s.ends == 1 and s.nodes == 0) return true;
-    try a.failTerm(.null_not_on_one_end, star, a.cst.mainToken(star));
+    if (s.ends >= 1 and s.nodes == 0) return true;
+    const tag: Analyser.Error.Tag = if (s.nodes > 0) .slash_between_nodes else .nothing_to_join;
+    try a.failTerm(tag, star, a.cst.mainToken(star));
     return false;
 }

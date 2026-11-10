@@ -78,6 +78,7 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | L    | Language server (after 9c, before 9d)     | done     |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | V    | Versions (`release.md`)                   |         |
+| R    | Diagrams as nodes, `@` removed, `*` on one side (`statements.md` §23; before 9e) |  |
 | P    | Performance: the bench, F1–F6 (`profile.md`) | waits: stable releases only |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |
@@ -248,6 +249,15 @@ Done when every level case passes.
   - **L4d** (done). `fab fmt x.fab` prints the program formatted; `-w`/`--write` writes it back when it changed, `--check` prints nothing and exits 1 when it isn't formatted; syntax errors are reported, exit 1. `make fmt` and `make fmt-check` cover the examples and the prelude beside the Zig sources. `textDocument/formatting` (`formatting.zig`): one edit replacing the whole document, none when formatted, refused (-32803) while it has syntax errors; the editor's options are ignored.
 
 **T. Tree-sitter** (`tree-sitter-fab/`, `editors/`), after L1 and before L2, so programs are read in colour while styles are iterated. The grammar is shallow, a second reading of `grammar.ebnf` kept cheap to follow: the tokens by sort, statements and their heads, groups, blocks; not the structure of chains, which the analyser owns. `queries/highlights.scm` colours as the semantic tokens do. Checked by `make test-tree-sitter` (its corpus and highlight tests, then every example and the prelude with no `ERROR` node); not in `make test`, and skipped without Node. `src/` is generated and committed, since editors compile `src/parser.c`. Editors: Helix from the local path, Zed by a dev extension reading this repository's subdirectory at a commit (`path`, accepted by Zed 1.27).
+
+**R. Diagrams as nodes** (`statements.md` §23), before 9e, since the git example needs it. In increments, each with its corpus rows:
+- **R1. Nothing to join beside a node.** `#X/(*/f)` reports *nothing to join* at the slash, as `g/(*/f)` does.
+- **R2. `*` on one side.** The side beside `*` holds at least one free end, all landing on one null element; `*/(f, g)`, `(f, g)/*` accepted; `*/+(f, g)` is `/` between nodes; `*` not on exactly one end becomes *not on one side*.
+- **R3. `@` removed.** The lexer reads `@` as invalid; `Zone.own`, `A.@`, `G.@` contexts, *diagram without `@` used as a node*, the label computed as `@` and `&canonical`'s "not `@`" go. A diagram name in relations is one node of the container standing for the diagram (kind `.zone`), made at its first use, glued after; the examples and the corpus follow (`*/( … )` tables).
+- **R4. Members.** `Zone.members`, in order, from every diagram name in relations (alone or attached), none from `A.x`; a zone's container is the first that names it. JSON zones gain `"members"` (still version 2).
+- **R5. The cascade.** A member's rules: `[base]`, its containers' layers outermost first (themes, tokens, class bindings, `:theme`), then its own; element bindings stay *another diagram's subject*.
+- **R6. Graphviz.** Subgraphs nested along the containment tree; edges to a diagram's node reach its cluster's border (`compound=true`, `lhead`/`ltail`, an invisible anchor).
+- **R7. The rest.** fab-lsp (hover names members and container; completion offers no `@`), tree-sitter, and `examples/git-simple.fab` in its final form.
 
 **V. Versions** (`release.md`). The version worked towards, `0.1.0`, written in fab-core's `build.zig.zon`; fab-core's `build.zig` reads it, asks git for the rest (`dev.N`, the commit, `.dirty`) and gives it to the code through build options, with `.incomplete` when a dev build admits unsupported tags, which a stable build refuses (`statements.md` §22.16); fab-core exports `fab.version`, which the other packages read. Shown by `fab --version`, the server's `serverInfo`, the JSON's `"version"` and generated files' comments. The other three `build.zig.zon` hold the same literal, checked in `make test`. The release procedure, the artifact and the changelog (after 0.1.0) wait for the first release.
 
