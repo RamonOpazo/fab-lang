@@ -559,6 +559,53 @@ test "a diagram's own tokens come after its themes" {
     try testing.expectEqual(rgba(0x000000), s.token(@fromBackingInt(@as(u32, 0)), "ink").?.color);
 }
 
+test "a container's layer reaches its members, beneath their own (statements.md §23.2)" {
+    var c = try Compilation.init(testing.allocator,
+        \\Master  :: #A/f
+        \\Feature :: #B/g
+        \\H       :: #C/h
+        \\Repo    :: Master, Feature
+        \\Outer   :: Repo
+        \\&node :line [dashed]
+        \\Repo :style { :theme [compact], :fill [#123456], &node { :shape [point], :line [dotted] }, [ink] := [#000000] }
+        \\Feature :style { &node :shape [box], [ink] := [#ff0000] }
+        \\Outer :style { &node :fill [#00ff00] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const Shape = enum { point, box, circle };
+    const Line = enum { solid, dashed, dotted };
+    const shape = s.descriptor(":shape").?;
+    const line = s.descriptor(":line").?;
+    const fill = s.descriptor(":fill").?;
+    const ink_of = s.descriptor(":ink").?;
+
+    // Master, in Repo, in Outer: Repo's classes, theme and tokens, Outer's
+    // classes; the top-level class is Master's own, over Repo's.
+    const a = try nodeNamed(s, "#A");
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .point }, a.label(Shape, shape));
+    try testing.expectEqual(Sheet.Label(Line){ .value = .dashed }, a.label(Line, line));
+    try testing.expectEqual(rgba(0x00ff00), a.color(fill).?);
+    try testing.expectEqual(rgba(0x000000), a.color(ink_of).?);
+    try testing.expectEqualStrings("0.2", try decimal(a.number(s.descriptor(":padding").?).?));
+    // Feature's own class and token, over Repo's.
+    const b = try nodeNamed(s, "#B");
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .box }, b.label(Shape, shape));
+    try testing.expectEqual(rgba(0xff0000), b.color(ink_of).?);
+    // H is held by nobody.
+    const h = try nodeNamed(s, "#C");
+    try testing.expectEqual(Sheet.Label(Shape){ .value = .circle }, h.label(Shape, shape));
+    try testing.expectEqual(@as(?Rgba, null), h.color(fill));
+    // In Repo itself, Repo's class over the top-level one.
+    for (s.ir.nodes.items(.diagram), 0..) |d, i| if (d != null and @backingInt(d.?) == 0) {
+        const of_master = s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
+        try testing.expectEqual(Sheet.Label(Line){ .value = .dotted }, of_master.label(Line, line));
+    };
+    // Repo's own binding stays Repo's.
+    try testing.expectEqual(rgba(0x123456), zoneStyle(s, 3).color(fill).?);
+    try testing.expectEqual(@as(?Rgba, null), zoneStyle(s, 0).color(fill));
+}
+
 test "computed below [base]: labels by name, `:label []` gives the name back, a cell's arrow by level" {
     var c = try Compilation.init(testing.allocator,
         \\G :: #A/f/#B, #A/g/#B | f/α/g

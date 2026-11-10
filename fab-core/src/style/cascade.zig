@@ -3,6 +3,10 @@
 //!
 //!   computed  <  [base]  <  the diagram's themes, left to right  <  the program  <  marks
 //!
+//! A diagram held by others (statements.md §23.2) has its containers' layers
+//! between `[base]` and its own, outermost first: their themes, tokens and
+//! classes, never their element bindings.
+//!
 //! A *rule*, one per diagram and set of classes present, folds `[base]`,
 //! the diagram's themes and the program's class bindings, the most specific
 //! winning within a layer and of one rank the later. Once every element is
@@ -66,7 +70,10 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
     @memset(b.zone_tokens, &.{});
     b.zone_themes = try gpa.alloc([]const decoded.Record, ir.zones.len);
     @memset(b.zone_themes, &.{});
-    for (0..ir.zones.len) |z| try b.prepareZone(@fromBackingInt(@as(u32, @intCast(z))));
+    // Themes first, every diagram's: a member's tokens read its containers',
+    // which are declared after it.
+    for (0..ir.zones.len) |z| try b.prepareThemes(@fromBackingInt(@as(u32, @intCast(z))));
+    for (0..ir.zones.len) |z| try b.prepareTokens(@fromBackingInt(@as(u32, @intCast(z))));
 
     const zones = ir.nodes.items(.zone);
     b.nodes = try gpa.alloc(Sheet.Element, ir.nodes.len);
@@ -159,6 +166,7 @@ const Builder = struct {
     own: std.AutoHashMapUnmanaged(SubjectKey, std.ArrayList(u32)) = .empty,
     zone_themes: [][]const decoded.Record = &.{},
     zone_tokens: [][]const decoded.Token = &.{},
+    chain_buffer: std.ArrayList(Ir.ZoneIndex) = .empty,
     nodes: []Sheet.Element = &.{},
     edges: []Sheet.Element = &.{},
     cells: []Sheet.Element = &.{},
@@ -184,6 +192,7 @@ const Builder = struct {
         while (oit.next()) |l| l.deinit(b.gpa);
         b.own.deinit(b.gpa);
         b.gpa.free(b.zone_themes);
+        b.chain_buffer.deinit(b.gpa);
     }
 
     /// On failure, the tables `build` hands over last.
@@ -255,42 +264,73 @@ const Builder = struct {
         };
     }
 
-    /// A diagram's themes, includes first, and its tokens: `[base]`'s, its
-    /// themes', its own.
-    fn prepareZone(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
+    /// The diagrams whose layers a diagram's rules fold, lowest first: its
+    /// containers, outermost first, then itself (statements.md §23.2). The
+    /// list is the Builder's, valid until the next call.
+    fn chain(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}![]const Ir.ZoneIndex {
+        b.chain_buffer.clearRetainingCapacity();
+        var at: ?Ir.ZoneIndex = zone;
+        while (at) |z| : (at = b.ir.zones.items(.container)[@backingInt(z)]) try b.chain_buffer.append(b.gpa, z);
+        std.mem.reverse(Ir.ZoneIndex, b.chain_buffer.items);
+        return b.chain_buffer.items;
+    }
+
+    /// A diagram's themes, includes first.
+    fn prepareThemes(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
         var themes: std.ArrayList(decoded.Record) = .empty;
         defer themes.deinit(b.gpa);
-        if (b.themeValue(zone)) |v| try b.expand(v, &themes, 8);
+        if (try b.themeValue(zone)) |v| try b.expand(v, &themes, 8);
         b.zone_themes[@backingInt(zone)] = try b.arena.dupe(decoded.Record, themes.items);
+    }
 
+    /// A diagram's tokens: `[base]`'s, then along its chain each diagram's
+    /// themes' and its own.
+    fn prepareTokens(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
         var tokens: std.ArrayList(decoded.Token) = .empty;
         defer tokens.deinit(b.gpa);
         if (b.base) |base| for (base.tokens) |t| try bindToken(b.gpa, &tokens, t);
-        for (themes.items) |theme| for (theme.tokens) |t| try bindToken(b.gpa, &tokens, t);
-        for (b.in.tokens) |t| if (t.zone == zone) try bindToken(b.gpa, &tokens, t.token);
+        for (try b.chain(zone)) |d| {
+            for (b.zone_themes[@backingInt(d)]) |theme| for (theme.tokens) |t| try bindToken(b.gpa, &tokens, t);
+            for (b.in.tokens) |t| if (t.zone == d) try bindToken(b.gpa, &tokens, t.token);
+        }
         b.zone_tokens[@backingInt(zone)] = try b.arena.dupe(decoded.Token, tokens.items);
     }
 
     /// The diagram's `:theme`, read as any descriptor is, below its themes:
-    /// `[base]`, a class at the top level, a class in the diagram, the
-    /// diagram itself.
-    fn themeValue(b: *Builder, zone: Ir.ZoneIndex) ?Value {
+    /// `[base]`, a class in each of its containers (outermost first), a class
+    /// at the top level, a class in the diagram, the diagram itself.
+    fn themeValue(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!?Value {
         var found: ?Value = null;
         if (b.base) |base| for (base.bindings) |binding| {
             if (binding.classes) |c| if (c.contains(.zone) and std.mem.eql(u8, binding.descriptor, ":theme")) {
                 found = binding.value;
             };
         };
+        const holders = try b.chain(zone);
+        for (holders[0 .. holders.len - 1]) |d| if (b.in_zone.get(@backingInt(d))) |l| {
+            if (b.zoneTheme(l.items)) |v| found = v;
+        };
         const lists = [_][]const u32{
             b.top.items,
             if (b.in_zone.get(@backingInt(zone))) |l| l.items else &.{},
-            if (b.own.get(subjectKey(.{ .zone = zone }))) |l| l.items else &.{},
         };
-        for (lists, 0..) |list, k| for (list) |i| {
+        for (lists) |list| if (b.zoneTheme(list)) |v| {
+            found = v;
+        };
+        if (b.own.get(subjectKey(.{ .zone = zone }))) |l| for (l.items) |i| {
             const binding = b.in.bindings[i];
-            if (k < 2 and !binding.subject.class.classes.contains(.zone)) continue;
             if (std.mem.eql(u8, binding.descriptor, ":theme")) found = binding.value;
         };
+        return found;
+    }
+
+    /// The last `&zone :theme` among class bindings.
+    fn zoneTheme(b: *Builder, list: []const u32) ?Value {
+        var found: ?Value = null;
+        for (list) |i| {
+            const binding = b.in.bindings[i];
+            if (binding.subject.class.classes.contains(.zone) and std.mem.eql(u8, binding.descriptor, ":theme")) found = binding.value;
+        }
         return found;
     }
 
@@ -324,13 +364,21 @@ const Builder = struct {
         const slots = try b.gpa.alloc(Slot, b.names.items.len);
         defer b.gpa.free(slots);
         @memset(slots, null);
-        // [base] is layer 0, each theme one more, the program the last.
+        // [base] is layer 0. Then each diagram of the chain, its containers
+        // outermost first and the diagram last: each theme one layer more,
+        // then its classes in the program. The program's top-level classes
+        // are every diagram's own, ranked below the diagram's classes.
         if (b.base) |base| try b.foldRecord(slots, base, classes, 0);
-        const themes = b.zone_themes[@backingInt(zone)];
-        for (themes, 1..) |theme, at| try b.foldRecord(slots, theme, classes, @intCast(at));
-        const program: Precedence = @intCast(themes.len + 1);
-        for (b.top.items) |i| try b.foldProgram(slots, i, classes, program, 0);
-        if (b.in_zone.get(@backingInt(zone))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, program, 4);
+        var layer: Precedence = 1;
+        for (try b.chain(zone)) |d| {
+            for (b.zone_themes[@backingInt(d)]) |theme| {
+                try b.foldRecord(slots, theme, classes, layer);
+                layer += 1;
+            }
+            if (d == zone) for (b.top.items) |i| try b.foldProgram(slots, i, classes, layer, 0);
+            if (b.in_zone.get(@backingInt(d))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, layer, 4);
+            layer += 1;
+        }
 
         const start: u32 = @intCast(b.entries.items.len);
         try b.emit(slots, b.zone_tokens[@backingInt(zone)], &b.entries);

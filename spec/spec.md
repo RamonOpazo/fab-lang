@@ -608,7 +608,7 @@ Classes of one rank apply in the order they are defined, the later winning, and 
 
 Specificity orders bindings within a layer of style; layers compose on top (see Style layer, Themes).
 
-**Each diagram styles itself, and its members' classes.** C's bindings of elements name only C's own subjects, including C's edges that reach into A. C's classes, tokens and themes reach its members too, beneath their own layers: a member is styled by `[base]`, then the diagrams holding it, outermost first, then itself. So `Repo :style { &node :shape [point] }` draws every branch's commits as points, and a branch can still bind its own. A diagram held by several is styled from the first, where it is drawn.
+**Each diagram styles itself, and its members' classes.** C's bindings of elements name only C's own subjects, including C's edges that reach into A. C's classes, tokens and themes reach its members too, beneath their own layers: a member is styled by `[base]`, then the diagrams holding it, outermost first, then itself. So `Repo :style { &node :shape [point] }` draws every branch's commits as points, and a branch can still bind its own. A diagram held by several is styled from the first, where it is drawn. A class bound at the top level (`&node :line [dashed]`) is every diagram's own, so it ranks above the diagrams holding it. A container's element bindings never reach its members.
 
 ## Style layer
 
