@@ -37,7 +37,7 @@ test "a valid program, its IR in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(
-        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
+        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","container":null,"members":[],"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
     , beforeSheet(doc));
 }
 
@@ -46,6 +46,17 @@ test "cells name their sides by kind, with their direction" {
     defer testing.allocator.free(doc);
     try expectContains(doc,
         \\"cells":[{"name":"α","level":2,"source":{"edge":0},"target":{"node":0},"directed":true,"zone":0},{"name":"β","level":2,"source":{"edge":0},"target":{"edge":0},"directed":false,"zone":0},{"name":"m","level":3,"source":{"cell":1},"target":{"cell":1},"directed":true,"zone":0}]
+    );
+}
+
+test "diagrams held: members in naming order, the first container, the diagram's node" {
+    const doc = try document("A :: f\nB :: g\nR :: B, A/h", preview);
+    defer testing.allocator.free(doc);
+    try expectContains(doc,
+        \\"zones":[{"name":"A","container":2,"members":[],"placeholder":false},{"name":"B","container":2,"members":[],"placeholder":false},{"name":"R","container":null,"members":[1,0],"placeholder":false}]
+    );
+    try expectContains(doc,
+        \\{"kind":"plain","name":null,"zone":2,"diagram":1,"canonical":null}
     );
 }
 

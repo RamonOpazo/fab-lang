@@ -711,12 +711,14 @@ test "Diagrams and names: an undeclared edge in another diagram" {
 
 test "Diagrams as nodes: the diagram itself, a node of the one naming it (statements.md §23.2)" {
     try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nUser :: */id/T.#UUID7\nDb :: T/owns/User", .ir =
-        \\zone T
+        \\zone T in Db
         \\  node n0 #UUID7
-        \\zone User
+        \\zone User in Db
         \\  node n1 null_node canon +id
         \\  edge id n1 -> n0
         \\zone Db
+        \\  member T
+        \\  member User
         \\  node n2 diagram T
         \\  node n3 diagram User
         \\  edge owns n2 -> n3
@@ -726,14 +728,46 @@ test "Diagrams as nodes: the diagram itself, a node of the one naming it (statem
 
 test "Diagrams as nodes: alone, and repeated, one node (statements.md §23.2)" {
     try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: A, A/g", .ir =
+        \\zone A in B
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\zone B
+        \\  member A
+        \\  node n2 diagram A
+        \\  node n3 canon g+
+        \\  edge g n2 -> n3
+        \\
+    });
+}
+
+test "Diagrams as nodes: a reference to a part holds nothing (statements.md §23.2)" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: A.f+/g", .ir =
         \\zone A
         \\  node n0 canon +f
         \\  node n1 canon f+
         \\  edge f n0 -> n1
         \\zone B
+        \\  node n2 canon g+
+        \\  edge g n1 -> n2
+        \\
+    });
+}
+
+test "Diagrams as nodes: held by several, nested under the first; nested in turn" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: A\nC :: A, B", .ir =
+        \\zone A in B
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\zone B in C
+        \\  member A
         \\  node n2 diagram A
-        \\  node n3 canon g+
-        \\  edge g n2 -> n3
+        \\zone C
+        \\  member A
+        \\  member B
+        \\  node n3 diagram A
+        \\  node n4 diagram B
         \\
     });
 }

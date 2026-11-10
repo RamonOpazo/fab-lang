@@ -33,7 +33,8 @@
 //!     as in the Language Server Protocol. Lines end at "\n".
 //!
 //!   IR: the tables of Ir.zig. Every reference is an index into a table.
-//!     { "zones": [{"name": "G", "placeholder": false}],
+//!     { "zones": [{"name": "G", "container": null | zone, "members": [zone],
+//!                  "placeholder": false}],             members in naming order
 //!       "nodes": [{"kind": "plain" | "choice" | "parallel" | "null_node" | "hole",
 //!                  "name": null | "A", "zone": zone, "diagram": null | zone,
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
@@ -166,11 +167,21 @@ fn writeSpan(lines: *const Lines, span: Diagnostic.Span, w: *Writer) Writer.Erro
 
 fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
     try w.writeAll("{\"zones\":[");
-    for (ir.zones.items(.name), ir.zones.items(.placeholder), 0..) |name, placeholder, i| {
+    for (ir.zones.items(.name), ir.zones.items(.container), ir.zones.items(.placeholder), 0..) |name, container, placeholder, i| {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"name\":");
         try string(w, ir.string(name));
-        try w.print(",\"placeholder\":{}", .{placeholder});
+        try w.writeAll(",\"container\":");
+        try optionalIndex(w, container);
+        try w.writeAll(",\"members\":[");
+        var first = true;
+        for (ir.members.items(.container), ir.members.items(.member)) |holder, m| {
+            if (@backingInt(holder) != i) continue;
+            if (!first) try w.writeByte(',');
+            first = false;
+            try w.print("{d}", .{@backingInt(m)});
+        }
+        try w.print("],\"placeholder\":{}", .{placeholder});
         try w.writeByte('}');
     }
 

@@ -26,6 +26,8 @@ nodes: std.MultiArrayList(Node).Slice,
 edges: std.MultiArrayList(Edge).Slice,
 cells: std.MultiArrayList(Cell).Slice,
 issues: std.MultiArrayList(Issue).Slice,
+/// Which diagrams each diagram holds, in the order it names them.
+members: std.MultiArrayList(Member).Slice,
 strings: []const u8,
 
 pub const ZoneIndex = enum(u32) { _ };
@@ -41,6 +43,10 @@ pub const String = struct {
 
 pub const Zone = struct {
     name: String,
+    /// The first diagram that names this one (statements.md §23.2): where it
+    /// is drawn, and styled from. A diagram only names diagrams declared
+    /// before it, so containers form a tree.
+    container: ?ZoneIndex = null,
     /// Stands for a statement that names no diagram (`review :: a b`,
     /// `:x := …`): it has no elements, only the issues that say what went
     /// wrong, and draws as a crossed square. Its name is the head's first
@@ -103,6 +109,13 @@ pub const Cell = struct {
     pub const Side = union(enum) { node: NodeIndex, edge: EdgeIndex, cell: CellIndex };
 };
 
+/// A diagram held by another, which names it in relations: `Repo :: Master`,
+/// `Db :: Document/owner/User` (statements.md §23.2).
+pub const Member = struct {
+    container: ZoneIndex,
+    member: ZoneIndex,
+};
+
 /// Any element of the graph.
 pub const Subject = union(enum) {
     node: NodeIndex,
@@ -127,6 +140,7 @@ pub fn deinit(ir: *Ir, gpa: std.mem.Allocator) void {
     ir.edges.deinit(gpa);
     ir.cells.deinit(gpa);
     ir.issues.deinit(gpa);
+    ir.members.deinit(gpa);
     gpa.free(ir.strings);
     ir.* = undefined;
 }
@@ -145,6 +159,7 @@ pub const Builder = struct {
     edges: std.MultiArrayList(Edge) = .empty,
     cells: std.MultiArrayList(Cell) = .empty,
     issues: std.MultiArrayList(Issue) = .empty,
+    members: std.MultiArrayList(Member) = .empty,
     strings: std.ArrayList(u8) = .empty,
 
     pub fn init(gpa: std.mem.Allocator) Builder {
@@ -158,6 +173,7 @@ pub const Builder = struct {
         b.edges.deinit(b.gpa);
         b.cells.deinit(b.gpa);
         b.issues.deinit(b.gpa);
+        b.members.deinit(b.gpa);
         b.strings.deinit(b.gpa);
     }
 
@@ -191,6 +207,13 @@ pub const Builder = struct {
         try b.issues.append(b.gpa, issue);
     }
 
+    /// `container` names `member`; the first to name it holds it.
+    pub fn addMember(b: *Builder, container: ZoneIndex, member: ZoneIndex) !void {
+        try b.members.append(b.gpa, .{ .container = container, .member = member });
+        const first = &b.zones.items(.container)[@backingInt(member)];
+        if (first.* == null) first.* = container;
+    }
+
     /// Hands the tables over to an Ir. The builder is empty afterwards.
     pub fn finish(b: *Builder) !Ir {
         const strings = try b.strings.toOwnedSlice(b.gpa);
@@ -200,6 +223,7 @@ pub const Builder = struct {
             .edges = b.edges.toOwnedSlice(),
             .cells = b.cells.toOwnedSlice(),
             .issues = b.issues.toOwnedSlice(),
+            .members = b.members.toOwnedSlice(),
             .strings = strings,
         };
     }
@@ -210,6 +234,8 @@ pub const Builder = struct {
 // The format of `fab ir` and of the golden files in test/cases/ir/.
 //
 //   zone G                           a placeholder: `placeholder review`
+//   zone A in G              A's first container is G
+//     member A                 G names A: holds it
 //     node n0 canon +f
 //     node n2 diagram User     the node standing for User, in G
 //     node n1 choice #Valid canon f+
@@ -226,7 +252,12 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     for (0..ir.zones.len) |z| {
         const zone = ir.zones.get(z);
         try w.print("{s} {s}", .{ if (zone.placeholder) "placeholder" else "zone", ir.string(zone.name) });
+        if (zone.container) |c| try w.print(" in {s}", .{ir.string(ir.zones.items(.name)[@backingInt(c)])});
         try w.writeAll("\n");
+
+        for (ir.members.items(.container), ir.members.items(.member)) |c, m| {
+            if (@backingInt(c) == z) try w.print("  member {s}\n", .{ir.string(ir.zones.items(.name)[@backingInt(m)])});
+        }
 
         for (0..ir.nodes.len) |n| {
             const node = ir.nodes.get(n);

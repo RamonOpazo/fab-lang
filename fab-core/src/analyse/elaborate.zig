@@ -190,15 +190,17 @@ fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
     return if (zone.index == a.zone()) null else zone;
 }
 
-/// `A` as a node: the diagram A, as one node of the diagram naming it
-/// (statements.md §23.2). It never enters A's own graph. One element per
-/// diagram in a declaration, made on first use; a name only a failed term
-/// held is made here. A broken diagram's error is said already.
+/// `A` as a node: the diagram A, as one node of the diagram naming it,
+/// which holds A (statements.md §23.2). It never enters A's own graph. One
+/// element per diagram in a declaration, made on first use, when A becomes
+/// a member; a name only a failed term held is made here. A broken
+/// diagram's error is said already.
 fn diagramNode(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
     try a.referTokenTo(token, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
     if (zone.broken) return hole(a);
     const gop = try a.scope.table.getOrPut(a.arena.allocator(), a.cst.tokenText(token));
+    if (!gop.found_existing) try a.builder.addMember(a.zone(), zone.index);
     if (!gop.found_existing or gop.value_ptr.is == .hole) gop.value_ptr.* = .{ .level = 0, .token = token, .is = .{
         .node = try a.uf.add(@backingInt(a.zone()), null, .{ .diagram = @backingInt(zone.index), .name_token = token, .kind = .plain, .kind_token = token }),
     } };
