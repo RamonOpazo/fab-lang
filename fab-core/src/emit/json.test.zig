@@ -157,7 +157,7 @@ test "a sheet is indexed as its IR" {
     const programs = [_][]const u8{
         "G :: f g",
         "Nat :: +(f, g)+ | f/α/g\nNat :style { α :label \"a\" }",
-        "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
+        "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :strict }",
         "review :: a b\nG :: f/? +(g, h)\nG :style { :theme [dark], &choice :fill [accent] }",
     };
     for (programs, 0..) |source, name| {

@@ -8,8 +8,9 @@ FeatureTwo :label "feature/auth"
 
 Repo :: Master, FeatureOne, FeatureTwo
 
+Repo :kind [git]  // convert canonical names into hashes, at least one non-cyclic lane (which is :main if stated)
+
 Repo :prove {
-    :kind [git],                // convert canonical names into hashes, at least one non-cyclic lane (which is :main if stated)
     :axiom (Master :main),      // if given, establishes the main branch on top and contextualizes the records
     :axiom (Master.init :init)  // if give, init's left node must be a `*`, thus, starting the branch
 }

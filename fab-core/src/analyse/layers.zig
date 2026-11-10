@@ -56,6 +56,10 @@ pub const Binding = struct {
     value: decoded.Value,
 };
 
+/// `G :kind [flow]`: a diagram's kind (statements.md §24.2), read before
+/// its layers. `attr` is the descriptor, for the errors pointing back.
+pub const Kind = struct { zone: Ir.ZoneIndex, label: []const u8, attr: Node.Index };
+
 /// `G :style { [ink] := [#000000] }`: a token a diagram's own layer binds,
 /// after its themes (statements.md §22.11).
 pub const Token = struct { zone: Ir.ZoneIndex, token: decoded.Token };
@@ -150,6 +154,12 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     const style = if (a.env.type_table.get(":Style")) |named| named.index else null;
     const classes = classesOf(subjects);
 
+    // `G :kind [flow]`: declared outside every record type and no record
+    // itself, so a fact of the diagram, at the top level only.
+    if (layer == null and f.record == null and !f.bundle and !a.env.isRecord(f.type))
+        return diagramKind(a, attr, f, subjects, classes);
+    try layered(a, subjects, name_token);
+
     // `G :style { … }`: the layer, opened on the diagrams it describes.
     const value = cst.data(attr).node;
     if (layer == null and f.record == null and a.env.isRecord(f.type) and cst.tag(value) == .block) {
@@ -166,6 +176,62 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
         break :blk text[1 .. text.len - 1];
     } else null;
     for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound });
+}
+
+/// `G :kind [flow]`, once per diagram, before its layers. `&zone :kind` is
+/// every diagram's, which the header will state: reserved.
+fn diagramKind(a: *Analyser, attr: Node.Index, f: Env.Function, subjects: []const Owner, classes: Env.Classes) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const name_token = cst.mainToken(attr);
+    const first = a.errors.items.len;
+    try records.function(a, attr, .{ .record = null, .at = .{ .subject = classes } });
+    if (a.errors.items.len > first) return;
+    const label = switch (try decode.attr(a, attr, f)) {
+        .label => |l| l.name,
+        else => return, // only labels fit :Kind
+    };
+    for (subjects) |s| {
+        const zone = switch (s.subject) {
+            .subject => |subject| switch (subject) {
+                .zone => |z| z,
+                .class => {
+                    try a.fail(.reserved_kind_of_class, name_token);
+                    return;
+                },
+                else => continue, // does not apply, said above
+            },
+            .node => continue,
+        };
+        if (a.layered.get(zone)) |layer_token| {
+            try a.errors.append(a.gpa, .{ .tag = .kind_after_layer, .token = name_token, .related = layer_token });
+            continue;
+        }
+        const gop = try a.kinds.getOrPut(a.gpa, zone);
+        if (gop.found_existing) {
+            try a.errors.append(a.gpa, .{ .tag = .binding_made_twice, .token = name_token, .related = cst.mainToken(gop.value_ptr.attr) });
+            continue;
+        }
+        gop.value_ptr.* = .{ .zone = zone, .label = label, .attr = attr };
+    }
+}
+
+/// Marks the diagrams a layer's descriptor describes, at its first: a kind
+/// after it is an error. A class with no diagram is every diagram's, and
+/// marks none.
+fn layered(a: *Analyser, subjects: []const Owner, token: TokenIndex) error{OutOfMemory}!void {
+    for (subjects) |s| {
+        const zone: Ir.ZoneIndex = switch (s.subject) {
+            .node => |n| n.zone,
+            .subject => |subject| switch (subject) {
+                .zone => |z| z,
+                .edge => |e| a.builder.edges.items(.zone)[@backingInt(e)],
+                .cell => |c| a.builder.cells.items(.zone)[@backingInt(c)],
+                .node => |n| a.builder.nodes.items(.zone)[@backingInt(n)],
+                .class => |c| c.zone orelse continue,
+            },
+        };
+        _ = try a.layered.getOrPutValue(a.gpa, zone, token);
+    }
 }
 
 /// The classes of what a descriptor is written at: an element's own, or a

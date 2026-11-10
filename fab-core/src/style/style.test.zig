@@ -204,9 +204,9 @@ test "a diagram's frame is its worst issue; unsupported adds the caption, even u
     var c = try Compilation.init(testing.allocator,
         \\K :: (f/*, g) h
         \\J :: f
-        \\J :prove { :kind [category] }
+        \\J :prove { :strict }
         \\G :: f g/+k h
-        \\G :prove { :kind [category] }
+        \\G :prove { :strict }
     , preview);
     defer c.deinit();
     const s = (try c.sheet()).?;

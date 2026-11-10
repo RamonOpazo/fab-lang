@@ -501,6 +501,26 @@ test "a mixed run is reported once, at the first different operator" {
     try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[0].token));
 }
 
+test "each diagram's kind is kept, by zone" {
+    // No prelude here: the kinds are declared first.
+    var a = try analyse(
+        \\:Kind :: [flow], [git]
+        \\&zone :kind :: :Kind
+        \\A :: f
+        \\B :: g
+        \\C :: h
+        \\C :kind [git]
+        \\A :kind [flow]
+    );
+    defer a.deinit();
+    try testing.expectEqual(@as(usize, 0), a.result.errors.len);
+    try testing.expectEqual(@as(usize, 2), a.result.kinds.len);
+    try testing.expectEqual(@as(u32, 0), @backingInt(a.result.kinds[0].zone));
+    try testing.expectEqualStrings("flow", a.result.kinds[0].label);
+    try testing.expectEqual(@as(u32, 2), @backingInt(a.result.kinds[1].zone));
+    try testing.expectEqualStrings("git", a.result.kinds[1].label);
+}
+
 test "a case is read as unsupported, its contents left out" {
     try expectTags("&zone :kind [flow] :> { :Style := { &node :shape [round] } }", &.{.unsupported_case});
 }

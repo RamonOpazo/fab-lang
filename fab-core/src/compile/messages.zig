@@ -324,6 +324,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "In a layer, each element takes each descriptor once, and each key of a table once. A layer gathers every description of it, so the two may be far apart; two contexts naming one element are one binding.",
             .hint = "Keep one of them. A later layer, or a narrower context, may override it instead.",
         },
+        .kind_after_layer => .{
+            .message = "{} is stated after one of the diagram's layers",
+            .explanation = "A diagram's kind decides what its layers may say and how it is drawn, so it is stated before them: `G :kind [flow]`, then `G :style { … }`.",
+            .hint = "Move `:kind` above the diagram's first layer.",
+        },
         .empty_arrow => .{
             .message = "An empty arrow",
             .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",
@@ -583,6 +588,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .message = "The space before {} joins one branch of several",
             .explanation = "The other branches of the group expose nothing on this side (a stop, a cycle, a lone node), so the space joins only one of them, though it reads as joining the group.",
             .hint = "Move the step into the branch it joins: `f/*, g h`.",
+        },
+        .reserved_kind_of_class => .{
+            .message = "A kind for every diagram is reserved",
+            .explanation = "A kind is stated per diagram, `G :kind [flow]`. Every diagram of a file will take one from the header, whose syntax is still open, so a class as the context of `:kind` is an error until it is decided.",
+            .hint = "State the kind of each diagram: `G :kind [flow]`.",
         },
         .reserved_node_or_edge_declaration => .{
             .message = "Declaring {} is reserved",

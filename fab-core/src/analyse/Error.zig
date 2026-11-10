@@ -143,6 +143,12 @@ pub const Tag = enum(u8) {
     key_not_taken,
     /// `:legend.[] "x"`, `:legend.[a/b] "x"`.
     key_malformed,
+
+    // -- kinds (step 11) ------------------------------------------------------
+
+    /// `G :style { … }` then `G :kind [flow]`: a layer is read under the
+    /// kind, so the kind comes first (statements.md §24.2).
+    kind_after_layer,
     /// `:t := { &node :fill [red] }`, `:t := { [ink] := [#fff] }`.
     subject_in_bundle,
     /// `:Style [x] := { G.f :pen [thin] }`.
@@ -262,6 +268,9 @@ pub const Tag = enum(u8) {
 
     /// `#User :: @/(id, name)`, `review :: a b`.
     reserved_node_or_edge_declaration,
+    /// `&zone :kind [flow]`: every diagram's kind, which the header will
+    /// state (statements.md §22.7, §24.2).
+    reserved_kind_of_class,
 
     // -- unsupported: the compiler has not caught up (statements.md §15) -----
 

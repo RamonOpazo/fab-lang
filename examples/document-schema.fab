@@ -17,9 +17,9 @@ Db :: {
     Tagging/(doc/Document, tag/Tag)
 }
 
-Db :prove {
-    :kind [schema],
+Db :kind [schema]
 
+Db :prove {
     :axiom (&node.id :pk, &edge :card [0..*/1]),
     :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
     :axiom (parent { :nullable, :card [0..*/0..1] }),

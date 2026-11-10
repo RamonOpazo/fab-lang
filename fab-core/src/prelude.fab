@@ -256,3 +256,13 @@
     &node :padding [0.2],
     &zone :padding [0.5]
 }
+
+// ── 7. Kinds ──────────────────────────────────────────────────────────
+
+// A diagram's kind is what its graph is (statements.md §24): stated beside
+// its layers and before them, G :kind [flow]. Declared outside every record
+// type, so it describes at the top level only, and no layer binds it. A
+// diagram with no kind is a plain graph: drawn by [base], nothing found.
+:Kind :: [flow], [state-machine], [category], [schema], [git], [sequence]
+
+&zone :kind :: :Kind

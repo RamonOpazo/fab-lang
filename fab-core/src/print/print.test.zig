@@ -215,13 +215,11 @@ test "comments: two spaces after the run's widest code, or a line of their own" 
     // A line with no comment doesn't push the comments.
     try expectPrinted(
         \\Repo :prove {
-        \\    :kind [category],
         \\    :axiom (fix merge == login session merge'), // both paths
         \\    :lemma.[clean] (#Merged :pushout) // the merge is clean
         \\}
     ,
         \\Repo :prove {
-        \\    :kind [category],
         \\    :axiom (fix merge == login session merge'),  // both paths
         \\    :lemma.[clean] (#Merged :pushout)            // the merge is clean
         \\}

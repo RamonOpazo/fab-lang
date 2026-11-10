@@ -3,6 +3,8 @@ Repo :: {
     (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
 }
 
+Repo :kind [git]
+
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
@@ -24,7 +26,6 @@ Repo :style {
 }
 
 Repo :prove {
-    :kind [category],
     :axiom (fix merge == login session merge'),  // both paths from the fork reach the same state
     :lemma.[clean] (#Merged :pushout)            // fAB checks the merge is clean: the least common state
 }

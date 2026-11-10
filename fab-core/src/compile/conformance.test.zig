@@ -9,7 +9,7 @@
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
 //! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on), and in step 9 its
-//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2). `done` is the last one finished; later cases
+//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -22,7 +22,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 9, .rule = 52 };
+const done: Progress = .{ .step = 11, .rule = 2 };
 
 const Progress = struct {
     step: u8,
@@ -1840,9 +1840,9 @@ test "Examples: a database schema: documents and comments" {
         \\  Tagging/(doc/Document, tag/Tag)
         \\}
         \\
-        \\Db :prove {
-        \\  :kind [schema],
+        \\Db :kind [schema]
         \\
+        \\Db :prove {
         \\  :axiom (&node.id :pk, &edge :card [0..*/1]),
         \\  :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
         \\  :axiom (parent { :nullable, :card [0..*/0..1] }),
@@ -1862,6 +1862,8 @@ test "Examples: a git history: commits as arrows" {
         \\  */init readme/#Fork +(fix/#Main, login session/#Feature),
         \\  (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
         \\}
+        \\
+        \\Repo :kind [git]
         \\
         \\:ref := :shape [round], :fill [muted]
         \\
@@ -1884,7 +1886,6 @@ test "Examples: a git history: commits as arrows" {
         \\}
         \\
         \\Repo :prove {
-        \\  :kind [category],
         \\  :axiom (fix merge == login session merge'),   // both paths from the fork reach the same state
         \\  :lemma.[clean] (#Merged :pushout)              // fAB checks the merge is clean: the least common state
         \\}
@@ -2120,9 +2121,9 @@ test "Examples: a database schema, documents and comments" {
         \\    Tagging/(doc/Document, tag/Tag)
         \\}
         \\
-        \\Db :prove {
-        \\    :kind [schema],
+        \\Db :kind [schema]
         \\
+        \\Db :prove {
         \\    :axiom (&node.id :pk, &edge :card [0..*/1]),
         \\    :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
         \\    :axiom (parent { :nullable, :card [0..*/0..1] }),
@@ -2154,6 +2155,8 @@ test "Examples: a git history, commits as arrows" {
         \\    (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
         \\}
         \\
+        \\Repo :kind [git]
+        \\
         \\:ref := :shape [round], :fill [muted]
         \\
         \\Repo :style {
@@ -2175,7 +2178,6 @@ test "Examples: a git history, commits as arrows" {
         \\}
         \\
         \\Repo :prove {
-        \\    :kind [category],
         \\    :axiom (fix merge == login session merge'),  // both paths from the fork reach the same state
         \\    :lemma.[clean] (#Merged :pushout)            // fAB checks the merge is clean: the least common state
         \\}
@@ -2239,4 +2241,24 @@ test "Examples: a git history, branch by branch" {
         \\  node n15: shape [point] program
         \\
     });
+}
+
+// ---------------------------------------------------------------------------
+// Kinds (step 11b): the diagram's own, stated before its layers.
+
+test "Kinds: the kind is the diagram's own, before its layers (statements.md §24.2)" {
+    const g = "G :: f\n";
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :kind [flow]\nG :style { f :label \"x\" }" });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G { :kind [flow], :style { f :label \"x\" } }" });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :style { f :label \"x\" }\nG :kind [flow]", .codes = &.{.{ .analysis = .kind_after_layer }} });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G.f :label \"x\"\nG :kind [flow]", .codes = &.{.{ .analysis = .kind_after_layer }} });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :kind [flow]\nG :kind [category]", .codes = &.{.{ .analysis = .binding_made_twice }} });
+}
+
+test "Kinds: one of the six, at a diagram, at the top level (statements.md §24.2)" {
+    const g = "G :: f\n";
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :kind [dark]", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :style { :kind [flow] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 11, .rule = 2, .source = g ++ "G.f :kind [flow]", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = 11, .rule = 2, .source = "&zone :kind [flow]", .codes = &.{.{ .analysis = .reserved_kind_of_class }} });
 }

@@ -1432,9 +1432,10 @@ Order :style { … }
 Order :prove { … }
 ```
 
-- **Declared at the top level,** as `:style` is: `&zone :kind :: :Kind`, outside every record type, so it describes at the top level only. `G :style { :kind [flow] }` is *undefined name*: `:Style` has no `:kind`, and no layer can bind it.
+- **Declared at the top level,** as `:style` is: `&zone :kind :: :Kind`, outside every record type, so it describes at the top level only, alone (`G :kind [flow]`) or in G's block (`G { :kind [flow], :style { … } }`). `G :style { :kind [flow] }` *does not apply*: one descriptor, one record type (§22.5), and `:kind` is in none, so no layer can bind it. `G.f :kind` does not apply either: only a diagram has a kind.
+- **`&zone :kind [flow]` is reserved:** a kind for every diagram is the header's to state (§22.7), and its syntax is open. As a case's head (24.3) it is a condition, not a description.
 - **The kinds are labels,** `:Kind :: [flow], [state-machine], …`: one type and six labels, all declarations. The prelude names no value for them. `G :kind [dark]` is *wrong type*.
-- **Stated before the diagram's layers.** What a layer may say depends on the kind (24.3), so a `G :kind` after any of G's layers is *kind stated after a layer*. Twice is *binding made twice*.
+- **Stated before the diagram's layers.** What a layer may say depends on the kind (24.3), so a `G :kind` after any description of G's layers (`G :style`, `G.f :label`, `G.&node :fill`) is *kind stated after a layer*. Twice is *binding made twice*. A class with no diagram (`&node :fill [red]`) describes every diagram and orders none.
 - **One kind per diagram, or none.** A diagram with no kind is a plain graph: drawn by `[base]`, with the vocabulary every kind shares, and nothing found (§17).
 - **The three levels stay** (§22.7): command line < header < local, and the local level is `G :kind`. `-H kind=schema` still reads.
 

@@ -103,7 +103,7 @@ test "a diagram's mark: the border of its worst issue, and the unsupported label
         \\J :: f
         \\K :: f
         \\review :: a b
-        \\J :prove { :kind [category] }
+        \\J :prove { :strict }
     , preview);
     defer c.deinit();
     const Mark = Compilation.ZoneMark;

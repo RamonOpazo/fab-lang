@@ -243,7 +243,7 @@ test "a reserved head draws a placeholder too" {
 }
 
 test "unsupported: a violet frame, and the caption above the name" {
-    try expectDot("J :: f\nJ :style { f :label \"x\" }\nJ :prove { :kind [category] }",
+    try expectDot("J :: f\nJ :style { f :label \"x\" }\nJ :prove { :strict }",
         \\  subgraph cluster_0 {
         \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>J>
         \\    pencolor="#8250df"
@@ -257,7 +257,7 @@ test "unsupported: a violet frame, and the caption above the name" {
 }
 
 test "under a red frame, the caption stays violet" {
-    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }\nG :prove { :kind [category] }", preview);
+    var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }\nG :prove { :strict }", preview);
     defer c.deinit();
     var o = try render((try c.sheet()).?);
     defer o.deinit();
@@ -386,7 +386,7 @@ test "an edge from inside a diagram to its node is not clipped; a flat diagram's
 
 test "a marked diagram that owns no node still shows its frame" {
     // Db's edge joins two of A's nodes; its unsupported proof marks Db.
-    try expectDot("A :: f g\nDb :: A.g+/h/A.+f\nDb :prove { :kind [schema] }",
+    try expectDot("A :: f g\nDb :: A.g+/h/A.+f\nDb :prove { :strict }",
         \\  subgraph cluster_0 {
         \\    peripheries=0
         \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
@@ -797,7 +797,7 @@ pub const spec_programs = [_][]const u8{
     "Par :: */s/! +(a, b)! t/*",
     "A :: f g\nB :: h/A.+f",
     "G :: f\nH :: g /k\nreview :: a b",
-    "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
+    "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :strict }",
     "A :: */f\nB :: */g\nDb :: A/h/B\nRepo :: Db, A/k/#X\nOuter :: Repo, Db/m",
     "A :: f\nB :: A/g/A, A.f+/h/A",
     "T :: #UUID7, #String\nUser :: */(id/T.#UUID7, name/T.#String)",

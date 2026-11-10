@@ -897,6 +897,8 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Levels in a naming or a record     | `:x := a \| b`, `G :style { a \| b }`        | `\|` separates the levels of a declaration                       |
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: */(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
+| Reserved: a kind for every diagram | `&zone :kind [flow]`                         | A file's kind is the header's, whose syntax is open              |
+| Kind stated after a layer          | `G :style { … }` then `G :kind [flow]`       | The layers are read under the kind, so it comes first            |
 | Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]` or `:descriptor` |
 | Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
 | Description with no context        | `:fill [red]` at the top level               | A context is left out only inside a block, where it is the owner |
@@ -1298,6 +1300,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 
 - Declaring a node or an edge on its own (Declaring nodes and edges, above).
+- A kind for every diagram, `&zone :kind [flow]`: the header's, when its syntax is settled (`statements.md` §24.2).
 
 **Settled since the first revision:** name scope (local to a diagram); precedence of `/` chains (left to right); the clash between colours and named nodes on `#` (colours are values in brackets); the format vocabulary and arrow grammar (now the style layer); styling proof-derived marks (`:marks`, as a definition after the proof).
 
