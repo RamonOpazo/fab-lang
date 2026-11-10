@@ -256,8 +256,8 @@ test "the prelude prints as it is written" {
     try expectPrinted(Compilation.prelude_source, Compilation.prelude_source);
 }
 
-test "the examples print as they are written" {
-    // examples/order-fulfilment.fab.
+test "the spec's flowchart prints as it is written" {
+    // The spec's Examples: a flowchart, order fulfilment.
     const order =
         \\Order :: {
         \\    */receive/#Received validate/? +(

@@ -1759,7 +1759,7 @@ test "Levels: the spec's examples" {
 }
 
 // ---------------------------------------------------------------------------
-// Examples (examples/*.fab, and the spec's Examples section)
+// Examples (the spec's Examples section)
 
 test "Examples: the simplest program" {
     try check(.{ .step = 5, .source =

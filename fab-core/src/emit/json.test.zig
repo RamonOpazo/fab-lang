@@ -152,9 +152,15 @@ test "marks are the last layer, and every element's mark is written" {
     try expectContains(doc, "\"stroke\":{\"layer\":\"mark\",\"value\":{\"color\":\"#d1242fff\"}}},\"mark\":\"error\"}");
 }
 
-test "every example's sheet is indexed as its IR" {
-    for (@import("examples").all) |example| {
-        const name, const source = example;
+test "a sheet is indexed as its IR" {
+    // Cells, members, a placeholder, a marked zone, themes.
+    const programs = [_][]const u8{
+        "G :: f g",
+        "Nat :: +(f, g)+ | f/α/g\nNat :style { α :label \"a\" }",
+        "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
+        "review :: a b\nG :: f/? +(g, h)\nG :style { :theme [dark], &choice :fill [accent] }",
+    };
+    for (programs, 0..) |source, name| {
         const doc = try document(source, preview);
         defer testing.allocator.free(doc);
         const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, doc, .{});
@@ -163,7 +169,7 @@ test "every example's sheet is indexed as its IR" {
         const ir = root.get("ir").?.object;
         const sheet = root.get("sheet").?.object;
         const rules = sheet.get("rules").?.array.items.len;
-        errdefer std.debug.print("\nin {s}\n", .{name});
+        errdefer std.debug.print("\nin program {d}\n", .{name});
         inline for (.{ "nodes", "edges", "cells", "zones" }) |table| {
             const elements = sheet.get(table).?.array.items;
             try testing.expectEqual(ir.get(table).?.array.items.len, elements.len);

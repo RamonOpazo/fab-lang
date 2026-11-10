@@ -170,11 +170,29 @@ test "a diagram's layer: each binding's value, and its own tokens" {
     , out.written());
 }
 
-test "every example's layers decode: nil only where nil is written" {
+/// Programs binding values in every shape: nil, empty slots, a named value,
+/// a bundle, flags and their `!`, text, maths, a theme list, tokens.
+const layered = [_][:0]const u8{
+    \\G :: f g/? +(h, k)
+    \\:ref := :shape [round], :fill [muted]
+    \\G :style {
+    \\    :theme [dark/compact], :fill [], :caption $\mathbb{N}$,
+    \\    f+ { :label [], :ref }, g+ :label "Valid?",
+    \\    f { :arrow [/dashed/>], :hide }, g :arrow [epi], h :arrow [//>], k :hide!,
+    \\    [ink] := [#000000], [circle] := [box]
+    \\}
+    ,
+    \\A :: f
+    \\B :: A/g
+    \\B :style { :stroke [#123456], &node { :shape [point], :line [dotted] }, g :label "a" }
+    \\&edge :label-at [0.25]
+    ,
+};
+
+test "layers decode: nil only where nil is written" {
     const value = @import("value.zig");
     var checked: usize = 0;
-    for (@import("examples").all) |example| {
-        const name, const source = example;
+    for (layered, 0..) |source, name| {
         var c = try Compilation.init(testing.allocator, source, tolerance);
         defer c.deinit();
         const result = try c.analysis();
@@ -210,7 +228,7 @@ test "every example's layers decode: nil only where nil is written" {
             var got: std.Io.Writer.Allocating = .init(testing.allocator);
             defer got.deinit();
             try decoded.write(b.value, &got.writer);
-            std.debug.print("{s}: `{s}` decoded as {s}\n", .{ name, cst.tokenText(cst.mainToken(b.attr)), got.written() });
+            std.debug.print("program {d}: `{s}` decoded as {s}\n", .{ name, cst.tokenText(cst.mainToken(b.attr)), got.written() });
             return error.TestUnexpectedResult;
         }
     }
