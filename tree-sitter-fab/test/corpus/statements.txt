@@ -78,3 +78,20 @@ H :: #A/f+ g? ¬h' | α/β // a level up
     operator: (defn)
     body: (type_id)
     body: (block (attr_id) (value))))
+
+==================
+A case, and a class with a hyphen
+==================
+
+&zone :kind [flow] :> {
+  :Style := { &dead-end :fill [red] }
+}
+
+---
+
+(program
+  (statement
+    head: (class_id) head: (attr_id) head: (value)
+    operator: (then)
+    body: (block
+      (type_id) (defn) (block (class_id) (attr_id) (value)))))

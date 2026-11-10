@@ -81,6 +81,10 @@
                       {
                         "type": "SYMBOL",
                         "name": "defn"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "then"
                       }
                     ]
                   }
@@ -372,7 +376,7 @@
     },
     "class_id": {
       "type": "PATTERN",
-      "value": "&[a-z][A-Za-z0-9_'\\u0080-\\u{10FFFF}]*",
+      "value": "&[a-z][A-Za-z0-9_'\\-\\u0080-\\u{10FFFF}]*",
       "flags": "u"
     },
     "string": {
@@ -431,6 +435,10 @@
     "defn": {
       "type": "STRING",
       "value": ":="
+    },
+    "then": {
+      "type": "STRING",
+      "value": ":>"
     },
     "bar": {
       "type": "STRING",

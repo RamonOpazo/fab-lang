@@ -99,9 +99,14 @@ test "classes" {
     try expectTexts("&node &edge_end", &.{ "&node", "&edge_end" });
 }
 
+test "a class name may hold a hyphen, as a descriptor's does" {
+    try expectTags("&dead-end &single-branch :pass", &.{ .class_id, .class_id, .attr_id });
+    try expectTexts("&dead-end &undirected-cell", &.{ "&dead-end", "&undirected-cell" });
+}
+
 test "colons" {
-    try expectTags(":label :label-start :: := : :1", &.{
-        .attr_id, .attr_id, .decl, .defn, .invalid, .invalid, .invalid,
+    try expectTags(":label :label-start :: := :> : :1", &.{
+        .attr_id, .attr_id, .decl, .defn, .then, .invalid, .invalid, .invalid,
     });
     try expectTexts(":label :label-start", &.{ ":label", ":label-start" });
 }

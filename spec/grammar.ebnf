@@ -13,7 +13,7 @@ program
     ;
 
 # Three forms (statements.md §22): a declaration (::), a naming (:=) and a
-# description, which has no operator.
+# description, which has no operator; and a case (:>), over the three.
 # DECL heads: a zone (G :: f g), a type (:Shape :: [circle], [box];
 # :Style :: { … }; :Angle :: :Number!; :Tip :: :Head, :Hook!, :Nil;
 # :Arrow :: [:Tip/:Stroke/:Tip]), or contexts and a descriptor (a
@@ -21,10 +21,13 @@ program
 # DEFN heads: a value ([red]), a typed value (:Color [red]) or a descriptor
 # (a bundle). A type is no value: never named with :=.
 # A description is an entry: G :style { … }, G.f :arrow [epi], G { … }.
+# THEN heads a case (statements.md §24.3): a description, the condition,
+# and a block of what holds under it: &zone :kind [flow] :> { … }. At the
+# top level only.
 # The head is read as a part: :Color [red] is a chain of a type and a
 # value, (&node) :fill an entry.
 statement
-    = part ( DECL | DEFN ) ( levels | block )
+    = part ( DECL | DEFN | THEN ) ( levels | block )
     | part
     ;
 
@@ -146,8 +149,8 @@ primary
 #                                  type names make it a type: [:Tip/:Stroke/:Tip]
 #
 #   SLASH /   PLUS +   QUID ?   BANG !   STAR *   DOT .    BAR |
-#   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  L_PAR (  R_PAR )
-#   L_CUR {   R_CUR }  EOL      EOF
+#   COMMA ,   IDEN ==  CONG ~=  DECL ::  DEFN :=  THEN :>  L_PAR (
+#   R_PAR )   L_CUR {  R_CUR }  EOL      EOF
 #
 # Name bodies: letters, digits, _, ' and non-ASCII. Trivia: // comments,
 # spaces, tabs, carriage returns. Anything else is INVALID, @ among it

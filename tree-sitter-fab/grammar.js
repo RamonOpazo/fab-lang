@@ -29,11 +29,12 @@ module.exports = grammar({
 
     _eol: _ => '\n',
 
-    // A declaration (::), a naming (:=), or a description (no operator).
+    // A declaration (::), a naming (:=), a case (:>), or a description (no
+    // operator).
     statement: $ => seq(
       field('head', repeat1($._element)),
       optional(seq(
-        field('operator', choice($.decl, $.defn)),
+        field('operator', choice($.decl, $.defn, $.then)),
         field('body', repeat(choice($._element, $.bar, $.comma))),
       )),
     ),
@@ -61,7 +62,7 @@ module.exports = grammar({
     edge_id: _ => new RegExp('[a-z_\\u0080-\\u{10FFFF}]' + body, 'u'),
     attr_id: _ => new RegExp(':[a-z]' + hyphenated, 'u'),
     type_id: _ => new RegExp(':[A-Z]' + body, 'u'),
-    class_id: _ => new RegExp('&[a-z]' + body, 'u'),
+    class_id: _ => new RegExp('&[a-z]' + hyphenated, 'u'),
 
     string: _ => /"([^"\\\n]|\\.)*"/,
     math: _ => /\$([^$\\\n]|\\.)*\$/,
@@ -76,6 +77,7 @@ module.exports = grammar({
     cong: _ => '~=',
     decl: _ => '::',
     defn: _ => ':=',
+    then: _ => ':>',
     bar: _ => '|',
     comma: _ => ',',
 

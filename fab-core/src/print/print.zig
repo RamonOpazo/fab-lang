@@ -141,7 +141,7 @@ fn layOut(arena: std.mem.Allocator, cst: *const Cst) error{OutOfMemory}![]Line {
                     .attr_id, .l_cur => if (line.columns[0] == null and line.columns[1] == null and tags[line.first] != .attr_id) {
                         line.columns[0] = at;
                     },
-                    .decl, .defn => if (line.columns[1] == null) {
+                    .decl, .defn, .then => if (line.columns[1] == null) {
                         line.columns[1] = at;
                     },
                     else => {},
@@ -215,9 +215,9 @@ fn spaced(left: Tag, right: Tag, touching: bool) bool {
     if (left == .l_cur) return right != .r_cur;
     if (right == .r_cur or right == .l_cur) return true;
     return switch (left) {
-        .decl, .defn, .bar, .iden, .cong => true,
+        .decl, .defn, .then, .bar, .iden, .cong => true,
         else => switch (right) {
-            .decl, .defn, .bar, .iden, .cong => true,
+            .decl, .defn, .then, .bar, .iden, .cong => true,
             else => !touching,
         },
     };

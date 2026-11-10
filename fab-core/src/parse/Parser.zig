@@ -130,15 +130,16 @@ fn parseProgram(p: *Parser) Error!void {
     p.nodes.set(0, .{ .tag = .root, .main_token = 0, .data = .{ .range = range } });
 }
 
-/// statement = part ( DECL | DEFN ) ( levels | block ) | part
+/// statement = part ( DECL | DEFN | THEN ) ( levels | block ) | part
 /// The head is read as a part; which heads each operator allows is the
-/// analyser's call. With no operator the part must be an entry: a
+/// analyser's call. `:>` is a case (statements.md §24.3), at the top level
+/// only. With no operator the part must be an entry: a
 /// description, `G :style { … }` (statements.md §22.1).
 fn parseStatement(p: *Parser) Error!Node.Index {
     if (!p.startsItem()) return p.fail(.expected_statement, .invalid);
     const head = try p.parsePart();
     switch (p.cur()) {
-        .decl, .defn => {},
+        .decl, .defn, .then => {},
         // A description: an entry, with no operator (statements.md §22.1).
         else => return if (p.nodes.items(.tag)[@backingInt(head)] == .entry) head else p.fail(.expected_token, .decl),
     }
@@ -637,11 +638,12 @@ fn recover(p: *Parser) void {
     }
 }
 
-/// Whether the line starting at `i` holds `::` or `:=`: a new statement.
+/// Whether the line starting at `i` holds `::`, `:=` or `:>`: a new
+/// statement.
 fn lineStartsStatement(p: *Parser, i: TokenIndex) bool {
     var j = i;
     while (true) : (j += 1) switch (p.tags[j]) {
-        .decl, .defn => return true,
+        .decl, .defn, .then => return true,
         .eol, .eof => return false,
         else => {},
     };

@@ -23,7 +23,7 @@ pub const Tag = enum(u8) {
     edge_id, // lowercase, _ or non-ASCII first: f, h', user_id, α
     attr_id, // : then lowercase first: :label, :label-start
     type_id, // : then uppercase first: :Color, :Shape
-    class_id, // & then lowercase first: &node, &edge
+    class_id, // & then lowercase first: &node, &dead-end
 
     // literals
     str, // "..."
@@ -41,6 +41,7 @@ pub const Tag = enum(u8) {
     cong, // ~= (for congruency.)
     decl, // :: (for any declaration.)
     defn, // := (for any definition.)
+    then, // :> (for a case.)
 
     // structure
     comma, // ,

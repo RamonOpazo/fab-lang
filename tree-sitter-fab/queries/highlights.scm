@@ -16,7 +16,7 @@
 (math) @string.special
 (value) @string.special
 
-[(decl) (defn)] @keyword.operator
+[(decl) (defn) (then)] @keyword.operator
 [(slash) (marker) (dot) (iden) (cong) (bar)] @operator
 (comma) @punctuation.delimiter
 ["(" ")" "{" "}"] @punctuation.bracket

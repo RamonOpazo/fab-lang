@@ -634,6 +634,11 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "The program is valid, but this compiler only checks the shape of `:prove` and `:place` so far. Their contents are not applied; `:style` is.",
             .hint = "Nothing to fix in the program.",
         },
+        .unsupported_case => .{
+            .message = "Cases are not supported yet",
+            .explanation = "The program is valid, but this compiler does not read a case, `&zone :kind [flow] :> { … }`, so far: what it declares and binds for a kind is left out.",
+            .hint = "Nothing to fix in the program.",
+        },
     };
 }
 
@@ -662,6 +667,7 @@ pub fn describe(tag: Token.Tag) []const u8 {
         .cong => "`~=`",
         .decl => "`::`",
         .defn => "`:=`",
+        .then => "`:>`",
         .comma => "`,`",
         .bar => "`|`",
         .l_par => "`(`",

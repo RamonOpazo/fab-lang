@@ -65,6 +65,7 @@ test "space around structure: commas, groups, braces, operators" {
     try expectPrinted(":Style [x] := {}", ":Style [x] := {}\n");
     try expectPrinted("W :prove { :axiom (k==f h) }", "W :prove { :axiom (k == f h) }\n");
     try expectPrinted(":Color [warn]:=[red]", ":Color [warn] := [red]\n");
+    try expectPrinted("&zone :kind [flow]:>{ :Style := {} }", "&zone :kind [flow] :> { :Style := {} }\n");
 }
 
 test "line breaks are kept, blank lines at most one" {

@@ -377,6 +377,10 @@
           {
             "type": "defn",
             "named": true
+          },
+          {
+            "type": "then",
+            "named": true
           }
         ]
       }
@@ -469,6 +473,10 @@
   },
   {
     "type": "string",
+    "named": true
+  },
+  {
+    "type": "then",
     "named": true
   },
   {

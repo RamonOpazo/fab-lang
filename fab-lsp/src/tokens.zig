@@ -29,7 +29,7 @@ pub fn typeOf(tag: Token.Tag) ?Type {
         .type_id => .type,
         .class_id => .@"enum",
         .str, .math, .val => .string,
-        .slash, .plus, .star, .quid, .bang, .dot, .iden, .cong, .decl, .defn, .bar => .operator,
+        .slash, .plus, .star, .quid, .bang, .dot, .iden, .cong, .decl, .defn, .then, .bar => .operator,
         .eof, .eol, .invalid, .comma, .l_par, .r_par, .l_cur, .r_cur => null,
     };
 }

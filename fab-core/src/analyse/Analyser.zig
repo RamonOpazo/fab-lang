@@ -397,6 +397,10 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             try definitions.naming(a, node, head, body);
             break :blk a.namedDiagram(head);
         },
+        .then => blk: {
+            try a.fail(.unsupported_case, cst.mainToken(node));
+            break :blk null;
+        },
         else => unreachable,
     };
     a.pending.clearRetainingCapacity();

@@ -267,11 +267,14 @@ pub const Tag = enum(u8) {
 
     /// A `:prove` or `:place` layer, until plan step 11. `:style` is applied.
     unsupported_layer,
+    /// `&zone :kind [flow] :> { … }`, a case (statements.md §24.3), until
+    /// plan step 11c.
+    unsupported_case,
 
     pub fn severity(tag: Tag) Severity {
         return switch (tag) {
             .chain_broken_across_lines, .owner_after_part, .kind_after_group_of_one, .space_reaches_one_branch, .pinch_of_one_end => .warning,
-            .unsupported_layer => .unsupported,
+            .unsupported_layer, .unsupported_case => .unsupported,
             else => .@"error",
         };
     }

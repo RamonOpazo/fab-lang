@@ -51,8 +51,8 @@ pub const Node = struct {
         /// The whole program.
         /// main_token: 0. data.range: the statements.
         root,
-        /// `head :: body`, `head := body`.
-        /// main_token: `::` or `:=`. data.nodes: head, body.
+        /// `head :: body`, `head := body`, `head :> body` (a case, at the top
+        /// level only). main_token: `::`, `:=` or `:>`. data.nodes: head, body.
         statement,
 
         // -- items -----------------------------------------------------------

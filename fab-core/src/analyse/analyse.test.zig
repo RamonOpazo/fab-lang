@@ -281,6 +281,7 @@ test "a theme's tokens are namings; a bundle holds none" {
 test "unsupported and warnings have their own severity" {
     const T = Analyser.Error.Tag;
     try testing.expectEqual(.unsupported, T.unsupported_layer.severity());
+    try testing.expectEqual(.unsupported, T.unsupported_case.severity());
     try testing.expectEqual(.warning, T.chain_broken_across_lines.severity());
     try testing.expectEqual(.@"error", T.reserved_node_or_edge_declaration.severity());
 }
@@ -498,6 +499,10 @@ test "a mixed run is reported once, at the first different operator" {
     defer a.deinit();
     try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .mixed_operators, .unsupported_layer }, a.tags());
     try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[0].token));
+}
+
+test "a case is read as unsupported, its contents left out" {
+    try expectTags("&zone :kind [flow] :> { :Style := { &node :shape [round] } }", &.{.unsupported_case});
 }
 
 test "runs inside groups are checked on their own" {

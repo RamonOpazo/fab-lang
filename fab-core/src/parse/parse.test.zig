@@ -326,6 +326,40 @@ test "namings and a description: a value, a bundle, a descriptor at a context" {
     );
 }
 
+test "a case: a description, :>, then a block of namings and declarations" {
+    try expectDump(
+        \\&zone :kind [flow] :> {
+        \\    :Proposition :: { &zone :may-end :: :Flag },
+        \\    :Style := { &node :shape [round] }
+        \\}
+    ,
+        \\root
+        \\  statement :>
+        \\    entry
+        \\      leaf class_id &zone
+        \\      attr :kind
+        \\        leaf val [flow]
+        \\    block
+        \\      items
+        \\        statement ::
+        \\          leaf type_id :Proposition
+        \\          block
+        \\            statement ::
+        \\              entry
+        \\                leaf class_id &zone
+        \\                attr :may-end
+        \\              leaf type_id :Flag
+        \\        statement :=
+        \\          leaf type_id :Style
+        \\          block
+        \\            entry
+        \\              leaf class_id &node
+        \\              attr :shape
+        \\                leaf val [round]
+        \\
+    );
+}
+
 test "operations: one level, a flat run, groups to mix" {
     try expectDump("Sq :prove { :axiom (f h == g k == d, (f == g) ~= h, +f :pullback) }",
         \\root
@@ -647,6 +681,8 @@ test "statement errors" {
     try expectFirstError("G :: f | | m", .empty_level, "|");
     try expectFirstError(") f", .expected_statement, ")");
     try expectFirstError("G f", .expected_token, "");
+    // A case is a statement of the top level only.
+    try expectFirstError("G :style { &zone :kind [flow] :> { :Style := {} } }", .expected_token, ":>");
 }
 
 test "touching errors" {

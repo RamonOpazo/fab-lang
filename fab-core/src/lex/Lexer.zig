@@ -77,11 +77,12 @@ pub fn next(self: *Lexer) Token {
         } else self.one(.invalid),
         '&' => if (isLower(self.peek(1))) blk: {
             self.index += 1;
-            break :blk self.name(.class_id, false);
+            break :blk self.name(.class_id, true);
         } else self.one(.invalid),
         ':' => switch (self.peek(1)) {
             ':' => self.two(.decl),
             '=' => self.two(.defn),
+            '>' => self.two(.then),
             'a'...'z' => blk: {
                 self.index += 1;
                 break :blk self.name(.attr_id, true);
@@ -156,7 +157,8 @@ fn two(self: *Lexer, tag: Tag) Tag {
 }
 
 /// A name whose first character has already been checked by the caller.
-/// Attribute names may also contain `-` (`:label-start`).
+/// Attribute and class names may also contain `-` (`:label-start`,
+/// `&dead-end`).
 fn name(self: *Lexer, tag: Tag, allow_hyphen: bool) Tag {
     self.index += 1;
     while (true) {
