@@ -29,6 +29,29 @@ test "a diagram: its size" {
     try expectHover(0, 0, "**diagram** `G` · 5 nodes, 4 edges\n\n```fab\nG :: #A/f g/? +(h, k)\n```");
 }
 
+test "a diagram: what it holds, and what holds it (statements.md §23.2)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const source = "A :: */f\nB :: */g\nDb :: A/h/B\nRepo :: Db, A";
+    try testing.expectEqualStrings(
+        "**diagram** `A` · 2 nodes, 1 edge; in `Db`\n\n```fab\nA :: */f\n```",
+        (try hoverAt(arena.allocator(), source, 0, 0)).?,
+    );
+    try testing.expectEqualStrings(
+        "**diagram** `Db` · 2 nodes, 1 edge; holds `A`, `B`; in `Repo`\n\n```fab\nDb :: A/h/B\n```",
+        (try hoverAt(arena.allocator(), source, 2, 0)).?,
+    );
+    // A node standing for a diagram is named by it.
+    try testing.expectEqualStrings(
+        "**edge** `h` in `Db`: `A` → `B`\n\n```fab\nDb :: A/h/B\n```",
+        (try hoverAt(arena.allocator(), source, 2, 8)).?,
+    );
+    try testing.expectEqualStrings(
+        "**diagram** `Repo` · 2 nodes, 0 edges; holds `Db`, `A`\n\n```fab\nRepo :: Db, A\n```",
+        (try hoverAt(arena.allocator(), source, 3, 0)).?,
+    );
+}
+
 test "an edge: its ends, by name or by canonical end, and their kind" {
     try expectHover(0, 8, "**edge** `f` in `G`: `#A` → `f+`\n\n```fab\nG :: #A/f g/? +(h, k)\n```");
     try expectHover(0, 10, "**edge** `g` in `G`: `f+` → `g+` (choice)\n\n```fab\nG :: #A/f g/? +(h, k)\n```");

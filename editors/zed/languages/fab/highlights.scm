@@ -5,7 +5,6 @@
 
 (zone_id) @type
 (node_id) @constant
-(at) @variable.special
 (star) @constant.builtin
 (edge_id) @function
 (attr_id) @property

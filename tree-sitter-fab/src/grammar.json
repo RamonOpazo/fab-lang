@@ -309,10 +309,6 @@
         },
         {
           "type": "SYMBOL",
-          "name": "at"
-        },
-        {
-          "type": "SYMBOL",
           "name": "star"
         },
         {
@@ -390,10 +386,6 @@
     "value": {
       "type": "PATTERN",
       "value": "\\[[^\\s\\[\\]\\(\\),]*\\]"
-    },
-    "at": {
-      "type": "STRING",
-      "value": "@"
     },
     "star": {
       "type": "STRING",

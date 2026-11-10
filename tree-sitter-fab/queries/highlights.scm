@@ -6,7 +6,6 @@
 
 (zone_id) @namespace
 (node_id) @constant
-(at) @variable.builtin
 (star) @constant.builtin
 (edge_id) @function
 (attr_id) @attribute

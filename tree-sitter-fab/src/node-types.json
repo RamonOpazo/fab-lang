@@ -8,10 +8,6 @@
       "required": false,
       "types": [
         {
-          "type": "at",
-          "named": true
-        },
-        {
           "type": "attr_id",
           "named": true
         },
@@ -106,10 +102,6 @@
       "multiple": true,
       "required": false,
       "types": [
-        {
-          "type": "at",
-          "named": true
-        },
         {
           "type": "attr_id",
           "named": true
@@ -223,10 +215,6 @@
         "required": false,
         "types": [
           {
-            "type": "at",
-            "named": true
-          },
-          {
             "type": "attr_id",
             "named": true
           },
@@ -308,10 +296,6 @@
         "multiple": true,
         "required": true,
         "types": [
-          {
-            "type": "at",
-            "named": true
-          },
           {
             "type": "attr_id",
             "named": true
@@ -421,10 +405,6 @@
   {
     "type": "?",
     "named": false
-  },
-  {
-    "type": "at",
-    "named": true
   },
   {
     "type": "attr_id",

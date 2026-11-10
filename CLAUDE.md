@@ -77,8 +77,8 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | 9    | Style layer                               | 9d5 done |
 | L    | Language server (after 9c, before 9d)     | done     |
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
-| V    | Versions (`release.md`)                   |         |
-| R    | Diagrams as nodes, `@` removed, `*` on one side (`statements.md` §23; before 9e) |  |
+| V    | Versions (`release.md`)                   | build   |
+| R    | Diagrams as nodes, `@` removed, `*` on one side (`statements.md` §23; before 9e) | done |
 | P    | Performance: the bench, F1–F6 (`profile.md`) | waits: stable releases only |
 | 10   | Renderer: style, arrows, themes           |         |
 | 11   | Proof and place shells                    |         |

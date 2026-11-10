@@ -1,7 +1,7 @@
 //! What a name is, shown on hover (plan step L2c): one line in Markdown, by
 //! its sort, then the line that defines it.
 //!
-//!   diagram   G · 3 nodes, 2 edges
+//!   diagram   G · 3 nodes, 2 edges; holds A, B; in Repo
 //!   edge      f in G: +f → #B; the nodes by name, or by canonical end
 //!   cell      α in G, a 2-cell: f ⇒ g
 //!   node      #X in G
@@ -36,7 +36,10 @@ fn write(ctx: *navigation.Context, at: Reference, w: *Writer) (Writer.Error || e
     switch (at.sort) {
         .zone => {
             try w.print("**diagram** `{s}`", .{text});
-            if (at.subject) |s| try counts(ir, s.zone, w);
+            if (at.subject) |s| {
+                try counts(ir, s.zone, w);
+                try holding(ir, s.zone, w);
+            }
         },
         .edge => {
             try w.print("**edge** `{s}`", .{text});
@@ -106,6 +109,19 @@ fn counts(ir: *const Ir, zone: Ir.ZoneIndex, w: *Writer) Writer.Error!void {
     for (ir.cells.items(.zone)) |z| n[2] += @intFromBool(z == zone);
     try w.print(" · {d} node{s}, {d} edge{s}", .{ n[0], plural(n[0]), n[1], plural(n[1]) });
     if (n[2] > 0) try w.print(", {d} cell{s}", .{ n[2], plural(n[2]) });
+}
+
+/// The diagrams a diagram names, which it holds, and the first naming it,
+/// which draws it (statements.md §23.2).
+fn holding(ir: *const Ir, zone: Ir.ZoneIndex, w: *Writer) Writer.Error!void {
+    var first = true;
+    for (ir.members.items(.container), ir.members.items(.member)) |c, m| {
+        if (c != zone) continue;
+        try w.writeAll(if (first) "; holds " else ", ");
+        try w.print("`{s}`", .{ir.string(ir.zones.items(.name)[@backingInt(m)])});
+        first = false;
+    }
+    if (ir.zones.items(.container)[@backingInt(zone)]) |c| try w.print("; in `{s}`", .{ir.string(ir.zones.items(.name)[@backingInt(c)])});
 }
 
 fn plural(n: usize) []const u8 {

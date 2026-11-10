@@ -1201,6 +1201,24 @@ Repo :prove {
 - `:ref` is a bundle: states that branches and tags name are drawn round and filled, the rest as points.
 - The proof states, as an axiom, that the merge square commutes, and asks, as a lemma, whether `#Merged` is its pushout. A merge conflict is exactly the case where no such pushout exists, so the checker would refute the lemma.
 
+The same history can be written branch by branch, each branch its own diagram, and the repository as the diagram holding them (`examples/git-simple.fab`):
+
+```
+Master     :: */init commit1 commit2 commit3 commit4 commit5
+FeatureOne :: Master.(commit2+)/commit1 commit2 commit3 commit4
+FeatureTwo :: Master.(commit2+)/commit1 commit2 merge/Master.(commit3+)
+
+Repo :: Master, FeatureOne, FeatureTwo
+
+Repo :style {
+    &node :shape [point]
+}
+```
+
+- Each branch starts where it leaves another: `Master.(commit2+)` is the state after Master's second commit, shared with Master, so both branches fork from it. The merge lands on `Master.(commit3+)`.
+- `Repo :: Master, FeatureOne, FeatureTwo` names the three diagrams, so Repo holds them (see Diagrams as nodes): they are drawn inside it, and Repo's style reaches them, beneath their own. Every commit is a point.
+- Repo's three nodes stand for the branches and join nothing; the history itself lives in the branches.
+
 ## Mathematical reading
 
 A diagram denotes a graph presented by its edges, graded by dimension: the shape from which a free category, a commutative diagram or a higher category is built.

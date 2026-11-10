@@ -52,7 +52,7 @@ module.exports = grammar({
 
     _token: $ => choice(
       $.zone_id, $.node_id, $.edge_id, $.attr_id, $.type_id, $.class_id,
-      $.at, $.star, $.string, $.math, $.value,
+      $.star, $.string, $.math, $.value,
       $.slash, $.marker, $.dot, $.iden, $.cong,
     ),
 
@@ -68,7 +68,6 @@ module.exports = grammar({
     // One opaque token: no whitespace, brackets, parentheses or commas.
     value: _ => /\[[^\s\[\]\(\),]*\]/,
 
-    at: _ => '@',
     star: _ => '*',
     slash: _ => '/',
     marker: _ => choice('+', '?', '!'),
