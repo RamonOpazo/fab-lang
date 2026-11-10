@@ -11,7 +11,7 @@ repository = "https://github.com/RamonOpazo/fab-lang"
 # must still be a commit in it that holds tree-sitter-fab.
 [grammars.fab]
 repository = "https://github.com/RamonOpazo/fab-lang"
-rev = "8abb4273e79398f561d69424783b38a853d6712e"
+rev = "449a56114552b10d25dc19cc971e25c056cc7952"
 path = "tree-sitter-fab"
 
 # `fab lsp`, found on the PATH (src/lib.rs).
