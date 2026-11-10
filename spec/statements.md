@@ -1285,3 +1285,119 @@ Amends §15's *unsupported never ships* (`release.md` §2). The rule was that a 
 **Decided.** The refusal belongs to a *stable* build, the one a tag names (`release.md` §1), in any optimisation mode. A dev build admits unsupported constructs in any mode, and is marked `incomplete` in its version's build metadata, wherever it names itself. What ships is stable, so unsupported still never ships.
 
 **Rejected.** A build option to admit them (`-Ddev`): a choice anyone could make, giving an optimised build that names itself like a stable one.
+
+## 23. Diagrams as nodes, `@` removed, and `*` on one side, 2026-11-10
+
+Found while writing a template for git diagrams (`examples/git-simple.fab`). A repository is its branches seen together, so one diagram must hold others, and each branch's history starts at `*`. Three rules stood in the way: a diagram name in relations meant the diagram's `@`, so holding a diagram required giving it one; `@` and `*` cannot share a node, so `Master :: @/(*/init commit1 …)` had no meaning; and `*` holds exactly one end, so a table's columns, which fan out of one row, had to fan out of `@` or of an open pinch. The analyser also turned that `@` into a hole without an error (§23.4).
+
+### 23.1 `@` is removed
+
+**What `@` did.** Two jobs. In styles it named the diagram (`G.@ :shape [box]`), and in relations it was a node inside the diagram standing for the diagram, where the diagram's own edges and other diagrams' edges met: a table's columns and the foreign keys that reach it.
+
+**The first job needs no `@`.** A diagram already describes itself: a description at the diagram, or an entry with no context in its block, and in a theme an entry with no subject binds the diagram the theme is applied to.
+
+```
+G :: f
+G :label "Lorem"                // G itself
+G :style { :label "Lorem" }     // the same, in its block
+```
+
+**The second job mixed two things.** A node standing for the diagram belongs to the diagrams that use it, not to the diagram's own graph. Inside, it forced a shape on the graph: a table had to be a fan out of `@`, and a git branch had nowhere to put it (its start is `*`, its tip moves with every commit). Outside, it made being used depend on having one: *diagram without `@` used as a node*.
+
+**Decided.** `@` leaves the language. The lexer reads `@` as an invalid token, so the sign stays free for later. The job moves to the diagram's name (§23.2). Gone with it: `A.@`, `G.@` as a context, *diagram without `@` used as a node*, the computed label `@`, `&canonical`'s "not `@`", the filled circle for `@`.
+
+### 23.2 A diagram name is the diagram
+
+**In relations, an uppercase name is the diagram itself, as one node of the diagram that writes it.** That node never enters the named diagram's own graph. As with named nodes, repeated names glue: one node per diagram and container.
+
+- **Alone, it includes the diagram:** `Repo :: Master, FeatureOne, FeatureTwo` holds the three branches and adds no edge.
+- **Attached by a slash, it includes it too,** and the edge reaches the diagram as a whole: `Membership/user/User`.
+- **A reference to a part shares, and includes nothing:** `FeatureOne :: Master.(commit2+)/commit1 …` starts at Master's node, and FeatureOne does not hold Master. (The spec said a cross reference drew A inside B; read literally, every branch would have drawn Master inside itself.)
+- **References point left,** as before: a diagram not yet declared, or the diagram itself, is *not declared before*.
+
+**Membership.** A diagram is a member of each diagram that names it, in order. Clusters form a tree, so a diagram belongs to the *first* diagram that names it: it is drawn there, and styled from there (below). Nodes still belong to the diagram that made them.
+
+**Drawn by its motif.** By default a member is a cluster, a delimited zone with a graph of its own, and an edge to the diagram reaches the cluster's border. Other motifs are the style's `:as` (`[node]`, `[table]`), chosen later by the proof's kind (step 11): a member drawn as one node, a table drawn as a table. The relations say *the diagram*; how it looks is not theirs to say.
+
+**The style reaches members.** Amends the spec's *each diagram styles itself*. A member's rules are its containers' layers beneath its own: `[base]`, then the containers, outermost first, then the diagram's own layer. What reaches is a layer's themes, tokens, class bindings and `:theme`. Element bindings do not: a container naming a member's parts (`Repo :style { Master.init :label "…" }`) is still *another diagram's subject*. Relaxing that later breaks nothing.
+
+**The proof sees members** (step 11): a proof at Repo reads Master's contents, as `(Master.init :init)` needs.
+
+**Categorically.** A container is a diagram whose objects may be diagrams; an edge between two of them is a morphism between diagrams, whose kind (a foreign key, a functor, a call) the proof says. Including a diagram alone adds an object and no arrow; the graph seen inside is the union of the members, glued where they share nodes.
+
+### 23.3 `*` holds the ends of one term, on one side
+
+**Why the guard was.** §5.3 replaced the seal with `*`, and three rules of the seal with one: "a null node holds one end". One end was the cheapest way to make a node *private*: nothing can glue to it or refer to it. It also kept a null node *one-sided*, so it is always a start (nothing arrives) or an end (§10, as in UML).
+
+**Privacy and one side are the point; the count is not.** `*/(a, b, c)` is private (nothing outside the term reaches it) and one-sided (three ends, all starts).
+
+**Decided.** `*` beside a term holds every free end on that side of it, at least one. `*/` distributes over a group, as `#A/` does, and every end it reaches lands on the one null node; closed branches are skipped, as when ends are counted.
+
+| Program | Before | Now |
+| --- | --- | --- |
+| `*/(a, b, c)` | *not on exactly one end* | one start holding dom a, b, c |
+| `(f, g)/*`, `+(yes, no)/*` | *not on exactly one end* | one stop holding cod f, g |
+| `*/(a, b c)` | *not on exactly one end* | a and b start there; c follows b |
+| `*/+(f, g)` | *not on exactly one end* | a slash between two nodes; write `*/(f, g)` |
+| a lone `*`, `f/*/g`, `*/f/g` | *not on exactly one end* | unchanged: no end, or both sides |
+| `k f/*, j/f+` | *reference to a null node* | unchanged: private |
+| `*/(a, b) h` | *nothing to join* | unchanged: `*` exposes nothing |
+
+**Categorically,** `+(a, b, c)` and `*/(a, b, c)` are the same graph, a wedge: three edges from one node. They differ in the interface. A pinch's apex stays open: `h +(a, b)` attaches to it, and relations reach it as `+a`. A null apex is sealed: anonymous, out of reach in relations, drawn as a dot. Definitions still name it through an edge (`+a :label "row"`).
+
+### 23.4 A node beside a group that exposes nothing
+
+`g/(*/f)` and `(f/*)/g` report *nothing to join*; `#X/(*/f)` and `@/(*/f)` made the node a hole and reported nothing. Rule 2 missed the mirror case: a node, a slash, then a group whose side facing it is empty. It is *nothing to join* at the slash, with its corpus row. With `@` gone, `#X/(*/f)` remains.
+
+### 23.5 The examples
+
+**Git.** Each branch is its history from `*`; the repository holds them. Nothing is written for the diagrams' sake.
+
+```
+Master     :: */init commit1 commit2 commit3 commit4 commit5
+FeatureOne :: Master.(commit2+)/commit1 commit2 commit3 commit4
+FeatureTwo :: Master.(commit2+)/commit1 commit2 merge/Master.(commit3+)
+
+Repo :: Master, FeatureOne, FeatureTwo
+
+Repo :style { &node :shape [point] }    // reaches every branch's commits
+```
+
+FeatureTwo forks after commit2 and merges into the state after commit3, so master's `commit3` and FeatureTwo's `merge` both arrive there: a square, the merge commit. Under `@`, Master needed `@/init …` (then init did not start at `*`), or `commit5/@` (then `@` moved with every commit).
+
+**Entity–relationship.** A table is one sealed row with its columns; the schema joins tables as wholes.
+
+```
+T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
+
+User         :: */(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+Organization :: */(id/T.#UUID7, name/T.#String)
+Membership   :: */(id/T.#UUID7, admin/T.#Bool)
+Tagging      :: */id/T.#UUID7
+
+Db :: {
+    Membership/(user/User, org/Organization),
+    …
+}
+```
+
+Db is written as before, and means more: it holds its tables, so its frame surrounds them and its proof reads them (`&node.id :pk`, `User.(email, nick)! :uk` already assumed so). T, reached only by `T.#UUID7`, is beside Db, not in it. Under `@` each table was `@/( … )`; written as an open pinch, `+( … )`, the row would draw as a node labelled `+id`, could be extended by mistake, and a one-column table (`+(id/…)`) would warn as a pinch of one end. As `*/( … )` every table has one form. A table's row and the table itself are now one sealed start and the diagram: a schema kind (step 11) identifies them, and `[table]` draws them as one.
+
+**Flowchart.** A subprocess is a diagram, and a flow passes through it as through a node, BPMN's call activity:
+
+```
+Payment :: */charge/? +(paid, declined)/*
+Order   :: */receive validate/Payment ship/*
+```
+
+`+(paid, declined)/*` ends both outcomes at one final node, where before each needed its own (`+(paid/*, declined/*)`). Order holds Payment, drawn inside it, and `validate` and `ship` reach its border. A start holding several flows (`*/(a, b)`) is an implicit fork, which `Par :: */s/! +(a, b)! t/*` writes with a bar; whether flows may write it is a restriction of the flowchart kind (§17), not of the syntax, as with `?`.
+
+### 23.6 Rejected
+
+- **`@` at a branch's tip** (`commit5/@`, a branch as a ref to its last commit). True of git, but fragile: the `@` moves at every commit, and every diagram that is to be held needs one.
+- **A name alone includes, a name with a slash is its `@`.** Keeps `@` only to be attached to, and gives one name two meanings by position.
+- **Its own syntax for inclusion** (`Master.*`, braces). A bare name already says it, and braces are a declaration's lines and a record's contents.
+- **Inclusion by reference.** Every diagram reaching a part of Master would hold Master: nesting with no tree.
+- **`&self`.** The diagram already describes itself (§23.1), and `&zone` is the class of every diagram.
+- **Tables as open pinches, made to look like dots by style.** The source would say "an open node, reachable" where the author means "a sealed start", and the one-column table would stay the exception.
+- ***Included twice*** (a warning). Repeated names glue, as Db names User three times; a diagram written alone twice is one member.
