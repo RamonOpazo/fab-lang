@@ -179,11 +179,12 @@ test "comments and newlines" {
 }
 
 test "every operator" {
-    try expectTags("/ + * ? ! @ . == ~= , | ( ) { }", &.{
-        .slash, .plus,  .star, .quid,  .bang,  .at,    .dot,   .iden,
+    try expectTags("/ + * ? ! . == ~= , | ( ) { }", &.{
+        .slash, .plus,  .star, .quid,  .bang,  .dot,   .iden,
         .cong,  .comma, .bar,  .l_par, .r_par, .l_cur, .r_cur,
     });
-    try expectTags("= ~ - ; % ]", &.{ .invalid, .invalid, .invalid, .invalid, .invalid, .invalid });
+    // `@` is free for later (statements.md §23.1).
+    try expectTags("= ~ - ; % ] @", &.{ .invalid, .invalid, .invalid, .invalid, .invalid, .invalid, .invalid });
 }
 
 test "eof repeats" {
@@ -220,14 +221,14 @@ test "the spec's larger examples lex with no invalid tokens" {
         ,
         \\T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
         \\
-        \\User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
-        \\Organization :: @/(id/T.#UUID7, name/T.#String)
-        \\Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
-        \\Project      :: @/(id/T.#UUID7, name/T.#String)
-        \\Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
-        \\Comment      :: @/(id/T.#UUID7, text/T.#Text)
-        \\Tag          :: @/(id/T.#UUID7, label/T.#String)
-        \\Tagging      :: @/(id/T.#UUID7)
+        \\User         :: */(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+        \\Organization :: */(id/T.#UUID7, name/T.#String)
+        \\Membership   :: */(id/T.#UUID7, admin/T.#Bool)
+        \\Project      :: */(id/T.#UUID7, name/T.#String)
+        \\Document     :: */(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+        \\Comment      :: */(id/T.#UUID7, text/T.#Text)
+        \\Tag          :: */(id/T.#UUID7, label/T.#String)
+        \\Tagging      :: */id/T.#UUID7
         \\
         \\Db :: {
         \\  Membership/(user/User, org/Organization),

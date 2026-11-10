@@ -17,7 +17,7 @@ test "a decision with an undirected edge: G :: #Valid? (f, g/)" {
     var b: Builder = .init(testing.allocator);
     errdefer b.deinit();
 
-    const g = try b.addZone(.{ .name = try b.addString("G"), .own = null });
+    const g = try b.addZone(.{ .name = try b.addString("G") });
     const f_name = try b.addString("f");
     const g_name = try b.addString("g");
     const n0 = try b.addNode(.{ .kind = .choice, .name = try b.addString("#Valid"), .zone = g, .canonical = null });
@@ -45,7 +45,7 @@ test "two zones sharing a node, a 2-cell and a 3-cell" {
     var b: Builder = .init(testing.allocator);
     errdefer b.deinit();
 
-    const a = try b.addZone(.{ .name = try b.addString("A"), .own = null });
+    const a = try b.addZone(.{ .name = try b.addString("A") });
     const n0 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .dom } });
     const n1 = try b.addNode(.{ .kind = .plain, .name = null, .zone = a, .canonical = .{ .edge = @fromBackingInt(@intCast(0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = n0, .target = n1, .directed = true, .zone = a });
@@ -55,7 +55,7 @@ test "two zones sharing a node, a 2-cell and a 3-cell" {
     _ = try b.addCell(.{ .name = try b.addString("m"), .level = 3, .source = .{ .cell = alpha }, .target = .{ .cell = beta }, .directed = true, .zone = a });
     _ = try b.addCell(.{ .name = try b.addString("ι"), .level = 2, .source = .{ .edge = f }, .target = .{ .node = n0 }, .directed = true, .zone = a });
 
-    const zb = try b.addZone(.{ .name = try b.addString("B"), .own = null });
+    const zb = try b.addZone(.{ .name = try b.addString("B") });
     const n2 = try b.addNode(.{ .kind = .plain, .name = null, .zone = zb, .canonical = .{ .edge = @fromBackingInt(@intCast(2)), .side = .dom } });
     _ = try b.addEdge(.{ .name = try b.addString("h"), .source = n2, .target = n1, .directed = true, .zone = zb });
 
@@ -80,26 +80,27 @@ test "two zones sharing a node, a 2-cell and a 3-cell" {
     );
 }
 
-test "a zone with an own node: User :: @ (id T.#UUID7)" {
+test "a diagram as a node of another: Db :: T/owns/User" {
     var b: Builder = .init(testing.allocator);
     errdefer b.deinit();
 
-    const t = try b.addZone(.{ .name = try b.addString("T"), .own = null });
-    const uuid = try b.addNode(.{ .kind = .plain, .name = try b.addString("#UUID7"), .zone = t, .canonical = null });
-    const user = try b.addZone(.{ .name = try b.addString("User"), .own = null });
-    const at = try b.addNode(.{ .kind = .plain, .name = null, .zone = user, .canonical = null });
-    b.zones.items(.own)[@backingInt(user)] = at;
-    _ = try b.addEdge(.{ .name = try b.addString("id"), .source = at, .target = uuid, .directed = true, .zone = user });
+    const t = try b.addZone(.{ .name = try b.addString("T") });
+    const user = try b.addZone(.{ .name = try b.addString("User") });
+    const db = try b.addZone(.{ .name = try b.addString("Db") });
+    const of_t = try b.addNode(.{ .kind = .plain, .name = null, .zone = db, .diagram = t, .canonical = null });
+    const of_user = try b.addNode(.{ .kind = .plain, .name = null, .zone = db, .diagram = user, .canonical = null });
+    _ = try b.addEdge(.{ .name = try b.addString("owns"), .source = of_t, .target = of_user, .directed = true, .zone = db });
 
     var ir = try b.finish();
     defer ir.deinit(testing.allocator);
 
     try expectDump(ir,
         \\zone T
-        \\  node n0 #UUID7
-        \\zone User own n1
-        \\  node n1
-        \\  edge id n1 -> n0
+        \\zone User
+        \\zone Db
+        \\  node n0 diagram T
+        \\  node n1 diagram User
+        \\  edge owns n0 -> n1
         \\
     );
 }

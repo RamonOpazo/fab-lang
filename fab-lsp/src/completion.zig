@@ -6,7 +6,7 @@
 //! errors (`base`), so names declared further up stay offered while the
 //! current line is broken.
 //!
-//!   G.      G's parts: edges, cells, named nodes, `@`, classes
+//!   G.      G's parts: edges, cells, named nodes, classes
 //!   #       the named nodes of the statement's diagram
 //!   f       the edges and cells of the statement's diagram
 //!   G       the diagrams
@@ -143,7 +143,7 @@ fn statementStart(tags: []const Tag) usize {
 /// or a class.
 const Path = struct {
     zone: ?[]const u8 = null,
-    part: union(enum) { whole, edge: []const u8, start: []const u8, end: []const u8, node: []const u8, own, class: []const u8 },
+    part: union(enum) { whole, edge: []const u8, start: []const u8, end: []const u8, node: []const u8, class: []const u8 },
 };
 
 /// What a descriptor is written at, and whether at the top level, where a
@@ -257,7 +257,7 @@ fn group(arena: std.mem.Allocator, t: Tokens, from: usize, to: usize, out: *std.
     return true;
 }
 
-/// One context: `G`, `G.f`, `+f`, `f+`, `#A`, `@`, `&c`, each but the first
+/// One context: `G`, `G.f`, `+f`, `f+`, `#A`, `&c`, each but the first
 /// optionally qualified, `G.`.
 fn path(t: Tokens, from: usize, to: usize) ?Path {
     var i = from;
@@ -270,7 +270,6 @@ fn path(t: Tokens, from: usize, to: usize) ?Path {
         .zone_id => if (zone == null) .{ .zone = t.text(i), .part = .whole } else null,
         .edge_id => .{ .zone = zone, .part = .{ .edge = t.text(i) } },
         .node_id => .{ .zone = zone, .part = .{ .node = t.text(i) } },
-        .at => .{ .zone = zone, .part = .own },
         .class_id => .{ .zone = zone, .part = .{ .class = t.text(i)[1..] } },
         else => null,
     };
@@ -319,7 +318,6 @@ fn need(ir: *const fab.Ir, paths: []const Path) ?Classes {
                 }
                 break :node any_node;
             },
-            .own => if (zone) |z| (if (ir.zones.items(.own)[@backingInt(z)]) |n| kindOf(ir, n) else any_node) else any_node,
         });
     }
     return classes_;
@@ -412,7 +410,6 @@ fn nodes(out: *Collector, ir: *const fab.Ir, zone: fab.Ir.ZoneIndex) error{OutOf
     for (ir.nodes.items(.name), ir.nodes.items(.zone)) |name, z| {
         if (z == zone) if (name) |n| try out.add(ir.string(n), Item.Kind.variable, "node");
     }
-    if (ir.zones.items(.own)[@backingInt(zone)] != null) try out.add("@", Item.Kind.variable, "the diagram's own node");
 }
 
 fn diagrams(out: *Collector, ir: *const fab.Ir) error{OutOfMemory}!void {

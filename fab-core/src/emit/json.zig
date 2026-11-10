@@ -8,9 +8,10 @@
 //! stands says its sort, so the node `#A` is "A", the class `&node` "node",
 //! the descriptor `:label` "label". Diagnostics quote the source as written.
 //!
-//! Format, version 2. A compilation:
+//! Format, version 1. It stays 1 while the language is being formalised,
+//! however the format changes (release.md §3). A compilation:
 //!
-//!   { "version": 2,
+//!   { "version": 1,
 //!     "status": "ok" | "warning" | "promoted" | "error",
 //!     "diagnostics": [Diagnostic],
 //!     "ir": IR | null,                null when the tolerance withholds it
@@ -32,9 +33,9 @@
 //!     as in the Language Server Protocol. Lines end at "\n".
 //!
 //!   IR: the tables of Ir.zig. Every reference is an index into a table.
-//!     { "zones": [{"name": "G", "own": null | node, "placeholder": false}],
+//!     { "zones": [{"name": "G", "placeholder": false}],
 //!       "nodes": [{"kind": "plain" | "choice" | "parallel" | "null_node" | "hole",
-//!                  "name": null | "A", "zone": zone,
+//!                  "name": null | "A", "zone": zone, "diagram": null | zone,
 //!                  "canonical": null | {"edge": edge, "side": "dom" | "cod"}}],
 //!       "edges": [{"name": "f", "source": node, "target": node,
 //!                  "directed": true, "zone": zone}],
@@ -73,7 +74,7 @@
 //!
 //! Tokens, for syntax highlighting:
 //!
-//!   { "version": 2, "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
+//!   { "version": 1, "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
 //!
 //! Strings are UTF-8. Bytes in the source that are not valid UTF-8 are
 //! written as U+FFFD.
@@ -91,7 +92,7 @@ const Decimal = @import("../analyse/Decimal.zig");
 
 const Writer = std.Io.Writer;
 
-pub const version = 2;
+pub const version = 1;
 
 pub const Error = Writer.Error || error{OutOfMemory};
 
@@ -165,12 +166,10 @@ fn writeSpan(lines: *const Lines, span: Diagnostic.Span, w: *Writer) Writer.Erro
 
 fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
     try w.writeAll("{\"zones\":[");
-    for (ir.zones.items(.name), ir.zones.items(.own), ir.zones.items(.placeholder), 0..) |name, own, placeholder, i| {
+    for (ir.zones.items(.name), ir.zones.items(.placeholder), 0..) |name, placeholder, i| {
         if (i > 0) try w.writeByte(',');
         try w.writeAll("{\"name\":");
         try string(w, ir.string(name));
-        try w.writeAll(",\"own\":");
-        try optionalIndex(w, own);
         try w.print(",\"placeholder\":{}", .{placeholder});
         try w.writeByte('}');
     }
@@ -183,7 +182,9 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         try string(w, @tagName(node.kind));
         try w.writeAll(",\"name\":");
         if (node.name) |name| try string(w, unsigiled(ir.string(name))) else try w.writeAll("null");
-        try w.print(",\"zone\":{d},\"canonical\":", .{@backingInt(node.zone)});
+        try w.print(",\"zone\":{d},\"diagram\":", .{@backingInt(node.zone)});
+        try optionalIndex(w, node.diagram);
+        try w.writeAll(",\"canonical\":");
         if (node.canonical) |end| {
             try w.print("{{\"edge\":{d},\"side\":\"{s}\"}}", .{ @backingInt(end.edge), @tagName(end.side) });
         } else try w.writeAll("null");

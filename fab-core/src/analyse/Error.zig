@@ -231,8 +231,6 @@ pub const Tag = enum(u8) {
     diagram_not_declared,
     /// `T.#UUDI7`, `A.+k` with no k in A.
     undeclared_name_in_diagram,
-    /// `Db :: T/owns/User` where T has no `@`.
-    diagram_without_own_node,
     /// `A.f g`, `A.(f, g)`, `f.#X`.
     cross_reference_not_a_node,
 

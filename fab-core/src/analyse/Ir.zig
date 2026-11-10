@@ -41,8 +41,6 @@ pub const String = struct {
 
 pub const Zone = struct {
     name: String,
-    /// The node `@`, if the zone has one.
-    own: ?NodeIndex,
     /// Stands for a statement that names no diagram (`review :: a b`,
     /// `:x := …`): it has no elements, only the issues that say what went
     /// wrong, and draws as a crossed square. Its name is the head's first
@@ -55,9 +53,13 @@ pub const Node = struct {
     /// `#A`, if the node is named.
     name: ?String,
     zone: ZoneIndex,
+    /// The diagram this node stands for, in the diagram that names it
+    /// (`Db :: Document/owner/User`; statements.md §23.2). Such a node is
+    /// named by its diagram's name.
+    diagram: ?ZoneIndex = null,
     /// The first edge end that created the node, in reading order: how the
     /// format layer refers to an unnamed node. Null when the node is named
-    /// (`#A` or `@`), since a named node is referred to by its name.
+    /// (`#A`, or a diagram's), since a named node is referred to by its name.
     canonical: ?End,
 
     pub const Kind = enum(u8) {
@@ -207,8 +209,9 @@ pub const Builder = struct {
 // Dump: zone by zone, its nodes, then its edges, then its cells; issues last.
 // The format of `fab ir` and of the golden files in test/cases/ir/.
 //
-//   zone G own n0                    a placeholder: `placeholder review`
+//   zone G                           a placeholder: `placeholder review`
 //     node n0 canon +f
+//     node n2 diagram User     the node standing for User, in G
 //     node n1 choice #Valid canon f+
 //     edge f n0 -> n1          directed
 //     edge g n1 -- n2          undirected
@@ -223,7 +226,6 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
     for (0..ir.zones.len) |z| {
         const zone = ir.zones.get(z);
         try w.print("{s} {s}", .{ if (zone.placeholder) "placeholder" else "zone", ir.string(zone.name) });
-        if (zone.own) |own| try w.print(" own n{d}", .{@backingInt(own)});
         try w.writeAll("\n");
 
         for (0..ir.nodes.len) |n| {
@@ -232,6 +234,7 @@ pub fn dump(ir: Ir, w: *std.Io.Writer) std.Io.Writer.Error!void {
             try w.print("  node n{d}", .{n});
             if (node.kind != .plain) try w.print(" {s}", .{@tagName(node.kind)});
             if (node.name) |name| try w.print(" {s}", .{ir.string(name)});
+            if (node.diagram) |d| try w.print(" diagram {s}", .{ir.string(ir.zones.items(.name)[@backingInt(d)])});
             if (node.canonical) |end| try w.print(" canon {f}", .{ir.endText(end)});
             try w.writeAll("\n");
         }

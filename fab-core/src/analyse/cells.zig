@@ -168,7 +168,6 @@ fn leaf(l: *Level, node: Node.Index) error{OutOfMemory}!Ports {
     const token = cst.mainToken(node);
     const text = switch (cst.tokenTag(token)) {
         .edge_id, .node_id => cst.tokenText(token),
-        .at => "@",
         else => return failedTerm(l, node),
     };
     if (cst.tokenTag(token) != .edge_id or sort.isSide(a, token)) {

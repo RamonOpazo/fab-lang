@@ -188,24 +188,24 @@ fn expectReferences(source: [:0]const u8, want: []const u8) !void {
 
 test "references: every name in a declaration, and what it names" {
     // A's names, then B's uses of them: an end (`A.f+`), a named node
-    // (`A.#X`), the diagram as its own node (`A`), its own edge (`+h`).
-    try expectReferences("A :: @/f/#X g\nB :: A.f+/h, A.#X/k, A/m, +h/n",
+    // (`A.#X`), the diagram itself (`A`), its own edge (`+h`).
+    try expectReferences("A :: #Y/f/#X g\nB :: A.f+/h, A.#X/k, A/m, +h/n",
         \\A@0 zone @0 =zone0
-        \\@@5 node @5 =node0
-        \\f@7 edge @7 =edge0
-        \\#X@9 node @9 =node1
-        \\g@12 edge @12 =edge1
-        \\B@14 zone @14 =zone1
-        \\A@19 zone @0 =zone0
-        \\f@21 edge @7 =edge0
-        \\h@24 edge @24 =edge2
-        \\A@27 zone @0 =zone0
-        \\#X@29 node @9 =node1
-        \\k@32 edge @32 =edge3
-        \\A@35 zone @0 =zone0
-        \\m@37 edge @37 =edge4
-        \\h@41 edge @24 =edge2
-        \\n@43 edge @43 =edge5
+        \\#Y@5 node @5 =node0
+        \\f@8 edge @8 =edge0
+        \\#X@10 node @10 =node1
+        \\g@13 edge @13 =edge1
+        \\B@15 zone @15 =zone1
+        \\A@20 zone @0 =zone0
+        \\f@22 edge @8 =edge0
+        \\h@25 edge @25 =edge2
+        \\A@28 zone @0 =zone0
+        \\#X@30 node @10 =node1
+        \\k@33 edge @33 =edge3
+        \\A@36 zone @0 =zone0
+        \\m@38 edge @38 =edge4
+        \\h@42 edge @25 =edge2
+        \\n@44 edge @44 =edge5
         \\
     );
 }
@@ -372,7 +372,7 @@ test "a side of a lower level stands for its identity" {
 }
 
 test "only level 1 makes nodes" {
-    var a = try analyse("G :: +(f, g)+ | f/α/#B, @/β/g");
+    var a = try analyse("G :: +(f, g)+ | f/α/#B, #C/β/g");
     defer a.deinit();
     try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .side_not_declared, .side_not_declared }, a.tags());
     try testing.expectEqualStrings("#B", a.cst.tokenText(a.result.errors[0].token));

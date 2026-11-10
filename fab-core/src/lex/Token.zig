@@ -36,7 +36,6 @@ pub const Tag = enum(u8) {
     star, // *
     quid, // ?
     bang, // !
-    at, // @
     dot, // .
     iden, // == (for identity.)
     cong, // ~= (for congruency.)

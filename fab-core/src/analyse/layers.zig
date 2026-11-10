@@ -244,10 +244,9 @@ fn part(a: *Analyser, zone: Analyser.Zone, node: Node.Index, out: *std.ArrayList
                 try a.referTokenTo(main, if (name.level == 1) .edge else .cell, .{ .token = name.is.generator.token }, elaborate.names(name));
                 try add(a, out, .{ .subject = .{ .subject = subject }, .zone = null }, main);
             },
-            .node_id, .at => {
-                const key = if (cst.tokenTag(main) == .at) "@" else cst.tokenText(main);
-                const name = zone.table.get(key) orelse
-                    return a.fail(if (cst.tokenTag(main) == .at) .diagram_without_own_node else .undeclared_name_in_diagram, main);
+            .node_id => {
+                const name = zone.table.get(cst.tokenText(main)) orelse
+                    return a.fail(.undeclared_name_in_diagram, main);
                 const elem = switch (name.is) {
                     .node => |e| e,
                     .hole => return,

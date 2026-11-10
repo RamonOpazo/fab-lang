@@ -184,7 +184,7 @@ pub const Zone = struct {
     /// The name in the head of its first declaration.
     token: TokenIndex,
     /// What its names mean, once elaborated: other diagrams reach in through
-    /// them (`A.+f`, `A.#X`, `A.@`, `A`).
+    /// them (`A.+f`, `A.#X`).
     table: Table = .empty,
     /// Declared by a statement too broken to read: drawn as a placeholder,
     /// and what refers into it is a hole, silently.
@@ -375,7 +375,7 @@ fn brokenZone(a: *Analyser, head: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
     if (a.cst.tokenTag(head) == .zone_id) {
         if (a.zones.get(text)) |declared| return declared.index;
     }
-    const index = try a.builder.addZone(.{ .name = try a.builder.addString(text), .own = null, .placeholder = true });
+    const index = try a.builder.addZone(.{ .name = try a.builder.addString(text), .placeholder = true });
     if (a.cst.tokenTag(head) == .zone_id)
         try a.zones.put(a.gpa, text, .{ .index = index, .token = head, .broken = true });
     return index;
@@ -423,7 +423,6 @@ fn markStatement(a: *Analyser, first: usize, zone_index: ?Ir.ZoneIndex, head: No
     } else return;
     const z = zone_index orelse try a.builder.addZone(.{
         .name = try a.builder.addString(cst.tokenText(cst.firstToken(head))),
-        .own = null,
         .placeholder = true,
     });
     for (rest) |*err| {
@@ -501,7 +500,7 @@ fn declaration(a: *Analyser, head: Node.Index, body: Node.Index) error{OutOfMemo
 /// of its own; references go to the first.
 fn declareZone(a: *Analyser, name: TokenIndex) error{OutOfMemory}!Ir.ZoneIndex {
     const text = a.cst.tokenText(name);
-    const index = try a.builder.addZone(.{ .name = try a.builder.addString(text), .own = null });
+    const index = try a.builder.addZone(.{ .name = try a.builder.addString(text) });
     const gop = try a.zones.getOrPut(a.gpa, text);
     if (gop.found_existing) {
         try a.errors.append(a.gpa, .{ .tag = .zone_declared_twice, .token = name, .related = gop.value_ptr.token });

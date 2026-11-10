@@ -48,9 +48,8 @@ fn cellsOnly(a: *Analyser, node: Node.Index) error{OutOfMemory}!bool {
                 return false;
             },
             // Only level 1 makes nodes: above it a named node is a side.
-            .node_id, .at => {
-                const key = if (cst.tokenTag(main) == .at) "@" else cst.tokenText(main);
-                if (a.scope.table.contains(key)) return true;
+            .node_id => {
+                if (a.scope.table.contains(cst.tokenText(main))) return true;
                 try a.failTerm(.side_not_declared, node, main);
                 return false;
             },
@@ -143,7 +142,7 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const marker = if (cst.tag(right) == .postfix) cst.tokenTag(cst.mainToken(right)) else null;
     if (marker == .quid or marker == .bang)
         return a.failTerm(.kind_on_reference, node, cst.mainToken(right));
-    const reaches = sort.isPinchedEdge(a, right) or sort.isLeaf(cst, right, .node_id) or sort.isLeaf(cst, right, .at);
+    const reaches = sort.isPinchedEdge(a, right) or sort.isLeaf(cst, right, .node_id);
     if (!sort.isLeaf(cst, left, .zone_id) or !reaches)
         try a.failTerm(.cross_reference_not_a_node, node, cst.firstToken(node));
 }

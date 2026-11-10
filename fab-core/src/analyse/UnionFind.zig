@@ -28,7 +28,7 @@ const UnionFind = @This();
 arena: std.mem.Allocator,
 parent: std.ArrayList(u32) = .empty,
 classes: std.ArrayList(Class) = .empty,
-/// Which edge end each element is; null for atoms (`#A`, `@`, holes,
+/// Which edge end each element is; null for atoms (`#A`, diagrams, holes,
 /// level-2 nodes).
 end_of: std.ArrayList(?Ir.End) = .empty,
 zone_of: std.ArrayList(u32) = .empty,
@@ -40,7 +40,8 @@ pub const Class = struct {
     kind_token: TokenIndex = 0,
     name: ?[]const u8 = null,
     name_token: TokenIndex = 0,
-    own: bool = false,
+    /// The diagram the class stands for (statements.md §23.2): a name.
+    diagram: ?u32 = null,
     sealed: bool = false,
     /// A placeholder for a part of the program that failed.
     hole: bool = false,
@@ -49,7 +50,7 @@ pub const Class = struct {
     outer: ?u32 = null,
 
     pub fn named(c: Class) bool {
-        return c.name != null or c.own;
+        return c.name != null or c.diagram != null;
     }
 };
 
@@ -64,7 +65,7 @@ pub const Conflict = struct {
         sealed_end,
         /// The classes have different kinds. The same kind agrees.
         different_kinds,
-        /// Both classes are named (`#A` or `@`).
+        /// Both classes are named (`#A`, or a diagram's node).
         two_names,
         /// Level 2: the classes stand for different outer edges.
         two_outer_edges,
@@ -160,7 +161,7 @@ fn merge(uf: *UnionFind, rx: u32, ry: u32) error{OutOfMemory}!void {
     }
     if (!cx.named()) {
         cx.name = cy.name;
-        cx.own = cy.own;
+        cx.diagram = cy.diagram;
         cx.name_token = cy.name_token;
     }
     cx.outer = cx.outer orelse cy.outer;

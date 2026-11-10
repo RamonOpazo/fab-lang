@@ -19,7 +19,7 @@ pub fn of(a: *const Analyser, node: Node.Index) Sort {
     const cst = a.cst;
     return switch (cst.tag(node)) {
         .leaf => switch (cst.tokenTag(cst.mainToken(node))) {
-            .node_id, .zone_id, .at, .star, .quid, .bang => .node,
+            .node_id, .zone_id, .star, .quid, .bang => .node,
             .edge_id => if (isSide(a, cst.mainToken(node))) .node else .edges,
             else => .edges,
         },

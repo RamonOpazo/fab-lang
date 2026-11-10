@@ -37,7 +37,7 @@ test "a valid program, its IR in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(
-        \\{"version":2,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","own":null,"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
+        \\{"version":1,"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
     , beforeSheet(doc));
 }
 
@@ -56,7 +56,7 @@ test "a broken program: diagnostics, holes and issues" {
         \\"status":"error","diagnostics":[{"code":"reference_not_declared","stage":"analysis","severity":"error","span":{"bytes":[10,11],"utf16":[10,11],"range":{"start":{"line":0,"character":10},"end":{"line":0,"character":11}}},"related":null,"message":"The edge `k` is not declared
     );
     try expectContains(doc,
-        \\{"kind":"hole","name":null,"zone":0,"canonical":{"edge":1,"side":"cod"}}
+        \\{"kind":"hole","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}
     );
     try expectContains(doc,
         \\"issues":[{"subject":{"node":2},"diagnostic":0}]},"sheet":
@@ -95,7 +95,7 @@ test "tokens" {
     defer out.deinit();
     try json.writeTokens(&c, &out.writer);
     try testing.expectEqualStrings(
-        \\{"version":2,"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
+        \\{"version":1,"tokens":[{"tag":"edge_id","bytes":[0,1],"utf16":[0,1]},{"tag":"slash","bytes":[1,2],"utf16":[1,2]},{"tag":"edge_id","bytes":[2,3],"utf16":[2,3]},{"tag":"eof","bytes":[3,3],"utf16":[3,3]}]}
     , out.written());
 }
 

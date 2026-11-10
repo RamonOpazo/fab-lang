@@ -574,11 +574,6 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "Names never come into existence by being mentioned from outside: the edge or the named node must be in the diagram's own declaration.",
             .hint = "Check the spelling, or add it to that diagram.",
         },
-        .diagram_without_own_node => .{
-            .message = "The diagram {} has no own node",
-            .explanation = "A diagram attaches as a node at its `@`. Without one, there is nothing to attach to.",
-            .hint = "Give it an own node: `T :: @/…`, or reach one of its nodes: `T.#X`.",
-        },
         .cross_reference_not_a_node => .{
             .message = "In relations, `.` reaches a node of another diagram",
             .explanation = "Another diagram's edges are its own and can't be declared again here. Its nodes can be shared: an end, a named node, or its own node.",
@@ -662,7 +657,6 @@ pub fn describe(tag: Token.Tag) []const u8 {
         .star => "`*`",
         .quid => "`?`",
         .bang => "`!`",
-        .at => "`@`",
         .dot => "`.`",
         .iden => "`==`",
         .cong => "`~=`",

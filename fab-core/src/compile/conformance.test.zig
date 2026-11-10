@@ -117,9 +117,9 @@ test "Composition: join" {
 
 test "Composition: a declaration in braces spans lines" {
     try check(.{ .step = 5, .source =
-        \\User :: @/id
-        \\Document :: @/id
-        \\Config :: @/id
+        \\User :: */id
+        \\Document :: */id
+        \\Config :: */id
         \\Db :: {
         \\  Document/owner/User,
         \\  Config/settings_of/User
@@ -628,8 +628,8 @@ test "Relations: a kind on a named node" {
     try check(.{ .step = 5, .rule = 4, .source = "G :: #A?", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
 }
 
-test "Relations: a pinch of the diagram's own node" {
-    try check(.{ .step = 5, .rule = 4, .source = "G :: (@)+", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
+test "Relations: a pinch of a diagram" {
+    try check(.{ .step = 5, .rule = 4, .source = "A :: f\nG :: (A)+", .codes = &.{.{ .analysis = .pinch_of_a_node }} });
 }
 
 test "Relations: a pinch of nothing" {
@@ -685,8 +685,8 @@ test "Diagrams and names: a cross reference shares A's node" {
     });
 }
 
-test "Diagrams as nodes: attached at the own node" {
-    try check(.{ .step = 5, .rule = 6, .source = "A :: @/f\nB :: h/A.@, A/k" });
+test "Diagrams as nodes: attached on either side" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: h/A, A/k" });
 }
 
 test "Diagrams and names: a diagram not declared" {
@@ -702,19 +702,48 @@ test "Diagrams as nodes: a diagram's own name" {
 }
 
 test "Named nodes: an undeclared name in another diagram" {
-    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nU :: @/(id/T.#UUDI7)", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
+    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nU :: */id/T.#UUDI7", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
 }
 
 test "Diagrams and names: an undeclared edge in another diagram" {
     try check(.{ .step = 5, .rule = 6, .source = "A :: g\nB :: h/A.+f", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
 }
 
-test "Diagrams as nodes: a diagram without @" {
-    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nUser :: @/id\nDb :: T/owns/User", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
+test "Diagrams as nodes: the diagram itself, a node of the one naming it (statements.md §23.2)" {
+    try check(.{ .step = 5, .rule = 6, .source = "T :: #UUID7\nUser :: */id/T.#UUID7\nDb :: T/owns/User", .ir =
+        \\zone T
+        \\  node n0 #UUID7
+        \\zone User
+        \\  node n1 null_node canon +id
+        \\  edge id n1 -> n0
+        \\zone Db
+        \\  node n2 diagram T
+        \\  node n3 diagram User
+        \\  edge owns n2 -> n3
+        \\
+    });
 }
 
-test "Diagrams and names: A.@ without @" {
-    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: h/A.@", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
+test "Diagrams as nodes: alone, and repeated, one node (statements.md §23.2)" {
+    try check(.{ .step = 5, .rule = 6, .source = "A :: f\nB :: A, A/g", .ir =
+        \\zone A
+        \\  node n0 canon +f
+        \\  node n1 canon f+
+        \\  edge f n0 -> n1
+        \\zone B
+        \\  node n2 diagram A
+        \\  node n3 canon g+
+        \\  edge g n2 -> n3
+        \\
+    });
+}
+
+test "Diagrams as nodes: two diagrams meeting" {
+    try check(.{ .step = 5, .rule = 5, .source = "A :: f\nB :: g\nC :: h/A B/k", .codes = &.{.{ .analysis = .two_names_for_one_node }} });
+}
+
+test "Lexical: @ is free for later (statements.md §23.1)" {
+    try check(.{ .step = 4, .source = "G :: @/f", .codes = &.{.{ .syntax = .invalid_token }} });
 }
 
 test "Diagrams and names: a reference to another diagram's null node" {
@@ -763,7 +792,7 @@ test "Statements: an entry as a declaration's head" {
 }
 
 test "Statements: a node declared, reserved" {
-    try check(.{ .step = 5, .source = "#User :: @/(id, name)", .codes = &.{.{ .analysis = .reserved_node_or_edge_declaration }} });
+    try check(.{ .step = 5, .source = "#User :: */(id, name)", .codes = &.{.{ .analysis = .reserved_node_or_edge_declaration }} });
 }
 
 test "Statements: an edge declared, reserved" {
@@ -1125,8 +1154,6 @@ test "Layers: contexts are subjects" {
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G.g+ :ink [red]\nG.&edge :pen [thin]\n&node :fill [red]\n(G, G.f) :note \"n\"" });
     // `G.f` inside G's block is `f`; braces and groups organise.
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { G.f :label \"x\", { g :label \"y\" }, f { :ink [red] } }" });
-    // `@`, a diagram's own node.
-    try check(.{ .step = 9, .rule = 31, .source = "T :: @/(id, name)\nT.@ :shape [box]" });
 }
 
 test "Layers: description at an undeclared context" {
@@ -1138,7 +1165,6 @@ test "Layers: an undeclared name in the diagram" {
     const g = "G :: f g\n";
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G.zz :label \"x\"", .codes = &.{.{ .analysis = .undeclared_name_in_diagram }} });
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G :style { +zz :label \"x\", #Zz :label \"y\" }", .codes = &.{ .{ .analysis = .undeclared_name_in_diagram }, .{ .analysis = .undeclared_name_in_diagram } } });
-    try check(.{ .step = 9, .rule = 31, .source = g ++ "G.@ :shape [box]", .codes = &.{.{ .analysis = .diagram_without_own_node }} });
     try check(.{ .step = 9, .rule = 31, .source = g ++ "G.&nodes :fill [red]", .codes = &.{.{ .analysis = .unknown_class }} });
 }
 
@@ -1178,9 +1204,13 @@ test "Layers: a node is referenced canonically" {
     try check(.{ .step = 9, .rule = 32, .source = "G :: */f g\nG.+f :label \"start\"" });
 }
 
+test "Layers: a shared start is named through its first edge (statements.md §23.3)" {
+    try check(.{ .step = 9, .rule = 32, .source = "T :: */(id, name)\nT.+id :label \"row\"" });
+    try check(.{ .step = 9, .rule = 32, .source = "T :: */(id, name)\nT.+name :label \"row\"", .codes = &.{.{ .analysis = .non_canonical_reference }} });
+}
+
 test "Layers: a named node is referenced by its name" {
     try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.+f :label \"x\"", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
-    try check(.{ .step = 9, .rule = 32, .source = "T :: @/(id, name)\nT.+id :shape [box]", .codes = &.{.{ .analysis = .named_node_referenced_by_end }} });
     try check(.{ .step = 9, .rule = 32, .source = "G :: #A/f g\nG.#A :label \"x\"" });
 }
 
@@ -1407,8 +1437,8 @@ test "Relations: a null node beside a space" {
     try check(.{ .step = 5, .rule = 1, .source = "G :: * f", .codes = &.{.{ .analysis = .node_beside_space }} });
 }
 
-test "Relations: own node beside a space" {
-    try check(.{ .step = 5, .rule = 1, .source = "G :: @ (f)", .codes = &.{.{ .analysis = .node_beside_space }} });
+test "Relations: a diagram before a space" {
+    try check(.{ .step = 5, .rule = 1, .source = "A :: f\nG :: A (f)", .codes = &.{.{ .analysis = .node_beside_space }} });
 }
 
 test "Relations: a diagram beside a space" {
@@ -1750,14 +1780,14 @@ test "Examples: a database schema: documents and comments" {
     try check(.{ .step = 5, .source =
         \\T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
         \\
-        \\User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
-        \\Organization :: @/(id/T.#UUID7, name/T.#String)
-        \\Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
-        \\Project      :: @/(id/T.#UUID7, name/T.#String)
-        \\Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
-        \\Comment      :: @/(id/T.#UUID7, text/T.#Text)
-        \\Tag          :: @/(id/T.#UUID7, label/T.#String)
-        \\Tagging      :: @/(id/T.#UUID7)
+        \\User         :: */(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+        \\Organization :: */(id/T.#UUID7, name/T.#String)
+        \\Membership   :: */(id/T.#UUID7, admin/T.#Bool)
+        \\Project      :: */(id/T.#UUID7, name/T.#String)
+        \\Document     :: */(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+        \\Comment      :: */(id/T.#UUID7, text/T.#Text)
+        \\Tag          :: */(id/T.#UUID7, label/T.#String)
+        \\Tagging      :: */id/T.#UUID7
         \\
         \\Db :: {
         \\  Membership/(user/User, org/Organization),

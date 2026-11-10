@@ -288,7 +288,7 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
     // by hand, and styled with the prelude.
     var b: fab.Ir.Builder = .init(testing.allocator);
     errdefer b.deinit();
-    const z = try b.addZone(.{ .name = try b.addString("G"), .own = null });
+    const z = try b.addZone(.{ .name = try b.addString("G") });
     const start = try b.addNode(.{ .kind = .null_node, .name = null, .zone = z, .canonical = null });
     const end = try b.addNode(.{ .kind = .plain, .name = null, .zone = z, .canonical = .{ .edge = @fromBackingInt(@as(u32, 0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = start, .target = end, .directed = true, .zone = z });
@@ -307,26 +307,22 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
 }
 
 test "a marked diagram that owns no node still shows its frame" {
-    // Db's edge joins A's and B's own nodes; its unsupported proof marks Db.
-    try expectDot("A :: @/f\nB :: @/g\nDb :: A/h/B\nDb :prove { :kind [schema] }",
+    // Db's edge joins two of A's nodes; its unsupported proof marks Db.
+    try expectDot("A :: f g\nDb :: A.g+/h/A.+f\nDb :prove { :kind [schema] }",
         \\  subgraph cluster_0 {
         \\    peripheries=0
-        \\    n0 [label="A", shape=circle, width=0.37, height=0.37, fixedsize=true]
+        \\    n0 [label="+f", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\    n1 [label="f+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
+        \\    n2 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
         \\  }
         \\  subgraph cluster_1 {
-        \\    peripheries=0
-        \\    n2 [label="B", shape=circle, width=0.37, height=0.37, fixedsize=true]
-        \\    n3 [label="g+", shape=circle, width=0.37, height=0.37, fixedsize=true, fontname="Helvetica-Oblique", fontcolor="#888888"]
-        \\  }
-        \\  subgraph cluster_2 {
         \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>Db>
         \\    pencolor="#8250df"
-        \\    a2 [label="", shape=point, width=0.01, height=0.01, style="invis"]
+        \\    a1 [label="", shape=point, width=0.01, height=0.01, style="invis"]
         \\  }
         \\  n0 -> n1 [label="f"]
-        \\  n2 -> n3 [label="g"]
-        \\  n0 -> n2 [label="h"]
+        \\  n1 -> n2 [label="g"]
+        \\  n2 -> n0 [label="h"]
         \\}
         \\
     );

@@ -1,0 +1,19 @@
+Master :: */init commit1 commit2 commit3 commit4 commit5
+
+FeatureOne :: Master.(commit2+)/commit1 commit2 commit3 commit4
+FeatureTwo :: Master.(commit2+)/commit1 commit2 merge/Master.(commit3+)
+
+FeatureOne :label "feature/cache"
+FeatureTwo :label "feature/auth"
+
+Repo :: Master, FeatureOne, FeatureTwo
+
+Repo :prove {
+    :kind [git],                // convert canonical names into hashes, at least one non-cyclic lane (which is :main if stated)
+    :axiom (Master :main),      // if given, establishes the main branch on top and contextualizes the records
+    :axiom (Master.init :init)  // if give, init's left node must be a `*`, thus, starting the branch
+}
+
+Repo :style {
+    &node :shape [point]  // maybe we could coordinate the style with the :prove :type?
+}

@@ -174,8 +174,8 @@
 // Computed defaults depend on the element, so no value states them. The
 // style pass fills them in wherever no layer binds the function:
 //
-//   &node :label   its name without #; @ its diagram's name; else its
-//                  canonical end (f+, +f)
+//   &node :label   its name without #; a diagram's node, its diagram's
+//                  name; else its canonical end (f+, +f)
 //   &edge :label   its name             &cell :label   its name
 //   &zone :label   its name
 //   &cell :arrow   [/double/>] at level 2, [/triple/>] at level 3, …

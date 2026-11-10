@@ -122,9 +122,8 @@ fn leaf(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         .edge_id => declareEdge(a, token),
         // A named node is plain: it meets no kind.
         .node_id => one(a, try named(a, text, token, .{ .name = text, .name_token = token, .kind = .plain, .kind_token = token })),
-        // A diagram name as a node: its own node.
-        .zone_id => one(a, try own(a, token)),
-        .at => one(a, try named(a, "@", token, .{ .own = true, .name_token = token, .kind = .plain, .kind_token = token })),
+        // A diagram name as a node: the diagram itself, held here.
+        .zone_id => one(a, try diagramNode(a, token)),
         .star => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .null_node })),
         .quid => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .choice, .kind_token = token })),
         .bang => one(a, try a.uf.add(@backingInt(a.zone()), null, .{ .kind = .parallel, .kind_token = token })),
@@ -185,34 +184,34 @@ fn declareEdge(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Ports {
 // Other diagrams (rule 6)
 
 /// A diagram declared before this one, by the token of its name. Its own
-/// declaration is not before it: it names its own node with `@`.
+/// declaration is not before it: a diagram never names itself.
 fn diagram(a: *Analyser, token: TokenIndex) ?Analyser.Zone {
     const zone = a.zones.get(a.cst.tokenText(token)) orelse return null;
     return if (zone.index == a.zone()) null else zone;
 }
 
-/// `A` as a node: A's own node. A broken diagram's error is said already.
-fn own(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
+/// `A` as a node: the diagram A, as one node of the diagram naming it
+/// (statements.md §23.2). It never enters A's own graph. One element per
+/// diagram in a declaration, made on first use; a name only a failed term
+/// held is made here. A broken diagram's error is said already.
+fn diagramNode(a: *Analyser, token: TokenIndex) error{OutOfMemory}!Elem {
     const zone = diagram(a, token) orelse return failHole(a, .diagram_not_declared, token);
     try a.referTokenTo(token, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
     if (zone.broken) return hole(a);
-    const at = zone.table.get("@") orelse return failHole(a, .diagram_without_own_node, token);
-    return nodeOf(a, at);
+    const gop = try a.scope.table.getOrPut(a.arena.allocator(), a.cst.tokenText(token));
+    if (!gop.found_existing or gop.value_ptr.is == .hole) gop.value_ptr.* = .{ .level = 0, .token = token, .is = .{
+        .node = try a.uf.add(@backingInt(a.zone()), null, .{ .diagram = @backingInt(zone.index), .name_token = token, .kind = .plain, .kind_token = token }),
+    } };
+    return gop.value_ptr.is.node;
 }
 
-/// `A.+f`, `A.f+`, `A.#X`, `A.@`: a node of another diagram, shared. It
-/// stays A's: the oldest element of a class is A's own.
+/// `A.+f`, `A.f+`, `A.#X`: a node of another diagram, shared. It stays A's:
+/// the oldest element of a class is A's own.
 fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     const cst = a.cst;
     const left, const right_ = cst.data(node).nodes;
     const right = sort.ofOne(cst, right_);
     const zone_token = cst.mainToken(left);
-    if (sort.isLeaf(cst, right, .at)) {
-        const elem = try own(a, zone_token);
-        if (diagram(a, zone_token)) |zone| if (zone.table.get("@")) |at| if (at.is == .node)
-            try a.referTokenTo(cst.mainToken(right), .node, .{ .token = at.token }, names(at));
-        return elem;
-    }
     const zone = diagram(a, zone_token) orelse return failHole(a, .diagram_not_declared, zone_token);
     try a.referTokenTo(zone_token, .zone, .{ .token = zone.token }, .{ .subject = .{ .zone = zone.index } });
     if (zone.broken) return hole(a);
@@ -230,8 +229,7 @@ fn crossReference(a: *Analyser, node: Node.Index) error{OutOfMemory}!Elem {
     return endOf(a, edge, if (cst.tag(right) == .prefix) .dom else .cod, name);
 }
 
-/// A named node, `@`, or a diagram name: one element per name in a
-/// declaration, made on first use. A name only a failed term held is made
+/// A named node: one element per name in a declaration, made on first use. A name only a failed term held is made
 /// here, as if first used.
 fn named(a: *Analyser, key: []const u8, token: TokenIndex, class: @import("UnionFind.zig").Class) error{OutOfMemory}!Elem {
     const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
@@ -272,7 +270,6 @@ fn failedTerm(a: *Analyser, node: Node.Index) error{OutOfMemory}!Ports {
         const key, const level: u32 = switch (cst.tokenTag(t)) {
             .edge_id => .{ cst.tokenText(t), 1 },
             .node_id => .{ cst.tokenText(t), 0 },
-            .at => .{ "@", 0 },
             else => continue,
         };
         const gop = try a.scope.table.getOrPut(a.arena.allocator(), key);
@@ -592,9 +589,9 @@ pub fn graph(a: *Analyser) error{OutOfMemory}!void {
             .kind = if (class.hole) .hole else class.kind orelse .plain,
             .name = if (class.name) |name| try a.builder.addString(name) else null,
             .zone = zone,
+            .diagram = if (class.diagram) |d| @fromBackingInt(d) else null,
             .canonical = null,
         });
-        if (class.own) a.builder.zones.items(.own)[@backingInt(zone)] = node_of[e];
     }
 
     // Canonical references (rule 7): a name is opted into, so a named node

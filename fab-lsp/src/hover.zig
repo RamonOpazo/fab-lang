@@ -112,12 +112,12 @@ fn plural(n: usize) []const u8 {
     return if (n == 1) "" else "s";
 }
 
-/// A node as the program refers to it: its name, `@`, `*`, or its canonical
-/// end (`+f`, `f+`); a choice and a parallel node say so.
+/// A node as the program refers to it: its name, its diagram's, `*`, or its
+/// canonical end (`+f`, `f+`); a choice and a parallel node say so.
 fn node(ir: *const Ir, index: Ir.NodeIndex, w: *Writer) Writer.Error!void {
     const n = ir.nodes.get(@backingInt(index));
-    if (ir.zones.items(.own)[@backingInt(n.zone)] == index) {
-        try w.writeAll("`@`");
+    if (n.diagram) |d| {
+        try w.print("`{s}`", .{ir.string(ir.zones.items(.name)[@backingInt(d)])});
     } else if (n.name) |name| {
         try w.print("`{s}`", .{ir.string(name)});
     } else switch (n.kind) {

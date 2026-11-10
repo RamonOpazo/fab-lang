@@ -24,7 +24,7 @@ pub fn typeOf(tag: Token.Tag) ?Type {
     return switch (tag) {
         .zone_id => .namespace,
         .edge_id => .function,
-        .node_id, .at => .variable,
+        .node_id => .variable,
         .attr_id => .property,
         .type_id => .type,
         .class_id => .@"enum",

@@ -120,10 +120,12 @@ test "a null node is a start if nothing arrives at it, else an end" {
     });
 }
 
-test "the own node is labelled with its diagram's name" {
-    try expectNodes("T :: #UUID7\nUser :: @/id/T.#UUID7", &.{
-        .{ "UUID7", false, ink, "circle" },
-        .{ "User", false, ink, "circle" },
+test "a diagram's node is labelled with its diagram's name" {
+    try expectNodes("A :: f\nDb :: A/g", &.{
+        .{ "+f", true, muted, "circle" },
+        .{ "f+", true, muted, "circle" },
+        .{ "A", false, ink, "circle" },
+        .{ "g+", true, muted, "circle" },
     });
 }
 
@@ -238,7 +240,7 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
     const Styler = @import("Styler.zig");
     var b: Ir.Builder = .init(testing.allocator);
     errdefer b.deinit();
-    const z = try b.addZone(.{ .name = try b.addString("G"), .own = null });
+    const z = try b.addZone(.{ .name = try b.addString("G") });
     const start = try b.addNode(.{ .kind = .null_node, .name = null, .zone = z, .canonical = null });
     const end = try b.addNode(.{ .kind = .plain, .name = null, .zone = z, .canonical = .{ .edge = @fromBackingInt(@as(u32, 0)), .side = .cod } });
     const f = try b.addEdge(.{ .name = try b.addString("f"), .source = start, .target = end, .directed = true, .zone = z });

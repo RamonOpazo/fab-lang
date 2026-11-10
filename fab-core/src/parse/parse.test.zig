@@ -202,8 +202,8 @@ test "markers on groups: postfix binds tighter than prefix" {
     );
 }
 
-test "node terms: named nodes, @, *, diagram names and classes are leaves" {
-    try expectDump("G :: */f/#A, @/id/T.#UUID7, &node",
+test "node terms: named nodes, *, diagram names and classes are leaves" {
+    try expectDump("G :: */f/#A, A/id/T.#UUID7, &node",
         \\root
         \\  statement ::
         \\    leaf zone_id G
@@ -213,7 +213,7 @@ test "node terms: named nodes, @, *, diagram names and classes are leaves" {
         \\        leaf edge_id f
         \\        leaf node_id #A
         \\      c_chain
-        \\        leaf at @
+        \\        leaf zone_id A
         \\        leaf edge_id id
         \\        juxtafix
         \\          leaf zone_id T

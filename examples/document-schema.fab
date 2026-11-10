@@ -1,13 +1,13 @@
 T :: #UUID7, #DTZ, #String, #Text, #JSONB, #Bool
 
-User         :: @/(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
-Organization :: @/(id/T.#UUID7, name/T.#String)
-Membership   :: @/(id/T.#UUID7, admin/T.#Bool)
-Project      :: @/(id/T.#UUID7, name/T.#String)
-Document     :: @/(id/T.#UUID7, title/T.#String, body/T.#JSONB)
-Comment      :: @/(id/T.#UUID7, text/T.#Text)
-Tag          :: @/(id/T.#UUID7, label/T.#String)
-Tagging      :: @/(id/T.#UUID7)
+User         :: */(id/T.#UUID7, email/T.#String, nick/T.#String, name/T.#String, created_at/T.#DTZ)
+Organization :: */(id/T.#UUID7, name/T.#String)
+Membership   :: */(id/T.#UUID7, admin/T.#Bool)
+Project      :: */(id/T.#UUID7, name/T.#String)
+Document     :: */(id/T.#UUID7, title/T.#String, body/T.#JSONB)
+Comment      :: */(id/T.#UUID7, text/T.#Text)
+Tag          :: */(id/T.#UUID7, label/T.#String)
+Tagging      :: */id/T.#UUID7
 
 Db :: {
     Membership/(user/User, org/Organization),

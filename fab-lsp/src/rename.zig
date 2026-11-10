@@ -1,7 +1,7 @@
 //! Renaming what the program owns (plan step L2d): every use of a name, in
 //! the document, its definition included, from fab-core's references.
 //!
-//! Refused, with a reason: a built-in, the prelude's names, `@`, a name also
+//! Refused, with a reason: a built-in, the prelude's names, a name also
 //! written where the analyser couldn't read it (renaming the rest would
 //! change what the program means), a new name of the wrong spelling, or one
 //! already naming something of its sort where it would be read: in the same
@@ -58,8 +58,6 @@ fn target(arena: std.mem.Allocator, ctx: *navigation.Context) error{OutOfMemory}
         return .{ .refused = try std.fmt.allocPrint(arena, "`{s}` is built in: it can't be renamed.", .{text}) };
     if (site.prelude)
         return .{ .refused = try std.fmt.allocPrint(arena, "`{s}` is the prelude's: it can't be renamed here.", .{text}) };
-    if (std.mem.eql(u8, text, "@"))
-        return .{ .refused = "`@` is a diagram's own node, not a name: rename the diagram." };
     if (try unread(ctx, at))
         return .{ .refused = try std.fmt.allocPrint(arena, "`{s}` is also written where the program couldn't be read: fix its errors first.", .{text}) };
     return .{ .ok = at };

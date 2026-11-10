@@ -254,7 +254,7 @@ Done when every level case passes.
 - **R1. Nothing to join beside a node.** `#X/(*/f)` reports *nothing to join* at the slash, as `g/(*/f)` does.
 - **R2. `*` on one side.** The side beside `*` holds at least one free end, all landing on one null element; `*/(f, g)`, `(f, g)/*` accepted; `*/+(f, g)` is `/` between nodes; `*` not on exactly one end becomes *not on one side*.
 - **R3. `@` removed.** The lexer reads `@` as invalid; `Zone.own`, `A.@`, `G.@` contexts, *diagram without `@` used as a node*, the label computed as `@` and `&canonical`'s "not `@`" go. A diagram name in relations is one node of the container standing for the diagram (kind `.zone`), made at its first use, glued after; the examples and the corpus follow (`*/( … )` tables).
-- **R4. Members.** `Zone.members`, in order, from every diagram name in relations (alone or attached), none from `A.x`; a zone's container is the first that names it. JSON zones gain `"members"` (still version 2).
+- **R4. Members.** `Zone.members`, in order, from every diagram name in relations (alone or attached), none from `A.x`; a zone's container is the first that names it. JSON zones gain `"members"`; the format stays version 1 (`release.md` §3).
 - **R5. The cascade.** A member's rules: `[base]`, its containers' layers outermost first (themes, tokens, class bindings, `:theme`), then its own; element bindings stay *another diagram's subject*.
 - **R6. Graphviz.** Subgraphs nested along the containment tree; edges to a diagram's node reach its cluster's border (`compound=true`, `lhead`/`ltail`, an invisible anchor).
 - **R7. The rest.** fab-lsp (hover names members and container; completion offers no `@`), tree-sitter, and `examples/git-simple.fab` in its final form.

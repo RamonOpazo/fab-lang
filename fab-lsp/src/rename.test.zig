@@ -60,10 +60,9 @@ test "a type, a label, a value, a descriptor" {
     try expectRenamed(":Mood :: [calm]\n&edge :mood :: :Mood\nG :: f\nG.f :mood [calm]", 1, 7, ":feel", ":Mood :: [calm]\n&edge :feel :: :Mood\nG :: f\nG.f :feel [calm]");
 }
 
-test "refused: built-ins, the prelude's, @" {
+test "refused: built-ins, the prelude's" {
     try expectRenamed(":Shade :: :Color", 0, 11, ":Hue", "refused: `:Color` is built in: it can't be renamed.");
     try expectRenamed("G :: f\nG.f :label \"x\"", 1, 5, ":name", "refused: `:label` is the prelude's: it can't be renamed here.");
-    try expectRenamed("G :: @/f", 0, 5, "#A", "refused: `@` is a diagram's own node, not a name: rename the diagram.");
 }
 
 test "refused: a new name spelled for another sort, or taken" {

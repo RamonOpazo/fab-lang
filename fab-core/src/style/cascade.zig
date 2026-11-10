@@ -69,9 +69,8 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
     for (0..ir.zones.len) |z| try b.prepareZone(@fromBackingInt(@as(u32, @intCast(z))));
 
     const zones = ir.nodes.items(.zone);
-    const own = ir.zones.items(.own);
     b.nodes = try gpa.alloc(Sheet.Element, ir.nodes.len);
-    for (b.nodes, ir.nodes.items(.kind), ir.nodes.items(.name), ir.nodes.items(.canonical), zones, reached, marks.nodes, 0..) |*e, kind, name, canonical, zone, arrived, mark, i| {
+    for (b.nodes, ir.nodes.items(.kind), ir.nodes.items(.name), ir.nodes.items(.diagram), ir.nodes.items(.canonical), zones, reached, marks.nodes, 0..) |*e, kind, name, diagram, canonical, zone, arrived, mark, i| {
         var classes: Env.Classes = .initMany(&.{ .node, switch (kind) {
             .plain => .plain,
             .choice => .choice,
@@ -79,18 +78,18 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
             .hole => .hole,
             .null_node => if (arrived) .end else .start,
         } });
-        // Labelled by its canonical end (spec, Subjects and classes): unnamed,
-        // not `@`, and its label, resolved without `&canonical`, left to be
-        // computed. A mark's `:label ""` keeps it out; `&choice :label []`
+        // Labelled by its canonical end (spec, Subjects and classes): unnamed
+        // (a diagram's node is named by its diagram), and its label, resolved
+        // without `&canonical`, left to be computed. A mark's `:label ""` keeps it out; `&choice :label []`
         // brings it in.
         const self: Ir.NodeIndex = @fromBackingInt(@as(u32, @intCast(i)));
-        if (name == null and canonical != null and own[@backingInt(zone)] != self and
+        if (name == null and canonical != null and
             try b.labelComputed(.{ .node = self }, try b.ruleFor(zone, classes))) classes.insert(.canonical);
         const computed: Value = if (name) |n|
             .{ .text = withoutSigil(ir.string(n)) }
-        else if (own[@backingInt(zone)] == self)
-            // `@` stands for the diagram itself (statements.md §20).
-            .{ .text = ir.string(ir.zones.items(.name)[@backingInt(zone)]) }
+        else if (diagram) |d|
+            // A diagram's node stands for the diagram (statements.md §23.2).
+            .{ .text = ir.string(ir.zones.items(.name)[@backingInt(d)]) }
         else if (canonical) |end|
             .{ .text = try b.canonicalLabel(end) }
         else

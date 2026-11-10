@@ -23,7 +23,7 @@ fn expectOffered(text: []const u8, want: []const u8) !void {
 const classes = "&node &plain &choice &parallel &start &end &hole &canonical &edge &cell &zone";
 
 test "after a diagram's name and a dot: its parts" {
-    try expectOffered("G :: @/f/#A g | f/α/g\nG.", "f g α #A @ " ++ classes);
+    try expectOffered("G :: */f/#A g | f/α/g\nG.", "f g α #A " ++ classes);
     try expectOffered("G :: f/g, h\nH :: k\nG.g", "g");
     // A diagram not declared offers nothing.
     try expectOffered("G :: f\nK.", "");

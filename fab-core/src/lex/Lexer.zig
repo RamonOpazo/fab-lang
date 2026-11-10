@@ -108,7 +108,6 @@ pub fn next(self: *Lexer) Token {
         '*' => self.one(.star),
         '?' => self.one(.quid),
         '!' => self.one(.bang),
-        '@' => self.one(.at),
         '.' => self.one(.dot),
         '=' => if (self.peek(1) == '=') self.two(.iden) else self.one(.invalid),
         '~' => if (self.peek(1) == '=') self.two(.cong) else self.one(.invalid),

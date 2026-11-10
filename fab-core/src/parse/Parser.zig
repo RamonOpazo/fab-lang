@@ -432,7 +432,7 @@ fn parsePostfix(p: *Parser) Error!Node.Index {
 /// postfix, `:Number!`; `:Color.(:Text)` parses, for the analyser to refuse.
 fn parsePrimary(p: *Parser) Error!Node.Index {
     switch (p.cur()) {
-        .edge_id, .node_id, .zone_id, .class_id, .type_id, .at, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
+        .edge_id, .node_id, .zone_id, .class_id, .type_id, .star, .quid, .bang, .str, .math, .val => return p.addLeaf(.leaf, p.next()),
         .l_par => return p.parseGroup(),
         else => return p.fail(.expected_atom, .invalid),
     }
@@ -508,7 +508,7 @@ fn touchesNext(p: *Parser) bool {
 /// touching what follows it; `?` and `!` always do, as a prefix or a node.
 fn startsAtomAt(p: *Parser, i: TokenIndex) bool {
     return switch (p.tags[i]) {
-        .edge_id, .node_id, .zone_id, .class_id, .type_id, .at, .star, .quid, .bang, .str, .math, .val, .l_par => true,
+        .edge_id, .node_id, .zone_id, .class_id, .type_id, .star, .quid, .bang, .str, .math, .val, .l_par => true,
         .plus => switch (p.tags[i + 1]) {
             .eol, .eof => false,
             else => p.ends[i] == p.starts[i + 1],
