@@ -329,6 +329,21 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "A diagram's kind decides what its layers may say and how it is drawn, so it is stated before them: `G :kind [flow]`, then `G :style { … }`.",
             .hint = "Move `:kind` above the diagram's first layer.",
         },
+        .case_on_another_descriptor => .{
+            .message = "A case tests `&zone :kind`",
+            .explanation = "A case states what holds in the diagrams of one kind: `&zone :kind [flow] :> { … }`. Its condition is the kind and nothing else, which no layer binds, so a case can never change what it tests.",
+            .hint = "Write the condition as `&zone :kind [flow]`.",
+        },
+        .case_item_of_no_form => .{
+            .message = "A case holds declarations and records of types",
+            .explanation = "Inside a case, `:T :: { … }` declares descriptors in a record type for the kind alone, and `:T := { … }` binds a record of that type for the kind's diagrams. Labels, members and descriptions belong outside, to every kind.",
+            .hint = "Write `:Proposition :: { &zone :may-end :: :Flag }` or `:Style := { … }`.",
+        },
+        .not_admitted_by_kind => .{
+            .message = "{} is not admitted by the diagram's kind",
+            .explanation = "This descriptor is declared only in the cases of other kinds: what it says has a meaning there, not in a diagram of this kind, or of no kind. Bundles and named records hold only what every kind shares.",
+            .hint = "State the diagram's kind, `G :kind [flow]`, or use a descriptor its kind admits.",
+        },
         .empty_arrow => .{
             .message = "An empty arrow",
             .explanation = "Any field of an arrow may be empty, `[/solid/>]` has no tail, but not all three: an arrow draws something.",
@@ -645,8 +660,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Nothing to fix in the program.",
         },
         .unsupported_case => .{
-            .message = "Cases are not supported yet",
-            .explanation = "The program is valid, but this compiler does not read a case, `&zone :kind [flow] :> { … }`, so far: what it declares and binds for a kind is left out.",
+            .message = "A kind's record is not applied yet",
+            .explanation = "The program is valid, but this compiler reads only a case's declarations so far: a record it binds for the kind's diagrams, `:Style := { … }`, is left out.",
             .hint = "Nothing to fix in the program.",
         },
     };

@@ -521,8 +521,60 @@ test "each diagram's kind is kept, by zone" {
     try testing.expectEqualStrings("git", a.result.kinds[1].label);
 }
 
-test "a case is read as unsupported, its contents left out" {
-    try expectTags("&zone :kind [flow] :> { :Style := { &node :shape [round] } }", &.{.unsupported_case});
+/// Kinds and a vocabulary to case on, since there is no prelude here.
+const kinds =
+    \\:Kind :: [flow], [git]
+    \\&zone :kind :: :Kind
+    \\:Style :: { &node :fill :: :Flag }
+    \\&zone :style :: :Style
+    \\
+;
+
+test "a case declares for its kind; another kind's case may declare the name again" {
+    const cases = kinds ++
+        \\&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }
+        \\&zone :kind [git] :> { :Style :: { (&node, &edge) :knob :: :Flag } }
+        \\G :: f
+        \\
+    ;
+    try expectTags(cases ++ "G :kind [flow]\nG :style { +f :knob }", &.{});
+    try expectTags(cases ++ "G :kind [git]\nG :style { f :knob }", &.{});
+    // Each kind's declaration is its own: a flow's knob is a node's only.
+    try expectTags(cases ++ "G :kind [flow]\nG :style { f :knob }", &.{.does_not_apply});
+    // No kind, or another, admits only what every kind shares.
+    try expectTags(cases ++ "G :style { +f :knob }", &.{.not_admitted_by_kind});
+    try expectTags(cases ++ "G :style { :nob }", &.{.unknown_attribute});
+    // Where no diagram is known, nor is a kind.
+    try expectTags(cases ++ ":k := :knob", &.{.not_admitted_by_kind});
+    // For every kind and in a case is twice, either way round; so is twice
+    // in one kind's case.
+    try expectTags(cases ++ ":Style :: { &node :knob :: :Flag }", &.{.name_defined_twice});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style :: { &node :fill :: :Flag } }", &.{.name_defined_twice});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style :: { &node :a :: :Flag }, :Style :: { &node :a :: :Flag } }", &.{.name_defined_twice});
+}
+
+test "a group's diagrams admit a kind's descriptor when they share the kind" {
+    const cases = kinds ++
+        \\&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }
+        \\A :: f
+        \\B :: g
+        \\A :kind [flow]
+        \\
+    ;
+    try expectTags(cases ++ "B :kind [flow]\n(A, B) :style { &node :knob }", &.{});
+    try expectTags(cases ++ "B :kind [git]\n(A, B) :style { &node :knob }", &.{.not_admitted_by_kind});
+}
+
+test "a case tests &zone :kind, and holds declarations and records of types" {
+    try expectTags(kinds ++ "&node :kind [flow] :> { :Style :: { &node :b :: :Flag } }", &.{.case_on_another_descriptor});
+    try expectTags(kinds ++ "&zone :fill :> { :Style :: { &node :b :: :Flag } }", &.{.case_on_another_descriptor});
+    try expectTags(kinds ++ "G :: f\nG :kind [flow] :> { :Style :: { &node :b :: :Flag } }", &.{.case_on_another_descriptor});
+    try expectTags(kinds ++ "&zone :kind [dark] :> { :Style :: { &node :b :: :Flag } }", &.{.undefined_name});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Kind :: [blob] }", &.{.case_item_of_no_form});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { #A :fill }", &.{.case_item_of_no_form});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style :: { [x] } }", &.{.case_item_of_no_form});
+    // A kind's record is read in plan step 11c2.
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style := { &node :fill } }", &.{.unsupported_case});
 }
 
 test "runs inside groups are checked on their own" {

@@ -361,6 +361,9 @@ fn descriptors(out: *Collector, env: *const Env, classes_: Classes, at: At) erro
     var it = env.functions.iterator();
     while (it.next()) |entry| {
         const f = entry.value_ptr;
+        // A kind's own descriptors (statements.md §24.3) wait until
+        // completion reads the diagram's kind.
+        if (f.kind != null) continue;
         if (!at.any and !classes_.subsetOf(f.classes)) continue;
         if (!at.top and f.record == null and !f.bundle and env.isRecord(f.type)) continue;
         if (record) |r| if (f.record != r) continue;

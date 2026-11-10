@@ -73,7 +73,9 @@ pub const Pending = union(enum) {
     node: struct { elem: u32, end: ?Ir.End, token: TokenIndex, zone: Ir.ZoneIndex },
 };
 
-pub const PendingBinding = struct { subject: Pending, attr: Node.Index, layer: Layer, descriptor: []const u8, key: ?[]const u8, value: decoded.Value };
+/// `function` is the descriptor's declaration where it was read: a name
+/// cases declare means one thing per kind.
+pub const PendingBinding = struct { subject: Pending, attr: Node.Index, layer: Layer, descriptor: []const u8, key: ?[]const u8, value: decoded.Value, function: Env.Function };
 pub const PendingReference = struct { token: TokenIndex, subject: Pending };
 
 /// Where a block's contexts are read: in a diagram, which has parts, or in
@@ -140,15 +142,15 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
     const name = cst.tokenText(name_token);
-    const f = a.env.functions.get(name) orelse {
+    const kind = kindOf(a, subjects);
+    const f = a.env.descriptor(name, kind) orelse {
         // Declared with the proof and place shells (plan step 11): checked
         // for shape, not read.
         if (std.mem.eql(u8, name, ":prove") or std.mem.eql(u8, name, ":place")) {
             try a.fail(.unsupported_layer, name_token);
             return;
         }
-        try a.fail(.unknown_attribute, name_token);
-        return;
+        return records.unknown(a, name_token);
     };
     try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
     const style = if (a.env.type_table.get(":Style")) |named| named.index else null;
@@ -169,13 +171,13 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
         return;
     }
 
-    try records.function(a, attr, .{ .record = style, .at = .{ .subject = classes } });
+    try records.function(a, attr, .{ .record = style, .at = .{ .subject = classes }, .kind = kind });
     const bound = try decode.attr(a, attr, f);
     const key: ?[]const u8 = if (cst.key(attr)) |k| blk: {
         const text = cst.tokenText(k);
         break :blk text[1 .. text.len - 1];
     } else null;
-    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound });
+    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound, .function = f });
 }
 
 /// `G :kind [flow]`, once per diagram, before its layers. `&zone :kind` is
@@ -220,18 +222,37 @@ fn diagramKind(a: *Analyser, attr: Node.Index, f: Env.Function, subjects: []cons
 /// marks none.
 fn layered(a: *Analyser, subjects: []const Owner, token: TokenIndex) error{OutOfMemory}!void {
     for (subjects) |s| {
-        const zone: Ir.ZoneIndex = switch (s.subject) {
-            .node => |n| n.zone,
-            .subject => |subject| switch (subject) {
-                .zone => |z| z,
-                .edge => |e| a.builder.edges.items(.zone)[@backingInt(e)],
-                .cell => |c| a.builder.cells.items(.zone)[@backingInt(c)],
-                .node => |n| a.builder.nodes.items(.zone)[@backingInt(n)],
-                .class => |c| c.zone orelse continue,
-            },
-        };
+        const zone = diagramOf(a, s) orelse continue;
         _ = try a.layered.getOrPutValue(a.gpa, zone, token);
     }
+}
+
+/// The kind all the subjects' diagrams share, which admits its case's
+/// descriptors; null when one has none, or is every diagram's (a class),
+/// or they differ.
+fn kindOf(a: *Analyser, subjects: []const Owner) ?[]const u8 {
+    var kind: ?[]const u8 = null;
+    for (subjects, 0..) |s, i| {
+        const zone = diagramOf(a, s) orelse return null;
+        const k = (a.kinds.get(zone) orelse return null).label;
+        if (i > 0 and !std.mem.eql(u8, k, kind.?)) return null;
+        kind = k;
+    }
+    return kind;
+}
+
+/// The diagram a subject is in; null for a class every diagram has.
+fn diagramOf(a: *Analyser, s: Owner) ?Ir.ZoneIndex {
+    return switch (s.subject) {
+        .node => |n| n.zone,
+        .subject => |subject| switch (subject) {
+            .zone => |z| z,
+            .edge => |e| a.builder.edges.items(.zone)[@backingInt(e)],
+            .cell => |c| a.builder.cells.items(.zone)[@backingInt(c)],
+            .node => |n| a.builder.nodes.items(.zone)[@backingInt(n)],
+            .class => |c| c.zone,
+        },
+    };
 }
 
 /// The classes of what a descriptor is written at: an element's own, or a
@@ -447,7 +468,7 @@ fn kinds(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
             .subject => continue,
         };
         if (reported == b.attr) continue;
-        const f = a.env.functions.get(a.cst.tokenText(a.cst.mainToken(b.attr))) orelse continue;
+        const f = b.function;
         const node = @backingInt(node_of[a.uf.find(n.elem)]);
         const kind: Env.Class = switch (a.builder.nodes.items(.kind)[node]) {
             .plain => .plain,
@@ -479,7 +500,7 @@ fn twice(a: *Analyser, node_of: []const Ir.NodeIndex) error{OutOfMemory}!void {
     for (a.bindings.items) |b| {
         const name = cst.tokenText(cst.mainToken(b.attr));
         const key_token = cst.key(b.attr);
-        if (key_token == null) if (a.env.functions.get(name)) |f| if (f.table) continue;
+        if (key_token == null and b.function.table) continue;
         const key: Key = .{
             .layer = b.layer,
             .subject = resolve(a, b.subject, node_of),

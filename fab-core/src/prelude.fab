@@ -266,3 +266,50 @@
 :Kind :: [flow], [state-machine], [category], [schema], [git], [sequence]
 
 &zone :kind :: :Kind
+
+// ── 8. Cases ──────────────────────────────────────────────────────────
+
+// What holds in the diagrams of one kind (statements.md §24.3): :> reads
+// "then". In its block, :T :: { … } adds descriptors to :T for the kind
+// only (elsewhere "not admitted by the kind"). A name may be declared in
+// several cases, once in each. Every property belongs to some kind, so
+// :Proposition is declared by the cases: a record type exists from its
+// first declaration. [state-machine] and [sequence] add nothing yet.
+
+&zone :kind [flow] :> {
+    :Proposition :: {
+        &zone   :may-end    :: :Flag,  // from every node, some path reaches an end
+        &zone   :must-end   :: :Flag,  // every path reaches an end
+        &zone   :structured :: :Flag,  // forks joined; loops only through choices
+        &node   :reachable  :: :Flag,  // some path from a start reaches it
+        &choice :exclusive  :: :Flag   // its branches never both taken
+    }
+}
+
+&zone :kind [state-machine] :> {
+    :Proposition :: {
+        &node :reachable :: :Flag  // some path from the initial state reaches it
+    }
+}
+
+&zone :kind [category] :> {
+    :Proposition :: {
+        &node          :pushout  :: :Flag,
+        (&node, &edge) :pullback :: :Flag
+    }
+}
+
+&zone :kind [schema] :> {
+    :Proposition :: {
+        &edge :card     :: :Cardinality,
+        &edge :pk       :: :Flag,
+        &edge :uk       :: :Flag,
+        &edge :nullable :: :Flag
+    }
+}
+
+&zone :kind [git] :> {
+    :Proposition :: {
+        &node :pushout :: :Flag  // a clean merge: the least common state
+    }
+}

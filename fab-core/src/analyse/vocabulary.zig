@@ -188,13 +188,34 @@ pub fn signature(a: *Analyser, head: Node.Index, body: Node.Index, record: ?Type
     const t = try typeExpression(a, body) orelse .unknown;
     if (!known) return;
 
-    const gop = try a.env.functions.getOrPut(a.gpa, cst.tokenText(function_token));
-    if (gop.found_existing) {
-        try a.referToken(function_token, .descriptor, .{ .token = gop.value_ptr.token, .prelude = gop.value_ptr.prelude });
-        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
+    const name = cst.tokenText(function_token);
+    const declared: Env.Function = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record, .table = key != null, .kind = a.case_kind };
+    const gop = try a.env.functions.getOrPut(a.gpa, name);
+    if (!gop.found_existing) {
+        gop.value_ptr.* = declared;
+        try a.referToken(function_token, .descriptor, .{ .token = function_token });
         return;
     }
-    gop.value_ptr.* = .{ .classes = Env.within(classes), .type = t, .token = function_token, .record = record, .table = key != null };
+    // Twice: for every kind and in a case, or in one kind's case twice. The
+    // same name in another kind's case is that kind's own (statements.md
+    // §24.3).
+    const first = gop.value_ptr;
+    const clash: ?Env.Function = if (first.kind == null or a.case_kind == null) first.* else a.env.descriptor(name, a.case_kind);
+    if (clash) |c| {
+        try a.referToken(function_token, .descriptor, .{ .token = c.token, .prelude = c.prelude });
+        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = function_token, .related = if (c.prelude) null else c.token });
+        return;
+    }
+    const index: u32 = @intCast(a.env.cased.items.len);
+    if (first.next) |n| {
+        var last = n;
+        while (a.env.cased.items[last].next) |m| last = m;
+        try a.env.cased.append(a.gpa, declared);
+        a.env.cased.items[last].next = index;
+    } else {
+        try a.env.cased.append(a.gpa, declared);
+        first.next = index;
+    }
     try a.referToken(function_token, .descriptor, .{ .token = function_token });
 }
 

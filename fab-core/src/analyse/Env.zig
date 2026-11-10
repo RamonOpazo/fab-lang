@@ -35,8 +35,11 @@ interned: std.HashMapUnmanaged(Type, TypeIndex, TypeContext, std.hash_map.defaul
 type_table: std.StringHashMapUnmanaged(Named) = .empty,
 /// Bracket names, brackets excluded: `red`, `circle`, `>`.
 values: std.StringHashMapUnmanaged(Value) = .empty,
-/// Function names, `:` included: `:fill`.
+/// Function names, `:` included: `:fill`. A descriptor a case declares
+/// (statements.md §24.3) is here by its first kind; the same name in other
+/// kinds' cases follows it in `cased`, through `next`.
 functions: std.StringHashMapUnmanaged(Function) = .empty,
+cased: std.ArrayList(Function) = .empty,
 /// The declared types, by identity: what each holds besides its labels.
 declared: std.ArrayList(Declared) = .empty,
 /// Named records and bundles' bodies, decoded (plan step 9d2): what
@@ -131,6 +134,11 @@ pub const Function = struct {
     prelude: bool = false,
     /// A bundle's body, decoded: what it binds where it is used.
     body: ?decoded.RecordIndex = null,
+    /// The kind whose case declares it, `[flow]` as `flow`; null for every
+    /// kind (statements.md §24.3).
+    kind: ?[]const u8 = null,
+    /// The same name declared in another kind's case, in `cased`.
+    next: ?u32 = null,
 };
 
 /// A descriptor in a bundle or a record, standing for the record type it
@@ -180,6 +188,7 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.type_table.deinit(gpa);
     env.values.deinit(gpa);
     env.functions.deinit(gpa);
+    env.cased.deinit(gpa);
     env.arena.deinit();
     env.* = undefined;
 }
@@ -197,6 +206,18 @@ pub fn adopt(env: *Env) void {
     while (functions.next()) |f| {
         f.prelude = true;
         for (f.contents) |*c| c.prelude = true;
+    }
+    for (env.cased.items) |*f| f.prelude = true;
+}
+
+/// The descriptor `descriptor_name` in a diagram of `kind` (null: no kind, or none
+/// known): declared for every kind, or in that kind's case.
+pub fn descriptor(env: *const Env, descriptor_name: []const u8, kind: ?[]const u8) ?Function {
+    var f = env.functions.get(descriptor_name) orelse return null;
+    while (true) {
+        if (f.kind == null) return f;
+        if (kind) |k| if (std.mem.eql(u8, f.kind.?, k)) return f;
+        f = env.cased.items[f.next orelse return null];
     }
 }
 

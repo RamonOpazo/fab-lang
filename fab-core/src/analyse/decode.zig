@@ -123,7 +123,7 @@ fn items(a: *Analyser, node: Node.Index, owner: ?Env.Classes, r: *Building) erro
 fn binding(a: *Analyser, node: Node.Index, classes: ?Env.Classes, r: *Building) error{OutOfMemory}!void {
     const cst = a.cst;
     const name = cst.tokenText(cst.mainToken(node));
-    const f = a.env.functions.get(name) orelse return;
+    const f = a.env.descriptor(name, null) orelse return;
     const key: ?[]const u8 = if (cst.key(node)) |k| keyText(cst.tokenText(k)) else null;
     try r.bindings.append(a.gpa, .{ .classes = classes, .descriptor = name, .key = key, .value = try attr(a, node, f) });
 }

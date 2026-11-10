@@ -9,7 +9,7 @@
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
 //! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on), and in step 9 its
-//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b). `done` is the last one finished; later cases
+//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b, 3 for 11c1). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -22,7 +22,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 11, .rule = 2 };
+const done: Progress = .{ .step = 11, .rule = 3 };
 
 const Progress = struct {
     step: u8,
@@ -2261,4 +2261,35 @@ test "Kinds: one of the six, at a diagram, at the top level (statements.md §24.
     try check(.{ .step = 11, .rule = 2, .source = g ++ "G :style { :kind [flow] }", .codes = &.{.{ .analysis = .does_not_apply }} });
     try check(.{ .step = 11, .rule = 2, .source = g ++ "G.f :kind [flow]", .codes = &.{.{ .analysis = .does_not_apply }} });
     try check(.{ .step = 11, .rule = 2, .source = "&zone :kind [flow]", .codes = &.{.{ .analysis = .reserved_kind_of_class }} });
+}
+
+// ---------------------------------------------------------------------------
+// Cases (step 11c1): what a kind declares, admitted in its diagrams only.
+
+test "Cases: a kind's descriptors, admitted in its diagrams (statements.md §24.3)" {
+    const cases =
+        \\&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }
+        \\&zone :kind [git] :> { :Style :: { (&node, &edge) :knob :: :Flag } }
+        \\G :: f
+        \\
+    ;
+    try check(.{ .step = 11, .rule = 3, .source = cases ++ "G :kind [flow]\nG :style { +f :knob }" });
+    try check(.{ .step = 11, .rule = 3, .source = cases ++ "G :kind [git]\nG :style { f :knob }" });
+    try check(.{ .step = 11, .rule = 3, .source = cases ++ "G :kind [category]\nG :style { +f :knob }", .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
+    try check(.{ .step = 11, .rule = 3, .source = cases ++ "G :style { +f :knob }", .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
+    try check(.{ .step = 11, .rule = 3, .source = cases ++ ":k := :knob", .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
+}
+
+test "Cases: added to, never taken from (statements.md §24.3)" {
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { :Style :: { &node :fill :: :Flag } }", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }\n:Style :: { &node :knob :: :Flag }", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }\n&zone :kind [flow] :> { :Style :: { &node :knob :: :Flag } }", .codes = &.{.{ .analysis = .name_defined_twice }} });
+}
+
+test "Cases: a condition on &zone :kind, and declarations and records of types (statements.md §24.3)" {
+    try check(.{ .step = 11, .rule = 3, .source = "&node :shape [box] :> { :Style :: { &node :knob :: :Flag } }", .codes = &.{.{ .analysis = .case_on_another_descriptor }} });
+    try check(.{ .step = 11, .rule = 3, .source = "G :: f\nG :kind [flow] :> { :Style :: { &node :knob :: :Flag } }", .codes = &.{.{ .analysis = .case_on_another_descriptor }} });
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [dark] :> { :Style :: { &node :knob :: :Flag } }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { :Mood :: [calm] }", .codes = &.{.{ .analysis = .case_item_of_no_form }} });
+    try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { &node :fill [red] }", .codes = &.{.{ .analysis = .case_item_of_no_form }} });
 }

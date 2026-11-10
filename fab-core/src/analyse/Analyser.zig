@@ -36,6 +36,7 @@ const cells = @import("cells.zig");
 const UnionFind = @import("UnionFind.zig");
 const definitions = @import("definitions.zig");
 const layers = @import("layers.zig");
+const cases = @import("cases.zig");
 const vocabulary = @import("vocabulary.zig");
 pub const Env = @import("Env.zig");
 
@@ -138,6 +139,9 @@ tokens: std.ArrayList(layers.Token) = .empty,
 /// a kind after it is an error.
 kinds: std.AutoHashMapUnmanaged(Ir.ZoneIndex, layers.Kind) = .empty,
 layered: std.AutoHashMapUnmanaged(Ir.ZoneIndex, TokenIndex) = .empty,
+/// The kind whose case is being read, `flow`: what its declarations are
+/// scoped to (statements.md §24.3). Null outside a case.
+case_kind: ?[]const u8 = null,
 contexts: std.ArrayList(layers.PendingReference) = .empty,
 /// The names used so far, with what they name: nodes still elements, and
 /// cells still tokens, until the graph is built.
@@ -416,7 +420,7 @@ fn statement(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
             break :blk a.namedDiagram(head);
         },
         .then => blk: {
-            try a.fail(.unsupported_case, cst.mainToken(node));
+            try cases.case(a, head, body);
             break :blk null;
         },
         else => unreachable,

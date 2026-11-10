@@ -155,6 +155,10 @@ pub const Use = struct {
     record: ?TypeIndex,
     at: union(enum) { subject: Env.Classes, bundle: *Bundle },
     contents: ?*Contents = null,
+    /// The kind of the diagram it is written in, which admits its case's
+    /// descriptors (statements.md §24.3); null in no kind, or where no
+    /// diagram is known: a bundle, a named record.
+    kind: ?[]const u8 = null,
 };
 
 /// `:fill [red]`, `:hide`, `:hide!`: known, applying where it is written,
@@ -162,10 +166,8 @@ pub const Use = struct {
 pub fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
-    const f = a.env.functions.get(cst.tokenText(name_token)) orelse {
-        try a.fail(.unknown_attribute, name_token);
-        return;
-    };
+    const f = a.env.descriptor(cst.tokenText(name_token), use.kind) orelse
+        return unknown(a, name_token);
     try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
     const signature: ?TokenIndex = if (f.prelude) null else f.token;
     if (cst.key(attr)) |key| try checkKey(a, f, key, signature);
@@ -211,6 +213,13 @@ pub fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!voi
     const actual = try vocabulary.typeOf(a, value);
     try vocabulary.check(a, actual, f.type, .wrong_type, cst.firstToken(value), signature);
     if (a.env.fits(actual, f.type)) try structure(a, value, f.type, .wrong_type);
+}
+
+/// A descriptor not found: declared only in other kinds' cases, or not at
+/// all.
+pub fn unknown(a: *Analyser, name_token: Cst.TokenIndex) error{OutOfMemory}!void {
+    const declared = a.env.functions.get(a.cst.tokenText(name_token));
+    try a.fail(if (declared != null) .not_admitted_by_kind else .unknown_attribute, name_token);
 }
 
 /// `:legend.[done]`: one name, on a table's descriptor. An entry with no key
