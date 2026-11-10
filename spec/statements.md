@@ -1419,7 +1419,7 @@ A diagram's kind is what its graph is: it decides what is drawn, what may be pro
 | `[git]` | a history: commits as arrows between states, branches and merges |
 | `[sequence]` | participants exchanging messages in time |
 
-`[flow]` is implemented first: it is the easiest, and the de facto diagram. The others are declared from the start, with no rules of their own until their turn: a diagram of a kind without rules is a plain graph with that kind's look and vocabulary. `[sequence]` comes last, since what it says is mostly placement, which waits for the place layer.
+`[flow]` is implemented first: it is the easiest, and the de facto diagram. The others are declared from the start, with no rules of their own until their turn: a diagram of a kind without rules is a plain graph with that kind's theme and vocabulary. `[sequence]` comes last, since what it says is mostly placement, which waits for the place layer.
 
 ### 24.2 The kind is the diagram's own
 
@@ -1435,7 +1435,8 @@ Order :prove { … }
 - **Declared at the top level,** as `:style` is: `&zone :kind :: :Kind`, outside every record type, so it describes at the top level only, alone (`G :kind [flow]`) or in G's block (`G { :kind [flow], :style { … } }`). `G :style { :kind [flow] }` *does not apply*: one descriptor, one record type (§22.5), and `:kind` is in none, so no layer can bind it. `G.f :kind` does not apply either: only a diagram has a kind.
 - **`&zone :kind [flow]` is reserved:** a kind for every diagram is the header's to state (§22.7), and its syntax is open. As a case's head (24.3) it is a condition, not a description.
 - **The kinds are labels,** `:Kind :: [flow], [state-machine], …`: one type and six labels, all declarations. The prelude names no value for them. `G :kind [dark]` is *wrong type*.
-- **Stated before the diagram's layers.** What a layer may say depends on the kind (24.3), so a `G :kind` after any description of G's layers (`G :style`, `G.f :label`, `G.&node :fill`) is *kind stated after a layer*. Twice is *binding made twice*. A class with no diagram (`&node :fill [red]`) describes every diagram and orders none.
+- **Stated anywhere, known once the program is read,** as a diagram's container is (§23.2): what depends on the kind, a kind's descriptors in G's layers (24.3), is checked then. Twice is *binding made twice*. (Its first version had *kind stated after a layer*: the layers were read under the kind. A member's kind comes from its container, declared after it, so the check waits anyway, and one rule serves both.)
+- **Passed down.** A diagram that states no kind has its container's, up the chain: Repo's `[git]` is the kind of the branches it holds, unless one states its own. Its vocabulary, its theme (24.3) and later its findings follow.
 - **One kind per diagram, or none.** A diagram with no kind is a plain graph: drawn by `[base]`, with the vocabulary every kind shares, and nothing found (§17).
 - **The three levels stay** (§22.7): command line < header < local, and the local level is `G :kind`. `-H kind=schema` still reads.
 
@@ -1456,13 +1457,13 @@ A case states what holds in the diagrams of one kind. `:>` reads "then": its hea
 **One case per kind holds every layer's part.** Inside its block, each item is a record type and an operator, and the operators keep their meanings (§22.1):
 
 - **`:T :: { … }` declares,** adding descriptors to `:T` for diagrams of the kind only. A proposition outside its kinds is *not admitted by the kind*, the error §22.5 named and nothing produced: `Order :prove { :lemma (#X :pullback) }` in a flow. A descriptor admitted by no kind at all is still *undefined name*.
-- **`:T := { … }` binds** a record of `:T` for the kind's diagrams, beneath their own layer of that type. A kind's look is `:Style := { … }`, an unnamed theme, applied after `[base]` and before the diagram's themes:
+- **`:T := { … }` binds** a record of `:T` for the kind's diagrams, beneath their own layer of that type. A kind's theme is `:Style := { … }`, an unnamed theme: **the first theme of the diagram that states the kind**, as if it came first in its `:theme`:
 
   ```
-  computed  <  [base]  <  the kind's look  <  G's :theme, left to right  <  G's own bindings  <  marks
+  computed  <  [base]  <  the kind's theme  <  G's :theme, left to right  <  G's own bindings  <  marks
   ```
 
-  The Sheet gains a layer, `kind`, between `base` and `theme`. Only `:Style`'s is written yet; the form holds for `:Proof` and `:Place` alike (24.6).
+  So it passes down with the diagram's other layers (§23.2, R5): Repo's `[git]` theme reaches its members beneath their own layers, and a member stating another kind has that kind's theme at its own level. Its descriptors may be the kind's own; its tokens come before the themes'. One per kind: a second is *defined twice*. The Sheet gains a layer, `kind`, between `base` and `theme`. Only `:Style`'s is written yet; the form holds for `:Proof` and `:Place` alike (24.6).
 
 Three constraints keep cases sound:
 
@@ -1489,7 +1490,7 @@ Three constraints keep cases sound:
         &node   :reachable  :: :Flag,
         &choice :exclusive  :: :Flag
     },
-    :Style := {}                                    // [base] is the flow look
+    :Style := {}                                    // [base] is the flow's style
 }
 
 &zone :kind [category] :> {
@@ -1546,9 +1547,8 @@ Order :prove {
 
 ### 24.6 Open
 
-- **A member under its container's kind.** Repo's `[git]` could reach the branches it holds, as its layers do (§23.2, step R5), unless a branch states its own; whether its findings are checked there too.
 - **`:Proof :=` and `:Place :=` in a case:** a kind's default proof and placement, beneath the diagram's own. Whether findings could be written so, as the kind's standing lemmas, rather than in code.
-- **Drawn as a kind, claiming nothing.** A kind's look is unnamed, so no `:theme` reaches it. If that is wanted, the look could be given a name; until then `G :kind` with no proof claims only the findings.
+- **Drawn as a kind, claiming nothing.** A kind's theme is unnamed, so no `:theme` reaches it. If that is wanted, the theme could be given a name; until then `G :kind` with no proof claims only the findings.
 - **A record type declared where it is used:** `&zone :prove :: :Proof { … }`, the descriptor, its record type and the type's descriptors at once, with questions of its own (whether `&zone` comes from the owner; how it meets "repeating a declaration adds to the type").
 - **`:pass`'s subjects.** A pass names elements (`α :pass "…"`) and finding classes (`&undecidable :pass`), which cut across nodes, edges, cells and diagrams: its signature waits for the finding classes.
 - **Cases on other conditions.** Only `:kind` today (24.3, constraint 1); another top-level descriptor no layer binds could serve the same way, when one is needed.
@@ -1556,13 +1556,32 @@ Order :prove {
 ### 24.7 Rejected
 
 - **The kind inside `:prove`** (§17, §22.5): the proof would decide the style and the places, and a diagram drawn as a kind would have to claim a proof.
-- **A kind as a theme the proof names** (this section's first draft: `:Style [flow] := { … }`, listed in `:Proof`'s `:kind`): a named value per kind, and a look and a vocabulary in two places. It needed a rule of its own, now gone: a named value standing in a type for itself.
+- **A kind as a theme the proof names** (this section's first draft: `:Style [flow] := { … }`, listed in `:Proof`'s `:kind`): a named value per kind, and a theme and a vocabulary in two places. It needed a rule of its own, now gone: a named value standing in a type for itself.
 - **A case testing any descriptor:** rules that bind what they test depend on the order they are read in.
 - **`&zone :axiom`,** as §22.9 declared it: an axiom describes the proof, not a diagram, and the class would admit a member as its subject (`Repo :prove { Main :axiom (…) }`).
 - **A case taking away** what is declared for every kind: the base vocabulary would stop being the same everywhere, and a name would mean different things by omission.
 - **`cd` and `er`.** `cd` is opaque outside mathematics, and the graph is a category's; ER, in Chen's notation, draws relationships as nodes and attributes as ovals, a different graph from a relational schema.
-- **A kind as a record holding its look** (`:Kind [category] := { :look [category-look] }`, or `:themes [objects]`): a new noun for what a case's `:Style :=` says.
+- **A kind as a record holding its theme** (`:Kind [category] := { :look [category-look] }`, or `:themes [objects]`): a new noun for what a case's `:Style :=` says.
+- ***Kind stated after a layer*** (24.2's first version): with inherited kinds the check waits for the whole program anyway, and the rule held a diagram's own kind to an order its container's escapes.
+- **A member's own kind's theme only,** beneath its containers' layers: the container's kind would reach its members' vocabulary and findings but not their drawing, an exception to R5.
 - **A `:kind` in the style, computed from the proof's.** Two places for one fact, and a disagreement to warn about.
 - **`:reserved`,** to set names aside for later declarations: it declares a name without saying what it is, and the prelude's names already cannot be defined again.
 - **Classes with `_`** (`&dead_end`, as §17 first wrote them): a second way of writing words, where descriptors and labels already use `-`.
 - **A type declared as a set of existing values** (`:Kind :: :Style.([flow], …)`): with kinds as labels, there are no values to collect.
+
+## 25. The Sheet as a tree of differences, 2026-11-10
+
+Amends §22.14 (one level of sharing, and its rejection of a parent per class) and §22.13 (tokens, defaults in JSON). Planned as step 11c3. The examples' JSON was 15 to 17 times their source, three quarters of it the Sheet: base rules repeating each other's `&node` entries (about 44% of their bytes), every diagram's seven tokens written whole, every entry's layer, `"inverted": false` and `"mark": null`. A kind's theme (§24.3) and containers' layers (R5) would add more: every git diagram repeating `[git]`, every member its container.
+
+**One principle: write only what differs from the parent.**
+
+- **Rules form a tree.** A rule is the fold of a sequence: `[base]` for its classes, then each layer a diagram adds (the kind's theme, each theme, each container's layers, the diagram's own classes). Its parent is the rule for the sequence one shorter, and it holds only the entries its own step changes. Along the classes the same: a base rule's parent is the base rule of its classes less the narrowest, by fAB's ranks (`node+plain+canonical` under `node+plain` under `node`). Diagrams sharing a prefix share its rules: every git diagram `base → [git]`, Repo's members `base → [git] → Repo`, every diagram with `:theme [dark]` its `[dark]` step. A rule changing nothing is not made.
+- **Tokens:** a diagram's are only those differing from `[base]`'s, as the dump already writes them.
+- **An entry's layer** is written only where it differs from its rule's: a base rule's entries are `base`, a kind step's `kind`, a theme step's `theme`, a diagram step's `program`.
+- **Defaults are not written:** a label's `inverted` only when true, an element's `mark` only when it has one, an element's empty style not at all.
+
+**Read the same.** `sheet.style(element)`: the element's own entries, then its rule's, then up the parents, the first found winning. Nothing is ranked when reading: the cascade ranked everything when it built the rules, and each rule holds resolved values. That answers §22.14's objection, "a second cascade": the tree stores the cascade's result, it does not redo it. SVG stacks a class per rule of the chain.
+
+**In JSON** a rule is `{parent, adds, classes, style}`: `adds` names its step, `{"base": null}`, `{"kind": "git"}`, `{"theme": "dark"}` or `{"zone": i}`, and a parent comes before the rules naming it. The format stays 1 (pre-alpha, `release.md` §3).
+
+**Rejected.** A diff written by the JSON emitter only: SVG would still repeat it (§22.14's reason, kept). Compression (gzip): it hides repetition from the bytes, not from the readers, who still walk it. Sharing by equal content, rules hashed together wherever their entries match: it would find accidental likenesses and lose what each rule stands for.

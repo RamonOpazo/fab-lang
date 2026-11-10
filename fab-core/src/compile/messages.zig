@@ -324,11 +324,6 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .explanation = "In a layer, each element takes each descriptor once, and each key of a table once. A layer gathers every description of it, so the two may be far apart; two contexts naming one element are one binding.",
             .hint = "Keep one of them. A later layer, or a narrower context, may override it instead.",
         },
-        .kind_after_layer => .{
-            .message = "{} is stated after one of the diagram's layers",
-            .explanation = "A diagram's kind decides what its layers may say and how it is drawn, so it is stated before them: `G :kind [flow]`, then `G :style { … }`.",
-            .hint = "Move `:kind` above the diagram's first layer.",
-        },
         .case_on_another_descriptor => .{
             .message = "A case tests `&zone :kind`",
             .explanation = "A case states what holds in the diagrams of one kind: `&zone :kind [flow] :> { … }`. Its condition is the kind and nothing else, which no layer binds, so a case can never change what it tests.",
@@ -660,8 +655,8 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Nothing to fix in the program.",
         },
         .unsupported_case => .{
-            .message = "A kind's record is not applied yet",
-            .explanation = "The program is valid, but this compiler reads only a case's declarations so far: a record it binds for the kind's diagrams, `:Style := { … }`, is left out.",
+            .message = "A kind's proof or places are not applied yet",
+            .explanation = "The program is valid, but of the records a case binds for its kind's diagrams this compiler applies only the theme, `:Style := { … }`, so far: `:Proof` and `:Place` records wait for their layers.",
             .hint = "Nothing to fix in the program.",
         },
     };

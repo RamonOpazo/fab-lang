@@ -146,9 +146,6 @@ pub const Tag = enum(u8) {
 
     // -- kinds (step 11) ------------------------------------------------------
 
-    /// `G :style { … }` then `G :kind [flow]`: a layer is read under the
-    /// kind, so the kind comes first (statements.md §24.2).
-    kind_after_layer,
     /// `&node :shape [box] :> { … }`, `G :kind [flow] :> { … }`: a case
     /// tests `&zone :kind` only (statements.md §24.3).
     case_on_another_descriptor,
@@ -285,8 +282,8 @@ pub const Tag = enum(u8) {
 
     /// A `:prove` or `:place` layer, until plan step 11. `:style` is applied.
     unsupported_layer,
-    /// `:Style := { … }` in a case, a kind's record (statements.md §24.3),
-    /// until plan step 11c2.
+    /// `:Proof := { … }` in a case, a kind's record of another type than
+    /// `:Style` (statements.md §24.3), until plan step 11d.
     unsupported_case,
 
     pub fn severity(tag: Tag) Severity {

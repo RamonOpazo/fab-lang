@@ -497,8 +497,9 @@ test "a cell declared twice keeps the first, and points back to it" {
 test "a mixed run is reported once, at the first different operator" {
     var a = try analyse("G :: a\nG :prove { :axiom (a == b ~= c == d ~= e) }");
     defer a.deinit();
-    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .mixed_operators, .unsupported_layer }, a.tags());
-    try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[0].token));
+    // In source order: the layer's descriptor comes first.
+    try testing.expectEqualSlices(Analyser.Error.Tag, &.{ .unsupported_layer, .mixed_operators }, a.tags());
+    try testing.expectEqualStrings("~=", a.cst.tokenText(a.result.errors[1].token));
 }
 
 test "each diagram's kind is kept, by zone" {
@@ -573,12 +574,15 @@ test "a case tests &zone :kind, and holds declarations and records of types" {
     try expectTags(kinds ++ "&zone :kind [flow] :> { :Kind :: [blob] }", &.{.case_item_of_no_form});
     try expectTags(kinds ++ "&zone :kind [flow] :> { #A :fill }", &.{.case_item_of_no_form});
     try expectTags(kinds ++ "&zone :kind [flow] :> { :Style :: { [x] } }", &.{.case_item_of_no_form});
-    // A kind's record is read in plan step 11c2.
-    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style := { &node :fill } }", &.{.unsupported_case});
+    // A kind's theme, one per kind; a record of another type waits for its
+    // layer (plan step 11d).
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style := { &node :fill } }", &.{});
+    try expectTags(kinds ++ "&zone :kind [flow] :> { :Style := { &node :fill } }\n&zone :kind [flow] :> { :Style := { &node :fill } }", &.{.name_defined_twice});
+    try expectTags(kinds ++ ":Proof :: { &zone :strict :: :Flag }\n&zone :kind [flow] :> { :Proof := { :strict } }", &.{.unsupported_case});
 }
 
 test "runs inside groups are checked on their own" {
-    try expectTags("G :: a\nG :prove { :axiom ((a == b ~= c) == d) }", &.{ .mixed_operators, .unsupported_layer });
+    try expectTags("G :: a\nG :prove { :axiom ((a == b ~= c) == d) }", &.{ .unsupported_layer, .mixed_operators });
 }
 
 // ---------------------------------------------------------------------------

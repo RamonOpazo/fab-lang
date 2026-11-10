@@ -166,7 +166,8 @@ pub const Use = struct {
 pub fn function(a: *Analyser, attr: Node.Index, use: Use) error{OutOfMemory}!void {
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
-    const f = a.env.descriptor(cst.tokenText(name_token), use.kind) orelse
+    // Inside a case its kind is known, though no diagram is.
+    const f = a.env.descriptor(cst.tokenText(name_token), use.kind orelse a.case_kind) orelse
         return unknown(a, name_token);
     try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
     const signature: ?TokenIndex = if (f.prelude) null else f.token;

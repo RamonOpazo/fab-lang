@@ -3,7 +3,7 @@
 //!
 //!   &zone :kind [flow] :> {
 //!       :Proposition :: { &zone :may-end :: :Flag },   declared for flows only
-//!       :Style := { &node :shape [round] }             the kind's look (11c2)
+//!       :Style := { &node :shape [round] }             the kind's theme
 //!   }
 //!
 //! The head is a condition on `&zone :kind`, and nothing else, so a case
@@ -62,7 +62,7 @@ fn condition(a: *Analyser, head: Node.Index) error{OutOfMemory}!?[]const u8 {
 }
 
 /// `:T :: { … }`, the kind's descriptors in a record type; `:T := { … }`,
-/// its record, applied with its look in plan step 11c2.
+/// its record for the kind's diagrams.
 fn caseItem(a: *Analyser, item: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     if (cst.tag(item) != .statement) return a.fail(.case_item_of_no_form, cst.firstToken(item));
@@ -81,7 +81,32 @@ fn caseItem(a: *Analyser, item: Node.Index) error{OutOfMemory}!void {
             try definitions.brackets(a, body);
             try vocabulary.declareType(a, head, body);
         },
-        .defn => try a.fail(.unsupported_case, op),
+        .defn => try kindTheme(a, head, body, op),
         else => try a.fail(.case_item_of_no_form, cst.firstToken(item)),
     }
+}
+
+/// `:Style := { … }`: the kind's theme, checked as a theme of `:Style` whose
+/// descriptors may be the kind's own, one per kind. A record of another
+/// type, `:Proof` or `:Place`, waits for its layer (plan step 11d).
+fn kindTheme(a: *Analyser, head: Node.Index, body: Node.Index, op: Cst.TokenIndex) error{OutOfMemory}!void {
+    const cst = a.cst;
+    const type_token = cst.mainToken(head);
+    if (!std.mem.eql(u8, cst.tokenText(type_token), ":Style")) return a.fail(.unsupported_case, op);
+    const style = a.env.type_table.get(":Style") orelse return a.fail(.not_a_type, type_token);
+    try a.referToken(type_token, .type, .of(style.token, style.prelude));
+    try definitions.brackets(a, body);
+    try definitions.entries(a, body);
+    _ = try records.theme(a, body, style.index);
+    const record = switch (try decode.of(a, body, style.index)) {
+        .record => |r| r,
+        else => return,
+    };
+    const kind = a.case_kind.?;
+    const gop = try a.env.kind_themes.getOrPut(a.gpa, kind);
+    if (gop.found_existing) {
+        try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = op, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
+        return;
+    }
+    gop.value_ptr.* = .{ .record = record, .token = op };
 }

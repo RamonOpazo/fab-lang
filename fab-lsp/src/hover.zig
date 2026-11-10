@@ -1,7 +1,7 @@
 //! What a name is, shown on hover (plan step L2c): one line in Markdown, by
 //! its sort, then the line that defines it.
 //!
-//!   diagram   G · 3 nodes, 2 edges; holds A, B; in Repo
+//!   diagram   G · 3 nodes, 2 edges; kind [git], from Repo; holds A, B; in Repo
 //!   edge      f in G: +f → #B; the nodes by name, or by canonical end
 //!   cell      α in G, a 2-cell: f ⇒ g
 //!   node      #X in G
@@ -38,6 +38,7 @@ fn write(ctx: *navigation.Context, at: Reference, w: *Writer) (Writer.Error || e
             try w.print("**diagram** `{s}`", .{text});
             if (at.subject) |s| {
                 try counts(ir, s.zone, w);
+                try kind(ir, result.kinds, s.zone, w);
                 try holding(ir, s.zone, w);
             }
         },
@@ -113,6 +114,16 @@ fn counts(ir: *const Ir, zone: Ir.ZoneIndex, w: *Writer) Writer.Error!void {
 
 /// The diagrams a diagram names, which it holds, and the first naming it,
 /// which draws it (statements.md §23.2).
+/// The diagram's kind in effect, and the container stating it if not
+/// itself (statements.md §24.2).
+fn kind(ir: *const Ir, kinds: anytype, zone: Ir.ZoneIndex, w: *Writer) Writer.Error!void {
+    for (kinds) |k| if (k.zone == zone) {
+        try w.print("; kind `[{s}]`", .{k.label});
+        if (k.from != zone) try w.print(", from `{s}`", .{ir.string(ir.zones.items(.name)[@backingInt(k.from)])});
+        return;
+    };
+}
+
 fn holding(ir: *const Ir, zone: Ir.ZoneIndex, w: *Writer) Writer.Error!void {
     var first = true;
     for (ir.members.items(.container), ir.members.items(.member)) |c, m| {

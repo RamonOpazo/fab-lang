@@ -56,9 +56,14 @@ pub const Binding = struct {
     value: decoded.Value,
 };
 
-/// `G :kind [flow]`: a diagram's kind (statements.md §24.2), read before
-/// its layers. `attr` is the descriptor, for the errors pointing back.
-pub const Kind = struct { zone: Ir.ZoneIndex, label: []const u8, attr: Node.Index };
+/// `G :kind [flow]`: a diagram's kind (statements.md §24.2), stated by
+/// `from`, the diagram itself or a container up its chain. `attr` is the
+/// statement's descriptor.
+pub const Kind = struct { zone: Ir.ZoneIndex, label: []const u8, attr: Node.Index, from: Ir.ZoneIndex };
+
+/// A descriptor only some kinds declare, read before the diagrams' kinds
+/// are known: checked once they are (`deferred`).
+pub const Deferred = struct { attr: Node.Index, subjects: []const Owner, layer: ?Layer };
 
 /// `G :style { [ink] := [#000000] }`: a token a diagram's own layer binds,
 /// after its themes (statements.md §22.11).
@@ -80,7 +85,7 @@ pub const PendingReference = struct { token: TokenIndex, subject: Pending };
 
 /// Where a block's contexts are read: in a diagram, which has parts, or in
 /// an element or a class, which has none.
-const Owner = struct { subject: Pending, zone: ?Analyser.Zone };
+pub const Owner = struct { subject: Pending, zone: ?Analyser.Zone };
 
 /// `G :style { … }`, `G.f :label "x"`, `&node :fill [red]`: a description
 /// at the top level, its shape checked already.
@@ -150,6 +155,12 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
             try a.fail(.unsupported_layer, name_token);
             return;
         }
+        // Some kind declares it, and a diagram's kind may come from a
+        // container not declared yet: checked once the program is read.
+        if (a.effective == null and a.env.functions.contains(name)) {
+            try a.deferred.append(a.gpa, .{ .attr = attr, .subjects = try a.arena.allocator().dupe(Owner, subjects), .layer = layer });
+            return;
+        }
         return records.unknown(a, name_token);
     };
     try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
@@ -160,7 +171,6 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     // itself, so a fact of the diagram, at the top level only.
     if (layer == null and f.record == null and !f.bundle and !a.env.isRecord(f.type))
         return diagramKind(a, attr, f, subjects, classes);
-    try layered(a, subjects, name_token);
 
     // `G :style { … }`: the layer, opened on the diagrams it describes.
     const value = cst.data(attr).node;
@@ -180,8 +190,8 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound, .function = f });
 }
 
-/// `G :kind [flow]`, once per diagram, before its layers. `&zone :kind` is
-/// every diagram's, which the header will state: reserved.
+/// `G :kind [flow]`, once per diagram, anywhere. `&zone :kind` is every
+/// diagram's, which the header will state: reserved.
 fn diagramKind(a: *Analyser, attr: Node.Index, f: Env.Function, subjects: []const Owner, classes: Env.Classes) error{OutOfMemory}!void {
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
@@ -204,26 +214,12 @@ fn diagramKind(a: *Analyser, attr: Node.Index, f: Env.Function, subjects: []cons
             },
             .node => continue,
         };
-        if (a.layered.get(zone)) |layer_token| {
-            try a.errors.append(a.gpa, .{ .tag = .kind_after_layer, .token = name_token, .related = layer_token });
-            continue;
-        }
         const gop = try a.kinds.getOrPut(a.gpa, zone);
         if (gop.found_existing) {
             try a.errors.append(a.gpa, .{ .tag = .binding_made_twice, .token = name_token, .related = cst.mainToken(gop.value_ptr.attr) });
             continue;
         }
-        gop.value_ptr.* = .{ .zone = zone, .label = label, .attr = attr };
-    }
-}
-
-/// Marks the diagrams a layer's descriptor describes, at its first: a kind
-/// after it is an error. A class with no diagram is every diagram's, and
-/// marks none.
-fn layered(a: *Analyser, subjects: []const Owner, token: TokenIndex) error{OutOfMemory}!void {
-    for (subjects) |s| {
-        const zone = diagramOf(a, s) orelse continue;
-        _ = try a.layered.getOrPutValue(a.gpa, zone, token);
+        gop.value_ptr.* = .{ .zone = zone, .label = label, .attr = attr, .from = zone };
     }
 }
 
@@ -234,7 +230,7 @@ fn kindOf(a: *Analyser, subjects: []const Owner) ?[]const u8 {
     var kind: ?[]const u8 = null;
     for (subjects, 0..) |s, i| {
         const zone = diagramOf(a, s) orelse return null;
-        const k = (a.kinds.get(zone) orelse return null).label;
+        const k = (a.kindOfZone(zone) orelse return null).label;
         if (i > 0 and !std.mem.eql(u8, k, kind.?)) return null;
         kind = k;
     }
@@ -574,6 +570,34 @@ fn errorSubject(p: Pending) ?Analyser.Subject {
 }
 
 /// Nodes, once the graph is built: each element's class is an IR node.
+/// Each diagram's kind in effect, its own or its container's up the chain
+/// (statements.md §24.2), then the descriptors that waited for it.
+pub fn deferred(a: *Analyser) error{OutOfMemory}!void {
+    const zones = a.builder.zones.len;
+    const effective = try a.arena.allocator().alloc(?Kind, zones);
+    for (effective, 0..) |*k, z| k.* = inEffect(a, @fromBackingInt(@as(u32, @intCast(z))));
+    a.effective = effective;
+    for (a.deferred.items) |d| {
+        const first = a.errors.items.len;
+        try descriptor(a, d.attr, d.subjects, d.layer);
+        // Its statement was marked long ago: its errors go on its diagram.
+        const zone = for (d.subjects) |o| {
+            if (diagramOf(a, o)) |z| break z;
+        } else null;
+        if (zone) |z| for (a.errors.items[first..]) |*err| {
+            if (err.subject == null) err.subject = .{ .zone = @backingInt(z) };
+        };
+    }
+}
+
+fn inEffect(a: *Analyser, zone: Ir.ZoneIndex) ?Kind {
+    var at: ?Ir.ZoneIndex = zone;
+    while (at) |z| : (at = a.builder.zones.items(.container)[@backingInt(z)]) {
+        if (a.kinds.get(z)) |k| return .{ .zone = zone, .label = k.label, .attr = k.attr, .from = z };
+    }
+    return null;
+}
+
 pub fn finish(a: *Analyser) error{OutOfMemory}![]Binding {
     const bindings = try a.gpa.alloc(Binding, a.bindings.items.len);
     for (a.bindings.items, bindings) |p, *b| b.* = .{ .subject = resolve(a, p.subject, a.node_of), .attr = p.attr, .layer = p.layer, .descriptor = p.descriptor, .key = p.key, .value = p.value };

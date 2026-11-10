@@ -14,7 +14,3 @@ Repo :prove {
     :axiom (Master :main),      // if given, establishes the main branch on top and contextualizes the records
     :axiom (Master.init :init)  // if give, init's left node must be a `*`, thus, starting the branch
 }
-
-Repo :style {
-    &node :shape [point]  // maybe we could coordinate the style with the :prove :type?
-}

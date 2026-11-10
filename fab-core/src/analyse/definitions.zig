@@ -179,7 +179,7 @@ fn isLiteral(cst: *const Cst, node: Node.Index) bool {
 
 /// The items of a record: descriptions, namings and operations, side by
 /// side. A descriptor's record or proposition is one too.
-fn entries(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
+pub fn entries(a: *Analyser, node: Node.Index) error{OutOfMemory}!void {
     const cst = a.cst;
     switch (cst.tag(node)) {
         .items => {

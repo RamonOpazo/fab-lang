@@ -898,7 +898,6 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Declaration head not a diagram     | `[red] :: f`, `G :style :: f`                | Only diagrams, nodes and edges are declared                      |
 | Reserved: node or edge declared    | `#User :: */(id, name)`, `review :: a b`     | What declaring a node or an edge means is open                   |
 | Reserved: a kind for every diagram | `&zone :kind [flow]`                         | A file's kind is the header's, whose syntax is open              |
-| Kind stated after a layer          | `G :style { … }` then `G :kind [flow]`       | The layers are read under the kind, so it comes first            |
 | Naming head of no form             | `f g := [red]`, `G := [red]`                 | A naming's left side is `[name]`, `:Type [name]` or `:descriptor` |
 | Description written with `:=`      | `G :style := { … }`, `G.f :arrow := [epi]`   | A description has no operator: `G :style { … }`                  |
 | Description with no context        | `:fill [red]` at the top level               | A context is left out only inside a block, where it is the owner |
@@ -1176,7 +1175,6 @@ Repo :kind [git]
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
-    &node    :shape [point],
     #Head    { :ref, :label "main" },
     #Feature { :ref, :label "feature/auth" },
     #V1      { :ref, :label "v1.0" },
@@ -1214,13 +1212,11 @@ FeatureTwo :: Master.(commit2+)/commit1 commit2 merge/Master.(commit3+)
 
 Repo :: Master, FeatureOne, FeatureTwo
 
-Repo :style {
-    &node :shape [point]
-}
+Repo :kind [git]
 ```
 
 - Each branch starts where it leaves another: `Master.(commit2+)` is the state after Master's second commit, shared with Master, so both branches fork from it. The merge lands on `Master.(commit3+)`.
-- `Repo :: Master, FeatureOne, FeatureTwo` names the three diagrams, so Repo holds them (see Diagrams as nodes): they are drawn inside it, and Repo's style reaches them, beneath their own. Every commit is a point.
+- `Repo :: Master, FeatureOne, FeatureTwo` names the three diagrams, so Repo holds them (see Diagrams as nodes): they are drawn inside it, and Repo's kind and style reach them, beneath their own. Every commit is a point: `[git]`'s theme draws them so.
 - Repo's three nodes stand for the branches and join nothing; the history itself lives in the branches.
 
 ## Mathematical reading

@@ -141,7 +141,7 @@ pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
     const graph = try c.ir() orelse return null;
     if (c.styled == null) {
         const result = try c.analysis();
-        c.styled = try Styler.style(c.gpa, graph, .{ .env = &result.env, .bindings = result.bindings, .tokens = result.tokens }, try c.marks());
+        c.styled = try Styler.style(c.gpa, graph, .{ .env = &result.env, .bindings = result.bindings, .tokens = result.tokens, .kinds = result.kinds }, try c.marks());
     }
     return &c.styled.?;
 }

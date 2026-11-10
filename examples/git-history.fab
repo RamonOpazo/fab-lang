@@ -8,7 +8,6 @@ Repo :kind [git]
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
-    &node    :shape [point],
     #Head    { :ref, :label "main" },
     #Feature { :ref, :label "feature/auth" },
     #V1      { :ref, :label "v1.0" },

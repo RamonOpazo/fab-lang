@@ -107,7 +107,8 @@ pub const Result = struct {
     bindings: []const layers.Binding = &.{},
     /// The tokens diagrams' own layers bind, after their themes.
     tokens: []const layers.Token = &.{},
-    /// Each diagram's kind, if stated (statements.md §24.2), by zone.
+    /// Each diagram's kind in effect, its own or a container's (statements.md
+    /// §24.2), by zone; diagrams of no kind left out.
     kinds: []const layers.Kind = &.{},
     /// Every name the program uses, with what it names: for the language
     /// server. In source order.
@@ -135,10 +136,12 @@ env: Env,
 /// nodes still elements until the graph is built (`layers.finish`).
 bindings: std.ArrayList(layers.PendingBinding) = .empty,
 tokens: std.ArrayList(layers.Token) = .empty,
-/// Each diagram's kind, and the first descriptor of each diagram's layers:
-/// a kind after it is an error.
+/// Each diagram's kind as stated; once the program is read, each diagram's
+/// in effect, by zone (`layers.deferred`), and the descriptors that waited
+/// for it.
 kinds: std.AutoHashMapUnmanaged(Ir.ZoneIndex, layers.Kind) = .empty,
-layered: std.AutoHashMapUnmanaged(Ir.ZoneIndex, TokenIndex) = .empty,
+effective: ?[]const ?layers.Kind = null,
+deferred: std.ArrayList(layers.Deferred) = .empty,
 /// The kind whose case is being read, `flow`: what its declarations are
 /// scoped to (statements.md §24.3). Null outside a case.
 case_kind: ?[]const u8 = null,
@@ -223,7 +226,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     defer a.bindings.deinit(gpa);
     defer a.tokens.deinit(gpa);
     defer a.kinds.deinit(gpa);
-    defer a.layered.deinit(gpa);
+    defer a.deferred.deinit(gpa);
     defer a.contexts.deinit(gpa);
     defer a.references.deinit(gpa);
     defer a.failed.deinit(gpa);
@@ -247,6 +250,7 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
             else => {},
         }
     }
+    try layers.deferred(&a);
     try elaborate.graph(&a);
     const bindings = try layers.finish(&a);
     errdefer gpa.free(bindings);
@@ -254,16 +258,20 @@ pub fn analyse(gpa: std.mem.Allocator, cst: *const Cst, base: ?Env) error{OutOfM
     errdefer gpa.free(references);
     const tokens = try a.tokens.toOwnedSlice(gpa);
     errdefer gpa.free(tokens);
-    const kinds = try gpa.alloc(layers.Kind, a.kinds.count());
+    var in_effect: std.ArrayList(layers.Kind) = .empty;
+    defer in_effect.deinit(gpa);
+    for (a.effective.?) |k| if (k) |kind| try in_effect.append(gpa, kind);
+    const kinds = try in_effect.toOwnedSlice(gpa);
     errdefer gpa.free(kinds);
-    var it = a.kinds.valueIterator();
-    for (kinds) |*k| k.* = it.next().?.*;
-    std.mem.sort(layers.Kind, kinds, {}, struct {
-        fn lessThan(_: void, l: layers.Kind, r: layers.Kind) bool {
-            return @backingInt(l.zone) < @backingInt(r.zone);
+
+    // In source order: some checks wait for the whole program (the graph,
+    // a kind in effect), and their errors belong where they point. Stable,
+    // so one token's errors keep the order they were found in.
+    std.mem.sort(Error, a.errors.items, {}, struct {
+        fn lessThan(_: void, l: Error, r: Error) bool {
+            return l.token < r.token;
         }
     }.lessThan);
-
     const errors = try a.errors.toOwnedSlice(gpa);
     errdefer gpa.free(errors);
     return .{ .ir = try a.builder.finish(), .errors = errors, .env = a.env, .bindings = bindings, .tokens = tokens, .kinds = kinds, .references = references };
@@ -454,6 +462,13 @@ fn markStatement(a: *Analyser, first: usize, zone_index: ?Ir.ZoneIndex, head: No
     for (rest) |*err| {
         if (err.subject == null) err.subject = .{ .zone = @backingInt(z) };
     }
+}
+
+/// A diagram's kind: in effect once the program is read, as stated until
+/// then.
+pub fn kindOfZone(a: *const Analyser, z: Ir.ZoneIndex) ?layers.Kind {
+    if (a.effective) |e| return if (@backingInt(z) < e.len) e[@backingInt(z)] else null;
+    return a.kinds.get(z);
 }
 
 /// The diagram a naming or a description is about: `G :style`, `G.f :label`. Its first

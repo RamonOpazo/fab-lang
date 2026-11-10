@@ -9,7 +9,7 @@
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
 //! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on), and in step 9 its
-//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b, 3 for 11c1). `done` is the last one finished; later cases
+//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b, 3 for 11c1, 4 for 11c2). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -22,7 +22,7 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 11, .rule = 3 };
+const done: Progress = .{ .step = 11, .rule = 4 };
 
 const Progress = struct {
     step: u8,
@@ -1868,7 +1868,6 @@ test "Examples: a git history: commits as arrows" {
         \\:ref := :shape [round], :fill [muted]
         \\
         \\Repo :style {
-        \\  &node :shape [point],
         \\  #Head    { :ref, :label "main" },
         \\  #Feature { :ref, :label "feature/auth" },
         \\  #V1      { :ref, :label "v1.0" },
@@ -2149,7 +2148,7 @@ test "Examples: a database schema, documents and comments" {
 }
 
 test "Examples: a git history, commits as arrows" {
-    try check(.{ .step = 9, .rule = 52, .source =
+    try check(.{ .step = 11, .rule = 4, .source =
         \\Repo :: {
         \\    */init readme/#Fork +(fix/#Main, login session/#Feature),
         \\    (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
@@ -2160,7 +2159,6 @@ test "Examples: a git history, commits as arrows" {
         \\:ref := :shape [round], :fill [muted]
         \\
         \\Repo :style {
-        \\    &node    :shape [point],
         \\    #Head    { :ref, :label "main" },
         \\    #Feature { :ref, :label "feature/auth" },
         \\    #V1      { :ref, :label "v1.0" },
@@ -2183,13 +2181,13 @@ test "Examples: a git history, commits as arrows" {
         \\}
     , .sheet =
         \\zone Repo: stroke [#8250df] mark, caption "unsupported" mark
-        \\  node n0: shape [point] program
-        \\  node n1: shape [point] program
-        \\  node n2: shape [point] program
-        \\  node n3: shape [point] program
-        \\  node n4: shape [point] program
+        \\  node n0: shape [point] kind
+        \\  node n1: shape [point] kind
+        \\  node n2: shape [point] kind
+        \\  node n3: shape [point] kind
+        \\  node n4: shape [point] kind
         \\  node n5: label "feature/auth" program, fill [#888888] program, shape [round] program
-        \\  node n6: shape [point] program
+        \\  node n6: shape [point] kind
         \\  node n7: label "v1.0" program, fill [#888888] program, shape [round] program
         \\  node n8: label "main" program, fill [#888888] program, shape [round] program
         \\  node n9: label "spike/cache" program, fill [#888888] program, shape [round] program
@@ -2208,37 +2206,35 @@ test "Examples: a git history, commits as arrows" {
 }
 
 test "Examples: a git history, branch by branch" {
-    try check(.{ .step = 9, .rule = 52, .source =
+    try check(.{ .step = 11, .rule = 4, .source =
         \\Master     :: */init commit1 commit2 commit3 commit4 commit5
         \\FeatureOne :: Master.(commit2+)/commit1 commit2 commit3 commit4
         \\FeatureTwo :: Master.(commit2+)/commit1 commit2 merge/Master.(commit3+)
         \\
         \\Repo :: Master, FeatureOne, FeatureTwo
         \\
-        \\Repo :style {
-        \\    &node :shape [point]
-        \\}
+        \\Repo :kind [git]
     , .sheet =
         \\zone Master
-        \\  node n0: shape [point] program
-        \\  node n1: shape [point] program
-        \\  node n2: shape [point] program
-        \\  node n3: shape [point] program
-        \\  node n4: shape [point] program
-        \\  node n5: shape [point] program
-        \\  node n6: shape [point] program
+        \\  node n0: shape [point] kind
+        \\  node n1: shape [point] kind
+        \\  node n2: shape [point] kind
+        \\  node n3: shape [point] kind
+        \\  node n4: shape [point] kind
+        \\  node n5: shape [point] kind
+        \\  node n6: shape [point] kind
         \\zone FeatureOne
-        \\  node n7: shape [point] program
-        \\  node n8: shape [point] program
-        \\  node n9: shape [point] program
-        \\  node n10: shape [point] program
+        \\  node n7: shape [point] kind
+        \\  node n8: shape [point] kind
+        \\  node n9: shape [point] kind
+        \\  node n10: shape [point] kind
         \\zone FeatureTwo
-        \\  node n11: shape [point] program
-        \\  node n12: shape [point] program
+        \\  node n11: shape [point] kind
+        \\  node n12: shape [point] kind
         \\zone Repo
-        \\  node n13: shape [point] program
-        \\  node n14: shape [point] program
-        \\  node n15: shape [point] program
+        \\  node n13: shape [point] kind
+        \\  node n14: shape [point] kind
+        \\  node n15: shape [point] kind
         \\
     });
 }
@@ -2246,12 +2242,13 @@ test "Examples: a git history, branch by branch" {
 // ---------------------------------------------------------------------------
 // Kinds (step 11b): the diagram's own, stated before its layers.
 
-test "Kinds: the kind is the diagram's own, before its layers (statements.md §24.2)" {
+test "Kinds: the kind is the diagram's own, stated anywhere (statements.md §24.2)" {
     const g = "G :: f\n";
     try check(.{ .step = 11, .rule = 2, .source = g ++ "G :kind [flow]\nG :style { f :label \"x\" }" });
     try check(.{ .step = 11, .rule = 2, .source = g ++ "G { :kind [flow], :style { f :label \"x\" } }" });
-    try check(.{ .step = 11, .rule = 2, .source = g ++ "G :style { f :label \"x\" }\nG :kind [flow]", .codes = &.{.{ .analysis = .kind_after_layer }} });
-    try check(.{ .step = 11, .rule = 2, .source = g ++ "G.f :label \"x\"\nG :kind [flow]", .codes = &.{.{ .analysis = .kind_after_layer }} });
+    // Known once the program is read, as a container is: stated anywhere.
+    try check(.{ .step = 11, .rule = 4, .source = g ++ "G :style { f :label \"x\" }\nG :kind [flow]" });
+    try check(.{ .step = 11, .rule = 4, .source = g ++ "G.f :label \"x\"\nG :kind [flow]" });
     try check(.{ .step = 11, .rule = 2, .source = g ++ "G :kind [flow]\nG :kind [category]", .codes = &.{.{ .analysis = .binding_made_twice }} });
 }
 
@@ -2292,4 +2289,62 @@ test "Cases: a condition on &zone :kind, and declarations and records of types (
     try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [dark] :> { :Style :: { &node :knob :: :Flag } }", .codes = &.{.{ .analysis = .wrong_type }} });
     try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { :Mood :: [calm] }", .codes = &.{.{ .analysis = .case_item_of_no_form }} });
     try check(.{ .step = 11, .rule = 3, .source = "&zone :kind [flow] :> { &node :fill [red] }", .codes = &.{.{ .analysis = .case_item_of_no_form }} });
+}
+
+// ---------------------------------------------------------------------------
+// The kind's theme (step 11c2): the first theme of the diagram stating the
+// kind, passed down with its layers; kinds in effect once the program is read.
+
+test "Kinds: the kind's theme, above [base], below themes and the program (statements.md §24.3)" {
+    try check(.{ .step = 11, .rule = 4, .source = "G :: f\nG :kind [state-machine]", .sheet =
+        \\zone G
+        \\  node n0: shape [round] kind
+        \\  node n1: shape [round] kind
+        \\
+    });
+    try check(.{ .step = 11, .rule = 4, .source = ":Style [boxy] := { &node :shape [box] }\nG :: f\nG :kind [state-machine]\nG :style { :theme [boxy] }", .sheet =
+        \\zone G
+        \\  node n0: shape [box] theme
+        \\  node n1: shape [box] theme
+        \\
+    });
+    try check(.{ .step = 11, .rule = 4, .source = "G :: f\nG :kind [state-machine]\nG :style { &node :shape [box] }", .sheet =
+        \\zone G
+        \\  node n0: shape [box] program
+        \\  node n1: shape [box] program
+        \\
+    });
+    // A kind's theme binds tokens, before the themes'.
+    try check(.{ .step = 11, .rule = 4, .source = "&zone :kind [schema] :> { :Style := { [ink] := [#000000], &edge :pen [thick] } }\nG :: f\nG :kind [schema]", .sheet =
+        \\zone G
+        \\  token ink [#000000]
+        \\  edge f: pen [thick] kind
+        \\
+    });
+}
+
+test "Kinds: passed down, unless a member states its own (statements.md §24.2)" {
+    try check(.{ .step = 11, .rule = 4, .source = "A :: f\nB :: g\nR :: A, B\nR :kind [git]\nB :kind [state-machine]", .sheet =
+        \\zone A
+        \\  node n0: shape [point] kind
+        \\  node n1: shape [point] kind
+        \\zone B
+        \\  node n2: shape [round] kind
+        \\  node n3: shape [round] kind
+        \\zone R
+        \\  node n4: shape [point] kind
+        \\  node n5: shape [point] kind
+        \\
+    });
+}
+
+test "Kinds: one theme per kind (statements.md §24.3)" {
+    try check(.{ .step = 11, .rule = 4, .source = "&zone :kind [git] :> { :Style := { &node :shape [box] } }", .codes = &.{.{ .analysis = .name_defined_twice }} });
+}
+
+test "Kinds: a kind's descriptor waits for the kind in effect (statements.md §24.2)" {
+    const knob = "&zone :kind [schema] :> { :Style :: { &node :knob :: :Flag } }\nA :: f\nA :style { +f :knob }\nR :: A\n";
+    try check(.{ .step = 11, .rule = 4, .source = knob ++ "R :kind [schema]" });
+    try check(.{ .step = 11, .rule = 4, .source = knob ++ "R :kind [git]", .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
+    try check(.{ .step = 11, .rule = 4, .source = knob, .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
 }

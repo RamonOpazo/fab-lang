@@ -400,7 +400,7 @@ const Reader = struct {
     /// diagram and descriptor.
     fn noteUndrawn(r: *Reader, v: Sheet.View, subject: fab.Ir.Subject, zone: fab.Ir.ZoneIndex) error{OutOfMemory}!void {
         for ([_][]const Sheet.Entry{ v.own, v.rule }) |entries| for (entries) |e| {
-            if (e.layer != .theme and e.layer != .program) continue;
+            if (e.layer != .kind and e.layer != .theme and e.layer != .program) continue;
             if (r.drawsDescriptor(e.descriptor)) continue;
             const gop = try r.noted.getOrPut(r.notes.gpa, .{ @backingInt(zone), @backingInt(e.descriptor) });
             if (gop.found_existing) continue;

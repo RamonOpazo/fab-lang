@@ -29,6 +29,20 @@ test "a diagram: its size" {
     try expectHover(0, 0, "**diagram** `G` · 5 nodes, 4 edges\n\n```fab\nG :: #A/f g/? +(h, k)\n```");
 }
 
+test "a diagram: its kind, its own or its container's (statements.md §24.2)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const source = "A :: */f\nR :: A\nR :kind [git]";
+    try testing.expectEqualStrings(
+        "**diagram** `A` · 2 nodes, 1 edge; kind `[git]`, from `R`; in `R`\n\n```fab\nA :: */f\n```",
+        (try hoverAt(arena.allocator(), source, 0, 0)).?,
+    );
+    try testing.expectEqualStrings(
+        "**diagram** `R` · 1 node, 0 edges; kind `[git]`; holds `A`\n\n```fab\nR :: A\n```",
+        (try hoverAt(arena.allocator(), source, 1, 0)).?,
+    );
+}
+
 test "a diagram: what it holds, and what holds it (statements.md §23.2)" {
     var arena: std.heap.ArenaAllocator = .init(testing.allocator);
     defer arena.deinit();

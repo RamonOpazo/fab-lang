@@ -54,7 +54,7 @@ pub const Entry = struct { descriptor: Descriptor, value: Value, layer: Layer = 
 
 /// Where an entry's value comes from. Above `base`, the author asked for
 /// it: what a renderer reports when it can't draw it.
-pub const Layer = enum { computed, base, theme, program, mark };
+pub const Layer = enum { computed, base, kind, theme, program, mark };
 
 /// How serious an issue is, as drawn: the colour of its mark, the token of
 /// that name. A promoted warning is drawn as an error.
@@ -236,7 +236,7 @@ fn shown(s: *const Sheet, subject: Subject, options: DumpOptions) bool {
 /// when asked; never what is computed.
 fn dumped(e: Entry, options: DumpOptions) bool {
     return switch (e.layer) {
-        .theme, .program, .mark => true,
+        .kind, .theme, .program, .mark => true,
         .base => options.base,
         .computed => false,
     };

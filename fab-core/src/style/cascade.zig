@@ -1,7 +1,10 @@
 //! The cascade (statements.md §22.4, §22.11, §22.12; plan step 9d4): the
 //! Sheet of values, folded from the layers, lowest first:
 //!
-//!   computed  <  [base]  <  the diagram's themes, left to right  <  the program  <  marks
+//!   computed  <  [base]  <  the kind's theme  <  the diagram's themes, left to right  <  the program  <  marks
+//!
+//! A kind's theme (statements.md §24.3) is the first theme of the diagram
+//! that states the kind, so it passes down with the diagram's layers.
 //!
 //! A diagram held by others (statements.md §23.2) has its containers' layers
 //! between `[base]` and its own, outermost first: their themes, tokens and
@@ -39,6 +42,8 @@ pub const Inputs = struct {
     env: *const Env,
     bindings: []const layers.Binding = &.{},
     tokens: []const layers.Token = &.{},
+    /// Each diagram's kind in effect, and the diagram stating it.
+    kinds: []const layers.Kind = &.{},
 };
 
 /// Each element's worst issue, and each diagram's mark.
@@ -68,7 +73,7 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
 
     b.zone_tokens = try gpa.alloc([]const decoded.Token, ir.zones.len);
     @memset(b.zone_tokens, &.{});
-    b.zone_themes = try gpa.alloc([]const decoded.Record, ir.zones.len);
+    b.zone_themes = try gpa.alloc([]const Themed, ir.zones.len);
     @memset(b.zone_themes, &.{});
     // Themes first, every diagram's: a member's tokens read its containers',
     // which are declared after it.
@@ -144,6 +149,10 @@ fn record(env: *const Env, v: ?Env.Value) ?decoded.Record {
 /// One step of the cascade's precedence: a layer, then a rank in it.
 const Precedence = u32;
 
+/// A theme of a diagram, and the layer its entries are in: a kind's theme
+/// and what it includes are `kind`, the rest `theme`.
+const Themed = struct { record: decoded.Record, layer: Layer };
+
 /// A descriptor's value so far, and the precedence it was bound at.
 const Slot = ?struct { at: Precedence, value: Value, layer: Layer };
 
@@ -164,7 +173,7 @@ const Builder = struct {
     top: std.ArrayList(u32) = .empty,
     in_zone: std.AutoHashMapUnmanaged(u32, std.ArrayList(u32)) = .empty,
     own: std.AutoHashMapUnmanaged(SubjectKey, std.ArrayList(u32)) = .empty,
-    zone_themes: [][]const decoded.Record = &.{},
+    zone_themes: [][]const Themed = &.{},
     zone_tokens: [][]const decoded.Token = &.{},
     chain_buffer: std.ArrayList(Ir.ZoneIndex) = .empty,
     nodes: []Sheet.Element = &.{},
@@ -275,12 +284,27 @@ const Builder = struct {
         return b.chain_buffer.items;
     }
 
-    /// A diagram's themes, includes first.
+    /// A diagram's themes, includes first: the kind's theme where the
+    /// diagram states its kind, then its `:theme`.
     fn prepareThemes(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
-        var themes: std.ArrayList(decoded.Record) = .empty;
+        var themes: std.ArrayList(Themed) = .empty;
         defer themes.deinit(b.gpa);
-        if (try b.themeValue(zone)) |v| try b.expand(v, &themes, 8);
-        b.zone_themes[@backingInt(zone)] = try b.arena.dupe(decoded.Record, themes.items);
+        var records: std.ArrayList(decoded.Record) = .empty;
+        defer records.deinit(b.gpa);
+        if (b.kindTheme(zone)) |r| try b.expand(.{ .record = r }, &records, 8);
+        for (records.items) |r| try themes.append(b.gpa, .{ .record = r, .layer = .kind });
+        records.clearRetainingCapacity();
+        if (try b.themeValue(zone)) |v| try b.expand(v, &records, 8);
+        for (records.items) |r| try themes.append(b.gpa, .{ .record = r, .layer = .theme });
+        b.zone_themes[@backingInt(zone)] = try b.arena.dupe(Themed, themes.items);
+    }
+
+    /// The theme of the kind `zone` states itself, if it has one.
+    fn kindTheme(b: *Builder, zone: Ir.ZoneIndex) ?decoded.RecordIndex {
+        for (b.in.kinds) |k| if (k.zone == zone and k.from == zone) {
+            return (b.in.env.kind_themes.get(k.label) orelse return null).record;
+        };
+        return null;
     }
 
     /// A diagram's tokens: `[base]`'s, then along its chain each diagram's
@@ -290,7 +314,7 @@ const Builder = struct {
         defer tokens.deinit(b.gpa);
         if (b.base) |base| for (base.tokens) |t| try bindToken(b.gpa, &tokens, t);
         for (try b.chain(zone)) |d| {
-            for (b.zone_themes[@backingInt(d)]) |theme| for (theme.tokens) |t| try bindToken(b.gpa, &tokens, t);
+            for (b.zone_themes[@backingInt(d)]) |theme| for (theme.record.tokens) |t| try bindToken(b.gpa, &tokens, t);
             for (b.in.tokens) |t| if (t.zone == d) try bindToken(b.gpa, &tokens, t.token);
         }
         b.zone_tokens[@backingInt(zone)] = try b.arena.dupe(decoded.Token, tokens.items);
@@ -368,11 +392,11 @@ const Builder = struct {
         // outermost first and the diagram last: each theme one layer more,
         // then its classes in the program. The program's top-level classes
         // are every diagram's own, ranked below the diagram's classes.
-        if (b.base) |base| try b.foldRecord(slots, base, classes, 0);
+        if (b.base) |base| try b.foldRecord(slots, base, classes, 0, .base);
         var layer: Precedence = 1;
         for (try b.chain(zone)) |d| {
             for (b.zone_themes[@backingInt(d)]) |theme| {
-                try b.foldRecord(slots, theme, classes, layer);
+                try b.foldRecord(slots, theme.record, classes, layer, theme.layer);
                 layer += 1;
             }
             if (d == zone) for (b.top.items) |i| try b.foldProgram(slots, i, classes, layer, 0);
@@ -390,12 +414,12 @@ const Builder = struct {
         return index;
     }
 
-    fn foldRecord(b: *Builder, slots: []Slot, r: decoded.Record, classes: Env.Classes, layer: Precedence) error{OutOfMemory}!void {
+    fn foldRecord(b: *Builder, slots: []Slot, r: decoded.Record, classes: Env.Classes, layer: Precedence, as: Layer) error{OutOfMemory}!void {
         for (r.bindings) |binding| {
             if (binding.key != null) continue;
             const meet = (binding.classes orelse continue).intersectWith(classes);
             if (meet.count() == 0) continue;
-            try b.bind(slots, binding.descriptor, binding.value, layer * 16 + rank(meet), if (layer == 0) .base else .theme, 8);
+            try b.bind(slots, binding.descriptor, binding.value, layer * 16 + rank(meet), as, 8);
         }
     }
 
@@ -469,7 +493,7 @@ const Builder = struct {
             if (!gop.found_existing) {
                 gop.value_ptr.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
                 @memset(slots, null);
-                if (b.base) |base| try b.foldRecord(slots, base, r.classes, 0);
+                if (b.base) |base| try b.foldRecord(slots, base, r.classes, 0, .base);
                 const start: u32 = @intCast(entries.items.len);
                 try b.emit(slots, base_tokens, &entries);
                 try rules.append(b.gpa, .{ .classes = r.classes, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });

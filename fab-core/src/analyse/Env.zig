@@ -45,6 +45,11 @@ declared: std.ArrayList(Declared) = .empty,
 /// Named records and bundles' bodies, decoded (plan step 9d2): what
 /// `decoded.Value.record` and `Function.body` index.
 records: std.ArrayList(decoded.Record) = .empty,
+/// Each kind's theme, `:Style := { … }` in its case (statements.md §24.3),
+/// by the kind's name: `flow`.
+kind_themes: std.StringHashMapUnmanaged(KindTheme) = .empty,
+
+pub const KindTheme = struct { record: decoded.RecordIndex, token: TokenIndex, prelude: bool = false };
 
 pub const TypeIndex = enum(u32) {
     text,
@@ -189,6 +194,7 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.values.deinit(gpa);
     env.functions.deinit(gpa);
     env.cased.deinit(gpa);
+    env.kind_themes.deinit(gpa);
     env.arena.deinit();
     env.* = undefined;
 }
@@ -208,6 +214,8 @@ pub fn adopt(env: *Env) void {
         for (f.contents) |*c| c.prelude = true;
     }
     for (env.cased.items) |*f| f.prelude = true;
+    var themes = env.kind_themes.valueIterator();
+    while (themes.next()) |t| t.prelude = true;
 }
 
 /// The descriptor `descriptor_name` in a diagram of `kind` (null: no kind, or none
