@@ -137,7 +137,7 @@ primary
 #   EDGE_ID   f, h', user_id, α    lowercase, _ or non-ASCII first
 #   ATTR_ID   :label, :label-start : then lowercase; - allowed
 #   TYPE_ID   :Color, :UpperCamel  : then uppercase
-#   CLASS_ID  &node                & then lowercase
+#   CLASS_ID  &node, &dead-end     & then lowercase; - allowed
 #   STR       "…"                  one line, \ escapes
 #   MATH      $…$                  one line, \ escapes
 #   VAL       [red], [/solid/>], []  one opaque token; no whitespace, [ ] ( ) ,

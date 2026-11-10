@@ -656,7 +656,7 @@ Revises 16.1 (plan step 7d). The principle: the analyser describes the largest s
 Planned with the proof shells (plan step 11); nothing here is implemented. Revises the open question on the header's errors by kind.
 
 - **The analyser describes, restrictions narrow.** Declarations accept every structure with a reading (16.3). A restriction turns some of them into findings: the kind states what the graph is proved against, and the proof layer narrows further.
-- **The kind is stated in the proof:** `G :prove := { :kind [cd], … }`. An entry with no subject binds the block's owner (1.3), so this is `G :kind`; `@` would be G's own node, and a class for the diagram itself (`&self`) would say again what the empty subject says. A proof is like a paper about the relations declared: it says what kind of thing they are, and that one statement decides three things, so no second attribute is needed: the kind of graph (what is drawn), the proofs that may be posited (which attributes the proof layer accepts), and which structures are promoted to findings. The same attribute may be given at the header, `G :kind := [cd]`, with the same name; the local one, in the proof, wins. The header comes late (it needs a stable CLI), so the proof's `:kind` is the one implemented first.
+- **The kind is stated in the proof:** `G :prove := { :kind [cd], … }`. (Superseded by §24.2: the kind is the diagram's own, `G :kind [category]`, beside its layers.) An entry with no subject binds the block's owner (1.3), so this is `G :kind`; `@` would be G's own node, and a class for the diagram itself (`&self`) would say again what the empty subject says. A proof is like a paper about the relations declared: it says what kind of thing they are, and that one statement decides three things, so no second attribute is needed: the kind of graph (what is drawn), the proofs that may be posited (which attributes the proof layer accepts), and which structures are promoted to findings. The same attribute may be given at the header, `G :kind := [cd]`, with the same name; the local one, in the proof, wins. The header comes late (it needs a stable CLI), so the proof's `:kind` is the one implemented first.
 - **No kind, no restrictions.** A diagram without a `:kind` is a plain graph: everything declared is drawn, and nothing becomes a finding.
 - **Findings are classed by reason, and the reason sets the severity.** A restriction never chooses a severity; it chooses the reason, so a pass written against a reason never breaks when severities move.
 
@@ -665,13 +665,13 @@ Planned with the proof shells (plan step 11); nothing here is implemented. Revis
 | `&refutable` | the structure contradicts the kind's rules, so the proof must take it as false (an undirected cell in a category) | error |
 | `&undecidable` | the structure has no check in the kind, because it does not belong to it: neither provable nor refutable there | warning |
 
-- **Narrower classes name the structure,** one per finding, beneath its reason: `&undirected_cell`, `&undirected_side`, and so on. The general and the specific live together, by the style layer's specificity: reason, structure, then one element.
+- **Narrower classes name the structure,** one per finding, beneath its reason: `&undirected-cell`, `&undirected-side`, and so on (hyphenated since §24.3). The general and the specific live together, by the style layer's specificity: reason, structure, then one element.
 - **`:pass` acknowledges a finding,** with an optional literal for the reason:
 
   ```
   G :prove := {
     :kind [cd],
-    &undirected_side :pass,
+    &undirected-side :pass,
     α :pass "a relation, not a morphism",
     &undecidable :pass
   }
@@ -1401,3 +1401,166 @@ Order   :: */receive validate/Payment ship/*
 - **`&self`.** The diagram already describes itself (§23.1), and `&zone` is the class of every diagram.
 - **Tables as open pinches, made to look like dots by style.** The source would say "an open node, reachable" where the author means "a sealed start", and the one-column table would stay the exception.
 - ***Included twice*** (a warning). Repeated names glue, as Db names User three times; a diagram written alone twice is one member.
+
+## 24. Kinds, and cases on them, 2026-11-10
+
+Planned with the proof shells (plan step 11); nothing here is implemented. Amends §17 (where the kind is stated, and how classes are written), §22.5 and §22.9 (`:Proof` loses `:kind`, and its descriptors their class), and §22.7 (the local level of `:kind` is the diagram's own).
+
+### 24.1 The kinds
+
+A diagram's kind is what its graph is: it decides what is drawn, what may be proved, and what is found with nothing written (§17). Six, named in full words:
+
+| Kind | What the graph is |
+| --- | --- |
+| `[flow]` | a flowchart: activities, choices, forks and joins, from starts to ends |
+| `[state-machine]` | named states, and transitions between them on events |
+| `[category]` | objects and arrows, where paths compose: commutative diagrams |
+| `[schema]` | a relational schema: tables, columns, and foreign keys as arrows |
+| `[git]` | a history: commits as arrows between states, branches and merges |
+| `[sequence]` | participants exchanging messages in time |
+
+`[flow]` is implemented first: it is the easiest, and the de facto diagram. The others are declared from the start, with no rules of their own until their turn: a diagram of a kind without rules is a plain graph with that kind's look and vocabulary. `[sequence]` comes last, since what it says is mostly placement, which waits for the place layer.
+
+### 24.2 The kind is the diagram's own
+
+The kind is a fact about the diagram, beside its layers, not inside one of them: it decides the style, the proof and the places alike, so no layer can own it.
+
+```
+Order :: …
+Order :kind [flow]
+Order :style { … }
+Order :prove { … }
+```
+
+- **Declared at the top level,** as `:style` is: `&zone :kind :: :Kind`, outside every record type, so it describes at the top level only. `G :style { :kind [flow] }` is *undefined name*: `:Style` has no `:kind`, and no layer can bind it.
+- **The kinds are labels,** `:Kind :: [flow], [state-machine], …`: one type and six labels, all declarations. The prelude names no value for them. `G :kind [dark]` is *wrong type*.
+- **Stated before the diagram's layers.** What a layer may say depends on the kind (24.3), so a `G :kind` after any of G's layers is *kind stated after a layer*. Twice is *binding made twice*.
+- **One kind per diagram, or none.** A diagram with no kind is a plain graph: drawn by `[base]`, with the vocabulary every kind shares, and nothing found (§17).
+- **The three levels stay** (§22.7): command line < header < local, and the local level is `G :kind`. `-H kind=schema` still reads.
+
+### 24.3 Cases
+
+A case states what holds in the diagrams of one kind. `:>` reads "then": its head is a condition on a diagram, its block what holds there.
+
+```
+&zone :kind [flow] :> {
+    :Proposition :: {
+        &zone   :may-end    :: :Flag,
+        &choice :exclusive  :: :Flag
+    },
+    :Style := {}
+}
+```
+
+**One case per kind holds every layer's part.** Inside its block, each item is a record type and an operator, and the operators keep their meanings (§22.1):
+
+- **`:T :: { … }` declares,** adding descriptors to `:T` for diagrams of the kind only. A proposition outside its kinds is *not admitted by the kind*, the error §22.5 named and nothing produced: `Order :prove { :lemma (#X :pullback) }` in a flow. A descriptor admitted by no kind at all is still *undefined name*.
+- **`:T := { … }` binds** a record of `:T` for the kind's diagrams, beneath their own layer of that type. A kind's look is `:Style := { … }`, an unnamed theme, applied after `[base]` and before the diagram's themes:
+
+  ```
+  computed  <  [base]  <  the kind's look  <  G's :theme, left to right  <  G's own bindings  <  marks
+  ```
+
+  The Sheet gains a layer, `kind`, between `base` and `theme`. Only `:Style`'s is written yet; the form holds for `:Proof` and `:Place` alike (24.6).
+
+Three constraints keep cases sound:
+
+1. **A case tests only `&zone :kind`.** The condition is the kind's descriptor and one of its labels, `&zone :kind [flow]`; anything else is *case on another descriptor*. `:kind` is bound once at the top level and read by the layers, never written by them, so a case can never feed itself: if a case could test `&node :shape [box]` and bind `:shape`, its outcome would depend on the order it was read in.
+2. **Cases add, never take away.** What is declared outside every case holds for every kind: `:axiom`, `:lemma`, `:pass`, `:strict`, the equations, all of `:Style`. A case adds to it. A descriptor declared both outside and in a case, in one record type, is *defined twice*; repeating a case adds to it, as repeating a declaration adds to a type (§22.8). A record type exists from its first declaration, in a case or outside one, so `:Proposition`, whose properties all belong to some kind, is declared by the cases alone, and `:axiom.[] :: :Proposition` may follow them.
+3. **A name may be declared in several cases,** once in each: `:reachable` for flows and for state machines, `:pushout` for categories and for histories. A diagram has one kind, so one case is active, and the name resolves to one declaration. This is the scoped naming 24.6 left open in its first draft, with the simplest scope there is.
+
+**A descriptor with no class is the record's own.** `:strict`, `:axiom` and `:lemma` describe the proof, not an element of the diagram, so `:Proof` declares them with no class: only an entry with no subject binds them (`G :prove { :axiom (…) }`), and `G :prove { #A :axiom (…) }` does not apply. Descriptors with classes (`(&node, &zone) :fill`, `:pass`'s) describe the elements of those classes, as before.
+
+**In the grammar,** a case is a statement whose head is a description (`context descriptor value`) and whose operator is `:>`, a third beside `::` and `:=`. `:>` is a new token, `:` touching `>`, free today.
+
+### 24.4 A worked example
+
+```
+&zone :kind :: :Kind
+:Kind :: [flow], [state-machine], [category], [schema], [git], [sequence]
+
+&zone :kind [flow] :> {
+    :Proposition :: {
+        &zone   :may-end    :: :Flag,
+        &zone   :must-end   :: :Flag,
+        &zone   :structured :: :Flag,
+        &node   :reachable  :: :Flag,
+        &choice :exclusive  :: :Flag
+    },
+    :Style := {}                                    // [base] is the flow look
+}
+
+&zone :kind [category] :> {
+    :Proposition :: {
+        &node          :pushout  :: :Flag,
+        (&node, &edge) :pullback :: :Flag
+    },
+    :Style := { &node :shape [] }                   // objects drawn as their labels
+}
+```
+
+A proof speaks in three voices, from the loudest:
+
+- **Findings: what the kind always checks,** with nothing written. Each is a structure the kind turns into `&refutable` (an error) or `&undecidable` (a warning), named by a narrower class (§17). They live in code, keyed by the kind.
+- **Lemmas: what the author asks,** checked against the axioms and the lemmas before them (§22.5).
+- **Axioms: what the author states,** never checked for truth, only for fit (§22.5).
+
+Worked through the spec's order fulfilment:
+
+```
+Order :kind [flow]
+
+Order :prove {
+    :axiom (validate+ :exclusive, charge+ :exclusive, reserve+ :exclusive),  // stated: one branch at a time
+    :lemma.[ends]  (:may-end),           // checked: from every state, some path reaches an end
+    :lemma.[shape] (:structured),        // checked: each fork has its join, loops only through choices
+    :lemma (#Shipped :reachable),        // checked: some path from the start reaches Shipped
+    &single-branch :pass "a guard kept for the reader"
+}
+```
+
+- **The axioms are taken as stated.** That yes and no never both happen cannot be read from the graph: it is an axiom by nature. They are still checked for fit: `#Shipped :exclusive` does not apply, a named state being no choice.
+- **`[ends]` is confirmed:** `retry` may loop forever, yet from every node some path reaches `close` or `notify`. `:must-end`, every path ends, would be refuted by the same loop. The example is why the two are named apart.
+- **Without `close/*`, #Shipped is a dead end:** a finding with nothing written, `&refutable` and `&dead-end`, an error at #Shipped; `[ends]` is refuted too, at the same node.
+- **A choice with one branch** is legal, and probably a mistake: `&undecidable`, `&single-branch`, a warning, which the pass above acknowledges with its reason.
+- **`(#X :pullback)` here** is *not admitted by the kind*: a flow's case declares no `:pullback`.
+
+### 24.5 The flow's vocabulary (candidates, settled in step 11)
+
+| Name | Kind | Says |
+| --- | --- | --- |
+| `:may-end` | property, of the diagram | from every node, some path reaches an end |
+| `:must-end` | property, of the diagram | every path reaches an end: no loop without an exit taken |
+| `:structured` | property, of the diagram | every fork has its join, every loop passes through a choice |
+| `:reachable` | property, of a node | some path from a start reaches it |
+| `:exclusive` | property, of a choice | its branches are never both taken |
+| `&dead-end` | finding, `&refutable` | a node with no way out that is not an end |
+| `&unreachable` | finding, `&refutable` | a node no path from a start reaches |
+| `&single-branch` | finding, `&undecidable` | a choice with one branch |
+| `&unmatched-fork`, `&unmatched-join` | finding, `&undecidable` | a fork with no join, a join with no fork |
+| `&cell-in-flow` | finding, `&undecidable` | a 2-cell or above: a flow gives it no meaning |
+
+**Classes are written as descriptors are,** lowercase-kebab: `&dead-end`, `&single-branch`, `&undirected-cell`. `-` is no operator, so a class name may hold it, and one way of writing serves every name that is a word: descriptors, classes, named values and labels.
+
+### 24.6 Open
+
+- **A member under its container's kind.** Repo's `[git]` could reach the branches it holds, as its layers do (§23.2, step R5), unless a branch states its own; whether its findings are checked there too.
+- **`:Proof :=` and `:Place :=` in a case:** a kind's default proof and placement, beneath the diagram's own. Whether findings could be written so, as the kind's standing lemmas, rather than in code.
+- **Drawn as a kind, claiming nothing.** A kind's look is unnamed, so no `:theme` reaches it. If that is wanted, the look could be given a name; until then `G :kind` with no proof claims only the findings.
+- **A record type declared where it is used:** `&zone :prove :: :Proof { … }`, the descriptor, its record type and the type's descriptors at once, with questions of its own (whether `&zone` comes from the owner; how it meets "repeating a declaration adds to the type").
+- **`:pass`'s subjects.** A pass names elements (`α :pass "…"`) and finding classes (`&undecidable :pass`), which cut across nodes, edges, cells and diagrams: its signature waits for the finding classes.
+- **Cases on other conditions.** Only `:kind` today (24.3, constraint 1); another top-level descriptor no layer binds could serve the same way, when one is needed.
+
+### 24.7 Rejected
+
+- **The kind inside `:prove`** (§17, §22.5): the proof would decide the style and the places, and a diagram drawn as a kind would have to claim a proof.
+- **A kind as a theme the proof names** (this section's first draft: `:Style [flow] := { … }`, listed in `:Proof`'s `:kind`): a named value per kind, and a look and a vocabulary in two places. It needed a rule of its own, now gone: a named value standing in a type for itself.
+- **A case testing any descriptor:** rules that bind what they test depend on the order they are read in.
+- **`&zone :axiom`,** as §22.9 declared it: an axiom describes the proof, not a diagram, and the class would admit a member as its subject (`Repo :prove { Main :axiom (…) }`).
+- **A case taking away** what is declared for every kind: the base vocabulary would stop being the same everywhere, and a name would mean different things by omission.
+- **`cd` and `er`.** `cd` is opaque outside mathematics, and the graph is a category's; ER, in Chen's notation, draws relationships as nodes and attributes as ovals, a different graph from a relational schema.
+- **A kind as a record holding its look** (`:Kind [category] := { :look [category-look] }`, or `:themes [objects]`): a new noun for what a case's `:Style :=` says.
+- **A `:kind` in the style, computed from the proof's.** Two places for one fact, and a disagreement to warn about.
+- **`:reserved`,** to set names aside for later declarations: it declares a name without saying what it is, and the prelude's names already cannot be defined again.
+- **Classes with `_`** (`&dead_end`, as §17 first wrote them): a second way of writing words, where descriptors and labels already use `-`.
+- **A type declared as a set of existing values** (`:Kind :: :Style.([flow], …)`): with kinds as labels, there are no values to collect.

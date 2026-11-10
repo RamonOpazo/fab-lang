@@ -86,7 +86,7 @@ G.f :label "x"
 - **Different contexts may overlap**, such as `&node` and `#Done`. The more specific context wins (see Subjects and classes). Nothing is ever silently overridden.
 - **Before use.** Names are defined before their first use, and a description at a context comes after the context's declaration.
 
-**The header.** A file's general rules, applying to every diagram in it: the kind of its graphs (flow, category, schema, plain graph), whether its proofs are strict, how errors are treated. The same description may be written at three levels, and **the most specific wins: command line < header < local** (`Db :prove { :kind [schema] }` overrides the header for Db). Descriptors of the compilation, `:warnings [error]` (warnings become errors) and `:broken [withhold]` (no drawing while errors remain), are header and command line only. The command line follows shell conventions, derived from the header's definition: `fab check db.fab -H kind=schema -H strict -H no-strict -H warnings=error`. The header's syntax, its boundary, and a flag to force a rule from the command line are open.
+**The header.** A file's general rules, applying to every diagram in it: the kind of its graphs (flow, category, schema, plain graph), whether its proofs are strict, how errors are treated. The same description may be written at three levels, and **the most specific wins: command line < header < local** (`Db :kind [schema]` overrides the header for Db). Descriptors of the compilation, `:warnings [error]` (warnings become errors) and `:broken [withhold]` (no drawing while errors remain), are header and command line only. The command line follows shell conventions, derived from the header's definition: `fab check db.fab -H kind=schema -H strict -H no-strict -H warnings=error`. The header's syntax, its boundary, and a flag to force a rule from the command line are open.
 
 - **Kind** decides what the relations mean. In category mode `f g` also implies that the composite exists; in flow mode it is two steps. The kind also decides what is drawn: a flow draws no cells.
 - **Strictness** decides which warnings are errors, for example an unmatched `!` fork.
@@ -406,7 +406,7 @@ A database schema is a category presented by a graph and path equations, as in c
 | Referenced key | `:refs` on a foreign key and a key of its target: the key it references, if not the `:pk` |
 | Constraint  | A path equation                                                                           |
 
-- **A schema is a kind:** `Db :prove { :kind [schema], … }`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
+- **A schema is a kind:** `Db :kind [schema]`. In a schema, an edge between two tables is a foreign key; nothing else marks it, so there is no `:fk`.
 - **A foreign key is one edge.** It is both the relationship, used in paths and equations, and the column that stores it. The column's type is the type of the target's `:pk`, so it is never written and cannot mismatch. Name foreign keys as relationships (`parent`, `author`); the column takes its name from the edge (see the foreign-key row under Style layer, Diagrams).
 - **No forward references between tables.** Tables never refer to each other, and hold only their own columns; every foreign key lives in the diagram that joins them, declared after them. Circular foreign keys are two edges there, and a self-reference is a loop on one cluster.
 - **One scope for foreign keys.** Edge names are local to their diagram, so the foreign keys of one schema share its scope: two tables cannot both have an edge `author`. Choose another name and give the column its name with `:label`.
@@ -544,7 +544,7 @@ Every value has a type, and so does every name. The kinds of type are fixed by t
 | a record type      | `{ … }`, holding its descriptors: `:Style`, `:Proof`, `:Place` |
 | a label type       | the labels it declares: `:Shape :: [circle], [box]`          |
 
-- **Types are `:UpperCamel`,** descriptors (attributes) `:lowercase-kebab`, named values and labels `[lowercase-kebab]`.
+- **Types are `:UpperCamel`,** descriptors (attributes) `:lowercase-kebab`, classes `&lowercase-kebab`, named values and labels `[lowercase-kebab]`.
 - **A type is read from the value's shape** (the bracket rules above, `"…"`, `$…$`, while `{ … }` has no type: it is checked by its structure where a record type is expected) or from a name's definition. A type written in a definition is a contract, checked: `:Color [warn] := [circle]` is an error. It is optional, and the LSP completes from it.
 - **Types are declared and spelled like their values:** `:Length :: :Number`, `:Tip :: :Head, :Hook!, :Nil`, `:Arrow :: [:Tip/:Stroke/:Tip]`, `:Themes :: [:Style]`. A comma is a choice, a bracket a tuple, a bracket of one type a list. A bracket holds type names only, never types and values together; what it needs is named first. **Declared types are distinct:** `:Length` and `:Angle` hold numbers, but a length is no angle. A literal fits by its shape; a value typed by a declaration fits that type, and the types that include it. **Repeating a declaration adds to the type:** labels, descriptors or types. There are no type constructors: a type is names, `!`, commas, groups and brackets (`statements.md` §22.8).
 - **Labels** are values with no definition, declared by their type: `:Shape :: [circle], [box]`. A renderer gives each its meaning (`[circle]`), or a record binds it (`[ink]`, see Themes). **A label belongs to one type:** declaring it in another is an error. Words two types share get a type of their own, which both include: `:Facing :: [outer], [inner]`, `:Side :: :Facing, :On`.
@@ -812,14 +812,15 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 ```
 Sq :: +(f h, g k)+
 
+Sq :kind [category]
+
 Sq :prove {
-    :kind [category],
     :axiom (f h == g k),                // path == path: we say the square commutes
     :lemma.[corner] (+f :pullback)      // fAB confirms it: context :property
 }
 ```
 
-- **A proof is a record of type `:Proof`:** `:kind` and `:strict` first, then `:axiom`, `:lemma` and `:pass`. Axioms and lemmas are tables of propositions, `&zone :axiom.[] :: :Proposition`. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
+- **A proof is a record of type `:Proof`:** `:strict` first, then `:axiom`, `:lemma` and `:pass`. The kind is not the proof's but the diagram's, stated before its layers (`Sq :kind [category]`), and it decides which propositions the proof admits (`statements.md` §24). Axioms and lemmas are tables of propositions, `:axiom.[] :: :Proposition`, the proof's own: declared with no class, bound by an entry with no subject. A key is optional; name only what is referred to: `Sq :lemma.[corner]`.
 - **A proposition is the fifth shape of a value,** `( … )`, a record type whose descriptors are properties: `:pullback`, `:pushout`, `:card`, `:pk` and the rest are declared in `:Proposition :: { … }`, with ordinary types. Equations stand among them, and a comma means *and*: `:axiom (&node.id :pk, &edge :card [0..*/1])`.
 - **How each is checked:**
 
@@ -1137,9 +1138,9 @@ Db :: {
     Tagging/(doc/Document, tag/Tag)
 }
 
-Db :prove {
-    :kind [schema],
+Db :kind [schema]
 
+Db :prove {
     :axiom (&node.id :pk, &edge :card [0..*/1]),
     :axiom (User.(email, nick)! :uk, Tag.label :uk, (user, org)! :uk, (doc, tag)! :uk),
     :axiom (parent { :nullable, :card [0..*/0..1] }),
@@ -1168,6 +1169,8 @@ Repo :: {
     (#Main/merge, #Feature/merge')/#Merged bump/#V1 +(hotfix/#Head, spike/#Spike)
 }
 
+Repo :kind [git]
+
 :ref := :shape [round], :fill [muted]
 
 Repo :style {
@@ -1189,7 +1192,6 @@ Repo :style {
 }
 
 Repo :prove {
-    :kind [category],
     :axiom (fix merge == login session merge'),  // both paths from the fork reach the same state
     :lemma.[clean] (#Merged :pushout)            // fAB checks the merge is clean: the least common state
 }
@@ -1282,7 +1284,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 - **What the checker checks,** whether statements imply others (two commuting squares imply the outer rectangle), and what is drawn for them (corner marks ⌟ ⌜, dashed unique arrows).
 - **Explicit cones.** How a universal property names its square when it can't be inferred from the node.
-- **Proof vocabulary per kind.** Whether the proof layer says `:mono` or `:pk`: the kind chooses, and which attributes each kind accepts is open.
+- **Proof vocabulary per kind.** Whether the proof layer says `:mono` or `:pk`: the kind chooses, each in its case of the prelude (`statements.md` §24.3); which properties each kind beyond `[flow]` admits is open.
 - **Equations.** They are written `==` and `~=`; what `~=` means (isomorphic objects, or commuting up to an invertible 2-cell) and the rest of their design is open.
 - **Proof equations** over partial edges: `parent document == document` holds only where `parent` is defined.
 - **Undirected edges in equations,** which have no composition order.
@@ -1291,7 +1293,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 **Coming.** Decided, and due in a later revision:
 
 - **Recovery item by item inside braces.** Inside `{ }` the parser recovers at each `,`, so a statement with a syntax error there could still draw its good items, with the broken one as a hole (`G :: { f /g, h }` draws `f` and `h`). Until then the whole statement draws its placeholder. What a hole attached to nothing means is to be settled with it.
-- **Restrictions and passes** (`statements.md` §17). Declarations describe every structure with a reading; a proof narrows it. `G :prove { :kind [cd], … }` states what kind of graph it is (an entry with no context describes the owner, G): what is drawn, which proofs may be posited, and which structures become findings, classed by reason: `&refutable` (contradicts the kind, an error) and `&undecidable` (has no check there, a warning), each with narrower classes per structure (`&undirected_cell`). `:pass` acknowledges a finding, by element or by class, with an optional reason: `α :pass "a relation, not a morphism"`. A pass reaches only findings, never a language error; it leaves a note and never changes the exit code, and a pass that matches nothing warns. The header may state `:kind` too, under the same name; the proof's wins. A diagram with no kind is a plain graph: it draws everything and raises no findings.
+- **Restrictions and passes** (`statements.md` §17). Declarations describe every structure with a reading; a proof narrows it. `G :kind [category]` states what kind of graph it is, beside G's layers (`statements.md` §24: each kind's look and vocabulary are a case in the prelude, `&zone :kind [category] :> { … }`): what is drawn, which proofs may be posited, and which structures become findings, classed by reason: `&refutable` (contradicts the kind, an error) and `&undecidable` (has no check there, a warning), each with narrower classes per structure (`&undirected-cell`). `:pass` acknowledges a finding, by element or by class, with an optional reason: `α :pass "a relation, not a morphism"`. A pass reaches only findings, never a language error; it leaves a note and never changes the exit code, and a pass that matches nothing warns. The header may state `:kind` too, under the same name; the diagram's wins. A diagram with no kind is a plain graph: it draws everything and raises no findings.
 
 **Reserved.** Constructs whose meaning is open are errors until decided, each marked *reserved* in Errors. Deciding one lifts its error:
 
