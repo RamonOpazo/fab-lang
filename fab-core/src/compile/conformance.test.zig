@@ -2,8 +2,9 @@
 //! the whole pipeline.
 //!
 //! Each case is a spec snippet, the diagnostics it reports (by code, in
-//! order) and, when it matters, the IR it denotes (as `Ir.dump`). Tests are
-//! named after the spec section the case comes from.
+//! order) and, when it matters, the IR it denotes (as `Ir.dump`) and the
+//! style it resolves to (as `Sheet.dump`: what the author asked for). Tests
+//! are named after the spec section the case comes from.
 //!
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
@@ -38,6 +39,8 @@ const Case = struct {
     codes: []const Diagnostic.Code = &.{},
     /// The IR's dump, when the case checks the graph it denotes.
     ir: ?[]const u8 = null,
+    /// The Sheet's dump, when the case checks the style it resolves to.
+    sheet: ?[]const u8 = null,
     /// The plan step that makes the case pass.
     step: u8,
     /// Within the step, the part that makes the case pass: step 5's rule, or
@@ -76,6 +79,12 @@ fn check(case: Case) !void {
         var out: std.Io.Writer.Allocating = .init(testing.allocator);
         defer out.deinit();
         try (try c.ir()).?.dump(&out.writer);
+        try testing.expectEqualStrings(want, out.written());
+    }
+    if (case.sheet) |want| {
+        var out: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer out.deinit();
+        try (try c.sheet()).?.dump(&out.writer, .{});
         try testing.expectEqualStrings(want, out.written());
     }
 }

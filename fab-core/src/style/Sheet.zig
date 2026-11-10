@@ -162,6 +162,109 @@ pub fn slice(s: *const Sheet, span: Span) []const Entry {
     return s.entries[span.start..span.end];
 }
 
+// ---------------------------------------------------------------------------
+// Dump: what the author asked for, as it resolved. Zone by zone, as
+// `Ir.dump`: its own style, the tokens it rebinds, then its nodes, edges
+// and cells. Each element lists, by descriptor, the entries a theme, the
+// program or a mark gave it, with that layer; `[base]` and what is computed
+// are left out, unless `base` asks for `[base]`; an element with nothing
+// to show is not written. Values as fAB writes them, a flag as its
+// descriptor, `!` when off. The format of the conformance corpus's
+// `.sheet`.
+//
+//   zone G: fill [#1f6feb] program
+//     token ink [#ff0000]        G rebinds [ink], unlike [base]
+//     node n0: shape [circle] theme, label "x" program
+//     edge f: arrow [/dashed/>] program, hide! program
+//     cell α: label $\alpha$ program
+
+pub const DumpOptions = struct {
+    /// `[base]`'s entries too, and every token a diagram has.
+    base: bool = false,
+};
+
+pub fn dump(s: *const Sheet, w: *std.Io.Writer, options: DumpOptions) std.Io.Writer.Error!void {
+    const ir = s.ir;
+    for (0..ir.zones.len) |z| {
+        const zone: Ir.ZoneIndex = @fromBackingInt(@as(u32, @intCast(z)));
+        try w.print("zone {s}", .{ir.string(ir.zones.items(.name)[z])});
+        try s.dumpStyle(.{ .zone = zone }, options, w);
+        try w.writeByte('\n');
+        for (s.tokens[z]) |t| {
+            if (!options.base) if (s.baseToken(t.label)) |b| if (std.meta.eql(b, t.value)) continue;
+            try w.print("  token {s} ", .{t.label});
+            try decoded.write(t.value, w);
+            try w.writeByte('\n');
+        }
+        for (ir.nodes.items(.zone), 0..) |owner, n| {
+            if (owner != zone) continue;
+            const subject: Subject = .{ .node = @fromBackingInt(@as(u32, @intCast(n))) };
+            if (!s.shown(subject, options)) continue;
+            try w.print("  node n{d}", .{n});
+            try s.dumpStyle(subject, options, w);
+            try w.writeByte('\n');
+        }
+        for (ir.edges.items(.zone), ir.edges.items(.name), 0..) |owner, name, e| {
+            if (owner != zone) continue;
+            const subject: Subject = .{ .edge = @fromBackingInt(@as(u32, @intCast(e))) };
+            if (!s.shown(subject, options)) continue;
+            try w.print("  edge {s}", .{ir.string(name)});
+            try s.dumpStyle(subject, options, w);
+            try w.writeByte('\n');
+        }
+        for (ir.cells.items(.zone), ir.cells.items(.name), 0..) |owner, name, c| {
+            if (owner != zone) continue;
+            const subject: Subject = .{ .cell = @fromBackingInt(@as(u32, @intCast(c))) };
+            if (!s.shown(subject, options)) continue;
+            try w.print("  cell {s}", .{ir.string(name)});
+            try s.dumpStyle(subject, options, w);
+            try w.writeByte('\n');
+        }
+    }
+}
+
+/// Whether the dump has anything of `subject`'s style to show.
+fn shown(s: *const Sheet, subject: Subject, options: DumpOptions) bool {
+    const v = s.style(subject);
+    for (0..s.descriptors.len) |d| {
+        if (v.entry(@fromBackingInt(@as(u16, @intCast(d))))) |e| if (dumped(e, options)) return true;
+    }
+    return false;
+}
+
+/// What the author asked for (a theme, the program, a mark), and `[base]`'s
+/// when asked; never what is computed.
+fn dumped(e: Entry, options: DumpOptions) bool {
+    return switch (e.layer) {
+        .theme, .program, .mark => true,
+        .base => options.base,
+        .computed => false,
+    };
+}
+
+/// `: d value layer, …`, in `:Style`'s order; nothing when none.
+fn dumpStyle(s: *const Sheet, subject: Subject, options: DumpOptions, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    const v = s.style(subject);
+    var first = true;
+    for (s.descriptors, 0..) |name, d| {
+        const e = v.entry(@fromBackingInt(@as(u16, @intCast(d)))) orelse continue;
+        if (!dumped(e, options)) continue;
+        try w.writeAll(if (first) ": " else ", ");
+        first = false;
+        // Names without their sigil, as the JSON writes them (§22.13); a
+        // flag as fAB writes it, `!` when off.
+        try w.writeAll(name[1..]);
+        switch (e.value) {
+            .flag => |on| if (!on) try w.writeByte('!'),
+            else => {
+                try w.writeByte(' ');
+                try decoded.write(e.value, w);
+            },
+        }
+        try w.print(" {s}", .{@tagName(e.layer)});
+    }
+}
+
 /// One element's style, read a descriptor at a time. The typed readers
 /// give null where the value is nil or of another sort; `label` tells nil
 /// from a label the caller has no meaning for.

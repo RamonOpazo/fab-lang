@@ -62,16 +62,39 @@ pub const Binding = struct {
 /// A label bound to a value: `[ink] := [#333333]`, `[circle] := [box]`.
 pub const Token = struct { label: []const u8, value: Value };
 
-/// A value as text, for tests and dumps: `nil`, `on`/`off`, `"text"`,
-/// `$math$`, `#rrggbb` (`#rrggbbaa` if not opaque), numbers and ranges in
-/// their normal form, labels by name with their `!`, `[a/b]` for elements,
+/// A value as text, for tests and dumps, as fAB writes it: `[]` for nil,
+/// `[circle]`, `[circle!]`, `[#rrggbb]` (`#rrggbbaa` if not opaque),
+/// numbers and ranges in their normal form (`[0.85]`, `[0..*]`), elements
+/// `[/dashed/>]`, a nil element an empty slot; `"text"` and `$math$`. A flag
+/// has no bracket form (`:hide`, `:hide!`): `on` or `off`. A record,
 /// `record N`.
 pub fn write(v: Value, w: *std.Io.Writer) std.Io.Writer.Error!void {
     switch (v) {
-        .nil => try w.writeAll("nil"),
+        .nil, .label, .color, .number, .range => {
+            try w.writeByte('[');
+            try element(v, w);
+            try w.writeByte(']');
+        },
+        .elements => |es| {
+            try w.writeByte('[');
+            for (es, 0..) |e, i| {
+                if (i > 0) try w.writeByte('/');
+                try element(e, w);
+            }
+            try w.writeByte(']');
+        },
         .flag => |on| try w.writeAll(if (on) "on" else "off"),
         .text => |t| try w.print("\"{s}\"", .{t}),
         .math => |m| try w.print("${s}$", .{m}),
+        .record => |r| try w.print("record {d}", .{@backingInt(r)}),
+    }
+}
+
+/// A value inside a bracket: as `write`, without the brackets; nil empty.
+fn element(v: Value, w: *std.Io.Writer) std.Io.Writer.Error!void {
+    switch (v) {
+        .nil => {},
+        .label => |l| try w.print("{s}{s}", .{ l.name, if (l.inverted) "!" else "" }),
         .color => |c| {
             try w.print("#{x:0>2}{x:0>2}{x:0>2}", .{ c.r, c.g, c.b });
             if (c.a != 0xff) try w.print("{x:0>2}", .{c.a});
@@ -82,15 +105,6 @@ pub fn write(v: Value, w: *std.Io.Writer) std.Io.Writer.Error!void {
             try w.writeAll("..");
             if (r.hi) |hi| try hi.format(w) else try w.writeByte('*');
         },
-        .label => |l| try w.print("{s}{s}", .{ l.name, if (l.inverted) "!" else "" }),
-        .elements => |es| {
-            try w.writeByte('[');
-            for (es, 0..) |e, i| {
-                if (i > 0) try w.writeByte('/');
-                try write(e, w);
-            }
-            try w.writeByte(']');
-        },
-        .record => |r| try w.print("record {d}", .{@backingInt(r)}),
+        .elements, .flag, .text, .math, .record => try write(v, w),
     }
 }

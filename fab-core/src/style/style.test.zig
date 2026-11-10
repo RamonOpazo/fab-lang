@@ -648,3 +648,57 @@ test "marks over everything, unless the diagram draws none" {
     try testing.expectEqual(rgba(0xd1242f), zoneStyle(s, 0).color(stroke).?);
     try testing.expectEqual(@as(?Rgba, null), zoneStyle(s, 1).color(stroke));
 }
+
+fn expectDump(source: []const u8, want: []const u8) !void {
+    var c = try Compilation.init(testing.allocator, source, preview);
+    defer c.deinit();
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try (try c.sheet()).?.dump(&out.writer, .{});
+    try testing.expectEqualStrings(want, out.written());
+}
+
+test "the dump: what the author asked for, by layer; [base] and the computed left out" {
+    try expectDump(
+        \\:Style [boxy] := { &node :shape [box], [ink] := [#ff0000] }
+        \\G :: f g
+        \\H :: h
+        \\G :style {
+        \\    :theme [boxy],
+        \\    :fill  [#123456],
+        \\    +f     { :label "x", :hide },
+        \\    g      { :arrow [/dashed/>], :hide! }
+        \\}
+    ,
+        \\zone G: fill [#123456] program
+        \\  token ink [#ff0000]
+        \\  node n0: label "x" program, shape [box] theme, hide program
+        \\  node n1: shape [box] theme
+        \\  node n2: shape [box] theme
+        \\  edge g: arrow [/dashed/>] program, hide! program
+        \\zone H
+        \\
+    );
+}
+
+test "the dump with [base]: its entries and every token, never the computed" {
+    var c = try Compilation.init(testing.allocator, "G :: f", preview);
+    defer c.deinit();
+    const sheet = (try c.sheet()).?;
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try sheet.dump(&out.writer, .{ .base = true });
+    const text = out.written();
+    for ([_][]const u8{ "as [cluster] base", "  token ink [#333333]\n", "  node n0: ", "shape [circle] base", "  edge f: ", "arrow [/solid/>] base" }) |want| {
+        if (std.mem.indexOf(u8, text, want) == null) {
+            std.debug.print("missing {s} in:\n{s}\n", .{ want, text });
+            return error.TestUnexpectedResult;
+        }
+    }
+    // The canonical label, `+f`, is computed.
+    try testing.expect(std.mem.indexOf(u8, text, "\"+f\"") == null);
+
+    out.clearRetainingCapacity();
+    try sheet.dump(&out.writer, .{});
+    try testing.expectEqualStrings("zone G\n", out.written());
+}

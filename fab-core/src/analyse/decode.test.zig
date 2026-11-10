@@ -52,22 +52,22 @@ fn expectRecord(source: []const u8, name: []const u8, want: []const u8) !void {
 
 test "the prelude's themes decode, every binding and token" {
     try expectRecord("", "dark",
-        \\&zone :fill = #1e1e1e
-        \\[ink] := #dddddd
-        \\[soft] := #aaaaaa
-        \\[muted] := #888888
+        \\&zone :fill = [#1e1e1e]
+        \\[ink] := [#dddddd]
+        \\[soft] := [#aaaaaa]
+        \\[muted] := [#888888]
         \\
     );
     try expectRecord("", "compact",
-        \\&node :padding = 0.2
-        \\&zone :padding = 0.5
+        \\&node :padding = [0.2]
+        \\&zone :padding = [0.5]
         \\
     );
     try expectRecord("", "print",
-        \\[ink] := #000000
-        \\[soft] := #000000
-        \\[muted] := #555555
-        \\[accent] := #000000
+        \\[ink] := [#000000]
+        \\[soft] := [#000000]
+        \\[muted] := [#555555]
+        \\[accent] := [#000000]
         \\
     );
 }
@@ -83,11 +83,11 @@ test "[base] decodes with nothing left unread" {
     try testing.expectEqual(@as(usize, 19 + 11 + 18 + 18 + 18 + 7), std.mem.count(u8, out.written(), "\n"));
     // Nil only where `[]` is written: a computed default, or nothing.
     for ([_][]const u8{
-        "&node :size = 1\n",      "&node :shape = circle\n",        "&node :ink = ink\n",
-        "&node :hide = off\n",    "&node :note = \"\"\n",           "&choice :label = \"\"\n",
-        "&edge :size = 0.85\n",   "&edge :arrow = [nil/solid/>]\n", "&cell :arrow = nil\n",
-        "&zone :theme = []\n",    "&zone :as = cluster\n",          "[ink] := #333333\n",
-        "&node :padding = 0.4\n", "&hole :line = dashed\n",         "&canonical :face = italic\n",
+        "&node :size = [1]\n",      "&node :shape = [circle]\n",   "&node :ink = [ink]\n",
+        "&node :hide = off\n",      "&node :note = \"\"\n",        "&choice :label = \"\"\n",
+        "&edge :size = [0.85]\n",   "&edge :arrow = [/solid/>]\n", "&cell :arrow = []\n",
+        "&zone :theme = []\n",      "&zone :as = [cluster]\n",     "[ink] := [#333333]\n",
+        "&node :padding = [0.4]\n", "&hole :line = [dashed]\n",    "&canonical :face = [italic]\n",
     }) |line| if (std.mem.indexOf(u8, out.written(), line) == null) {
         std.debug.print("missing: {s}", .{line});
         return error.TestUnexpectedResult;
@@ -101,10 +101,10 @@ test "named values are resolved where used; labels stay by name" {
         \\:Color [warn] := [pink]
         \\:Style [mine] := { &edge :arrow [epi], &node { :fill [warn], :stroke [muted], :shape [box] } }
     , "mine",
-        \\&edge :arrow = [nil/solid/>>]
-        \\&node :fill = #bf3989
-        \\&node :stroke = muted
-        \\&node :shape = box
+        \\&edge :arrow = [/solid/>>]
+        \\&node :fill = [#bf3989]
+        \\&node :stroke = [muted]
+        \\&node :shape = [box]
         \\
     );
 }
@@ -114,9 +114,9 @@ test "a theme's bindings: classes, the diagram applied to, includes, tokens" {
         \\:Style [night] := { :theme [dark], (&choice, &parallel) :ink [accent], [accent] := [#58a6ff], :caption $\mathbb{N}$ }
     , "night",
         \\&zone :theme = [record 1]
-        \\&choice,&parallel :ink = accent
+        \\&choice,&parallel :ink = [accent]
         \\&zone :caption = $\mathbb{N}$
-        \\[accent] := #58a6ff
+        \\[accent] := [#58a6ff]
         \\
     );
 }
@@ -129,8 +129,8 @@ test "a bundle's body binds where it is used" {
     defer out.deinit();
     try writeRecord(env, env.functions.get(":ref").?.body.?, &out.writer);
     try testing.expectEqualStrings(
-        \\(where used) :shape = round
-        \\(where used) :fill = muted
+        \\(where used) :shape = [round]
+        \\(where used) :fill = [muted]
         \\(where used) :hide = off
         \\
     , out.written());
@@ -160,12 +160,12 @@ test "a diagram's layer: each binding's value, and its own tokens" {
     // `:theme [dark]` is a list of one, though one element is written.
     try testing.expectEqualStrings(
         \\:label = "a "b""
-        \\:arrow = [nil/dashed/>]
+        \\:arrow = [/dashed/>]
         \\:hide = on
         \\:ref = on
         \\:theme = [record 1]
-        \\:label-at = 0.25
-        \\zone 0 [ink] := #000000
+        \\:label-at = [0.25]
+        \\zone 0 [ink] := [#000000]
         \\
     , out.written());
 }
