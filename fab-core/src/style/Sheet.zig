@@ -4,12 +4,12 @@
 //! The prelude is its only schema: a style is a list of entries, a
 //! descriptor of `:Style` and its value, resolved (tokens as colours,
 //! computed defaults filled in). Styles are shared the way the author
-//! shares them (§22.14): a *base rule* per set of classes holds what
-//! `[base]` makes, in every diagram; a *diagram rule* names its base rule as
-//! its parent and holds only what the diagram changes, and is not made when
-//! nothing is; each element names its rule and holds only its own entries.
-//! `style` merges the three. A renderer reads what it draws, by descriptor,
-//! and reports the rest.
+//! shares them (§25): rules are a tree of steps, `[base]` class by class,
+//! then each layer a diagram adds (the kind's theme, a theme, a diagram's
+//! classes), each rule holding only what its step changes; each element
+//! names its rule and holds only its own entries. `style` reads the element,
+//! then up its rules. A renderer reads what it draws, by descriptor, and
+//! reports the rest.
 //!
 //! Made by Styler.zig. A Sheet borrows the IR and the environment, which
 //! must outlive it, and owns its tables; what the cascade computes (labels,
@@ -71,11 +71,22 @@ pub const Mark = enum(u2) {
 /// Entries `start..end` of `entries`.
 pub const Span = struct { start: u32 = 0, end: u32 = 0 };
 
-/// The style elements of one set of classes share: `&node, &choice`, in
-/// every diagram (a base rule: no zone, no parent), or in `G`, over its base
-/// rule (only the entries that differ from it, by value or by layer).
+/// One step of the cascade, as a rule adds it (statements.md §25): a class
+/// inside `[base]`, a kind's theme, a named theme, a diagram's classes and
+/// tokens, or (null) the top level's classes, every diagram's.
+pub const Step = union(enum) {
+    class: Env.Class,
+    kind: []const u8,
+    theme: []const u8,
+    zone: ?Ir.ZoneIndex,
+};
+
+/// What one step adds to its parent's style, for one set of classes: the
+/// entries that differ, by value or by layer. A class step's classes are
+/// its parent's and its own; a layer step's, the whole set its elements
+/// have.
 pub const Rule = struct {
-    zone: ?Ir.ZoneIndex = null,
+    adds: Step,
     classes: Env.Classes,
     parent: ?RuleIndex = null,
     entries: Span,
@@ -147,15 +158,10 @@ pub fn rule(s: *const Sheet, r: RuleIndex) Rule {
 }
 
 /// The style of `subject`: its own entries over its rule's, over its rule's
-/// parent's.
+/// parents'.
 pub fn style(s: *const Sheet, subject: Subject) View {
     const e = s.element(subject);
-    const r = s.rule(e.rule);
-    return .{
-        .own = s.slice(e.own),
-        .rule = s.slice(r.entries),
-        .parent = if (r.parent) |p| s.slice(s.rule(p).entries) else &.{},
-    };
+    return .{ .sheet = s, .own = s.slice(e.own), .rule = e.rule };
 }
 
 pub fn slice(s: *const Sheet, span: Span) []const Entry {
@@ -269,10 +275,9 @@ fn dumpStyle(s: *const Sheet, subject: Subject, options: DumpOptions, w: *std.Io
 /// give null where the value is nil or of another sort; `label` tells nil
 /// from a label the caller has no meaning for.
 pub const View = struct {
+    sheet: *const Sheet,
     own: []const Entry,
-    rule: []const Entry,
-    /// The rule's parent's: `[base]`'s, which binds nothing of the author's.
-    parent: []const Entry = &.{},
+    rule: ?RuleIndex,
 
     pub fn get(v: View, d: Descriptor) ?Value {
         return if (v.entry(d)) |e| e.value else null;
@@ -280,8 +285,27 @@ pub const View = struct {
 
     /// The entry for `d`, with the layer that bound it.
     pub fn entry(v: View, d: Descriptor) ?Entry {
-        return find(v.own, d) orelse find(v.rule, d) orelse find(v.parent, d);
+        if (find(v.own, d)) |e| return e;
+        var it = v.rules();
+        while (it.next()) |entries| if (find(entries, d)) |e| return e;
+        return null;
     }
+
+    /// The entries of the element's rule, then of each parent up.
+    pub fn rules(v: View) Rules {
+        return .{ .sheet = v.sheet, .at = v.rule };
+    }
+
+    pub const Rules = struct {
+        sheet: *const Sheet,
+        at: ?RuleIndex,
+
+        pub fn next(it: *Rules) ?[]const Entry {
+            const r = it.sheet.rule(it.at orelse return null);
+            it.at = r.parent;
+            return it.sheet.slice(r.entries);
+        }
+    };
 
     pub fn color(v: View, d: Descriptor) ?value.Rgba {
         return if (v.get(d)) |x| switch (x) {

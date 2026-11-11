@@ -128,10 +128,11 @@ test "the sheet: rules shared, an element's own entries, layers, values by shape
         \\G :style { :theme [dark], &edge :size [1.5], #A :fill [#ff000080], #A :hide, f :arrow [?!/dashed/>], f :label $x_1$ }
     , strict);
     defer testing.allocator.free(doc);
-    // The edges' base rule, [base]'s, and G's over it: what the theme and
-    // the class binding change.
-    try expectContains(doc, "{\"zone\":null,\"classes\":[\"edge\"],\"parent\":null,\"style\":{\"label\":{\"layer\":\"base\",\"value\":null},");
-    try expectContains(doc, "{\"zone\":0,\"classes\":[\"edge\"],\"parent\":");
+    // The edges' tree: [base]'s `&edge`, `[dark]` over it, then G's class
+    // binding (statements.md §25).
+    try expectContains(doc, "{\"adds\":{\"class\":\"edge\"},\"classes\":[\"edge\"],\"parent\":null,\"style\":{\"label\":{\"layer\":\"base\",\"value\":null},");
+    try expectContains(doc, "{\"adds\":{\"theme\":\"dark\"},\"classes\":[\"edge\"],\"parent\":");
+    try expectContains(doc, "{\"adds\":{\"zone\":0},\"classes\":[\"edge\"],\"parent\":");
     try expectContains(doc, "\"size\":{\"layer\":\"program\",\"value\":{\"number\":\"1.5\"}}");
     try expectContains(doc, "\"layer\":\"theme\"");
     // Each element: its rule, and only its own entries.

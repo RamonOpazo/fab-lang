@@ -399,13 +399,19 @@ const Reader = struct {
     /// What the author bound that this engine doesn't draw, once per
     /// diagram and descriptor.
     fn noteUndrawn(r: *Reader, v: Sheet.View, subject: fab.Ir.Subject, zone: fab.Ir.ZoneIndex) error{OutOfMemory}!void {
-        for ([_][]const Sheet.Entry{ v.own, v.rule }) |entries| for (entries) |e| {
+        try r.noteEntries(v.own, subject, zone);
+        var it = v.rules();
+        while (it.next()) |entries| try r.noteEntries(entries, subject, zone);
+    }
+
+    fn noteEntries(r: *Reader, entries: []const Sheet.Entry, subject: fab.Ir.Subject, zone: fab.Ir.ZoneIndex) error{OutOfMemory}!void {
+        for (entries) |e| {
             if (e.layer != .kind and e.layer != .theme and e.layer != .program) continue;
             if (r.drawsDescriptor(e.descriptor)) continue;
             const gop = try r.noted.getOrPut(r.notes.gpa, .{ @backingInt(zone), @backingInt(e.descriptor) });
             if (gop.found_existing) continue;
             try r.notes.add(.{ .tag = .descriptor_not_drawn, .subject = subject, .name = r.sheet.descriptors[@backingInt(e.descriptor)] });
-        };
+        }
     }
 
     fn drawsDescriptor(r: *const Reader, d: Sheet.Descriptor) bool {

@@ -286,17 +286,21 @@ fn ruleOf(s: *const Sheet, subject: Sheet.Subject) Sheet.Rule {
     return s.rule(s.element(subject).rule);
 }
 
-test "an unstyled program is its base rules, shared by every diagram" {
+test "an unstyled program is [base]'s rules, class by class, shared by every diagram" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f\nH :: #B/g", preview);
     defer c.deinit();
     const s = (try c.sheet()).?;
-    // One per set of classes: the zones, the named nodes, the canonical
-    // ones (`f+`), the edges.
-    try testing.expectEqual(4, s.rules.len);
-    for (s.rules) |r| {
-        try testing.expectEqual(null, r.zone);
-        try testing.expectEqual(null, r.parent);
-    }
+    // One per class step: the zones; `&node`, the named nodes
+    // (`&plain`), the canonical ones (`f+`, `&canonical`); the edges.
+    try testing.expectEqual(5, s.rules.len);
+    for (s.rules) |r| try testing.expect(r.adds == .class);
+    const canonical = ruleOf(s, nodeAt(1));
+    try testing.expectEqual(.canonical, canonical.adds.class);
+    const plain = s.rule(canonical.parent.?);
+    try testing.expectEqual(.plain, plain.adds.class);
+    try testing.expectEqual(s.element(nodeAt(0)).rule, canonical.parent.?);
+    try testing.expectEqual(.node, s.rule(plain.parent.?).adds.class);
+    try testing.expectEqual(null, s.rule(plain.parent.?).parent);
     try testing.expectEqual(s.element(nodeAt(0)).rule, s.element(nodeAt(2)).rule);
     try testing.expectEqual(s.element(zoneAt(0)).rule, s.element(zoneAt(1)).rule);
 }
@@ -317,26 +321,26 @@ test "a diagram rule holds what differs from its base rule, by value or by layer
     // G rebinds a token: every entry written [ink] changes, the rest is the
     // base rule's.
     const g = ruleOf(s, nodeAt(0));
-    try testing.expectEqual(0, @backingInt(g.zone.?));
+    try testing.expectEqual(0, @backingInt(g.adds.zone.?));
     const base = s.rule(g.parent.?);
-    try testing.expectEqual(null, base.zone);
+    try testing.expect(base.adds == .class);
     for (s.slice(g.entries)) |e| try testing.expect(e.value == .color);
     try testing.expectEqual(0x000000, rgb(s.style(nodeAt(0)).color(ink_of).?));
     try testing.expectEqual(ink, rgb(s.style(nodeAt(4)).color(ink_of).?));
 
     // H binds [base]'s own value: kept, since the author bound it.
     const h = ruleOf(s, edgeAt(1));
-    try testing.expectEqual(1, @backingInt(h.zone.?));
+    try testing.expectEqual(1, @backingInt(h.adds.zone.?));
     const entries = s.slice(h.entries);
     try testing.expectEqual(1, entries.len);
     try testing.expectEqual(size, entries[0].descriptor);
     try testing.expectEqual(.program, entries[0].layer);
     // Its nodes change nothing: they name the base rule.
-    try testing.expectEqual(null, ruleOf(s, nodeAt(2)).zone);
+    try testing.expect(ruleOf(s, nodeAt(2)).adds == .class);
 
     // J is unstyled.
-    try testing.expectEqual(null, ruleOf(s, nodeAt(4)).zone);
-    try testing.expectEqual(null, ruleOf(s, edgeAt(2)).zone);
+    try testing.expect(ruleOf(s, nodeAt(4)).adds == .class);
+    try testing.expect(ruleOf(s, edgeAt(2)).adds == .class);
 }
 
 test "a theme makes a diagram rule; parents come first" {
@@ -344,9 +348,61 @@ test "a theme makes a diagram rule; parents come first" {
     defer c.deinit();
     const s = (try c.sheet()).?;
     const r = ruleOf(s, nodeAt(0));
-    try testing.expect(r.zone != null);
+    try testing.expectEqualStrings("dark", r.adds.theme);
     for (s.slice(r.entries)) |e| try testing.expect(e.layer == .theme or e.value == .color);
     for (s.rules, 0..) |x, i| if (x.parent) |p| try testing.expect(@backingInt(p) < i);
+}
+
+test "diagrams of one kind share its step" {
+    var c = try Compilation.init(testing.allocator,
+        \\A :: #X/f
+        \\B :: #Y/g
+        \\A :kind [git]
+        \\B :kind [git]
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const x = (try nodeNamed(s, "#X")).rule.?;
+    try testing.expectEqual(x, (try nodeNamed(s, "#Y")).rule.?);
+    try testing.expectEqualStrings("git", s.rule(x).adds.kind);
+    // Over [base]'s `&node, &plain`.
+    try testing.expectEqual(.plain, s.rule(s.rule(x).parent.?).adds.class);
+}
+
+test "members share their container's step, and the container's own nodes too" {
+    var c = try Compilation.init(testing.allocator,
+        \\A :: #X/f
+        \\B :: #Y/g
+        \\R :: A/h/B
+        \\R :style { &node :fill [#ff0000] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const x = (try nodeNamed(s, "#X")).rule.?;
+    try testing.expectEqual(x, (try nodeNamed(s, "#Y")).rule.?);
+    try testing.expectEqual(2, @backingInt(s.rule(x).adds.zone.?));
+    // R's own nodes, the diagrams A and B, are `&node, &plain` too: the same
+    // sequence, the same rule.
+    for (s.ir.nodes.items(.zone), s.elements.nodes) |zone, e| if (@backingInt(zone) == 2) {
+        try testing.expectEqual(x, e.rule);
+    };
+}
+
+test "a theme's step is shared by the diagrams it themes" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: #A/f
+        \\H :: #B/g
+        \\J :: #C/h
+        \\G :style { :theme [dark] }
+        \\H :style { :theme [dark] }
+    , preview);
+    defer c.deinit();
+    const s = (try c.sheet()).?;
+    const a = (try nodeNamed(s, "#A")).rule.?;
+    try testing.expectEqual(a, (try nodeNamed(s, "#B")).rule.?);
+    try testing.expectEqualStrings("dark", s.rule(a).adds.theme);
+    try testing.expectEqual(s.rule(a).parent.?, (try nodeNamed(s, "#C")).rule.?);
+    try testing.expectEqual(s.element(edgeAt(0)).rule, s.element(edgeAt(1)).rule);
 }
 
 fn rgb(c: @import("../analyse/value.zig").Rgba) u24 {

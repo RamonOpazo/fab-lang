@@ -247,8 +247,8 @@ fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
     try w.writeAll("{\"rules\":[");
     for (s.rules, 0..) |r, i| {
         if (i > 0) try w.writeByte(',');
-        try w.writeAll("{\"zone\":");
-        try optionalIndex(w, r.zone);
+        try w.writeAll("{\"adds\":");
+        try writeStep(r.adds, w);
         try w.writeAll(",\"classes\":[");
         var it = r.classes.iterator();
         var first = true;
@@ -283,6 +283,30 @@ fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
         try writeTokenMap(tokens, w);
     }
     try w.writeAll("]}}");
+}
+
+/// A rule's step (statements.md §25): `{"class": "plain"}`, `{"kind":
+/// "git"}`, `{"theme": "dark"}`, `{"zone": i}`, null for the top level.
+fn writeStep(step: Sheet.Step, w: *Writer) Writer.Error!void {
+    switch (step) {
+        .class => |c| {
+            try w.writeAll("{\"class\":");
+            try string(w, @tagName(c));
+        },
+        .kind => |k| {
+            try w.writeAll("{\"kind\":");
+            try string(w, k);
+        },
+        .theme => |t| {
+            try w.writeAll("{\"theme\":");
+            try string(w, t);
+        },
+        .zone => |z| {
+            try w.writeAll("{\"zone\":");
+            try optionalIndex(w, z);
+        },
+    }
+    try w.writeByte('}');
 }
 
 fn writeStyle(s: *const Sheet, entries: []const Sheet.Entry, w: *Writer) Writer.Error!void {

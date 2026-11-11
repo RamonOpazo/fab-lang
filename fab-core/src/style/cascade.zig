@@ -12,13 +12,13 @@
 //!
 //! A *rule*, one per diagram and set of classes present, folds `[base]`,
 //! the diagram's themes and the program's class bindings, the most specific
-//! winning within a layer and of one rank the later. Once every element is
-//! made, rules are shared (§22.14): each becomes its set of classes' base
-//! rule, `[base]` alone with its own tokens, and a diagram rule over it
-//! holding what differs, made only when something does. Within the program, a
+//! winning within a layer and of one rank the later. Within the program, a
 //! class at the top level (every diagram's) ranks below a class inside the
 //! diagram, each by the classes' own ranks: `&node` < the kinds <
-//! `&canonical` < `&hole`. An *element* holds its own bindings, then what is
+//! `&canonical` < `&hole`. Once every element is made, rules are shared as a
+//! tree of steps (statements.md §25): `[base]` class by class, then each
+//! layer the diagram adds, each step a rule holding what it changes; a
+//! sequence of steps is made once, whichever diagrams take it. An *element* holds its own bindings, then what is
 //! computed where the result is still nil (labels by name, a cell's arrow by
 //! level), then its marks. Tokens are resolved per diagram, one step, in
 //! rules and elements alike.
@@ -68,6 +68,7 @@ pub fn build(gpa: std.mem.Allocator, ir: *const Ir, in: Inputs, reached: []const
     defer b.deinit();
     errdefer b.free();
     try b.collectDescriptors();
+    try b.nameRecords();
     b.base = record(in.env, in.env.values.get("base"));
     try b.sortBindings();
 
@@ -149,9 +150,17 @@ fn record(env: *const Env, v: ?Env.Value) ?decoded.Record {
 /// One step of the cascade's precedence: a layer, then a rank in it.
 const Precedence = u32;
 
-/// A theme of a diagram, and the layer its entries are in: a kind's theme
-/// and what it includes are `kind`, the rest `theme`.
-const Themed = struct { record: decoded.Record, layer: Layer };
+/// A theme of a diagram, the layer its entries are in (a kind's theme and
+/// what it includes are `kind`, the rest `theme`), and its step's name.
+const Themed = struct { record: decoded.Record, index: decoded.RecordIndex, layer: Layer, step: Sheet.Step };
+
+/// One step of a diagram's layers (statements.md §25): a theme, the top
+/// level's classes, or a diagram's classes and tokens, at a precedence.
+const LayerStep = struct {
+    adds: Sheet.Step,
+    at: Precedence,
+    what: union(enum) { theme: Themed, top, classes: Ir.ZoneIndex },
+};
 
 /// A descriptor's value so far, and the precedence it was bound at.
 const Slot = ?struct { at: Precedence, value: Value, layer: Layer };
@@ -166,7 +175,12 @@ const Builder = struct {
     names: std.ArrayList([]const u8) = .empty,
     by_name: std.StringHashMapUnmanaged(Descriptor) = .empty,
     rules: std.ArrayList(Sheet.Rule) = .empty,
+    /// Each rule's diagram, until `share`.
+    rule_zones: std.ArrayList(Ir.ZoneIndex) = .empty,
     entries: std.ArrayList(Entry) = .empty,
+    /// The named records, for their steps: `[dark]` is `dark`.
+    record_names: std.AutoHashMapUnmanaged(u32, Named) = .empty,
+    step_buffer: std.ArrayList(LayerStep) = .empty,
     made: std.AutoHashMapUnmanaged(Key, Sheet.RuleIndex) = .empty,
     /// The program's bindings by what they describe, each list in source
     /// order: classes at the top level, classes in a diagram, elements.
@@ -185,6 +199,7 @@ const Builder = struct {
     zone_mark: ZoneMark = .{},
 
     const Key = struct { zone: u32, classes: u16 };
+    const Named = struct { name: []const u8, token: u32 };
     const SubjectKey = struct { table: u8, index: u32 };
 
     fn deinit(b: *Builder) void {
@@ -192,7 +207,10 @@ const Builder = struct {
         b.made.deinit(b.gpa);
         b.names.deinit(b.gpa);
         b.rules.deinit(b.gpa);
+        b.rule_zones.deinit(b.gpa);
         b.entries.deinit(b.gpa);
+        b.record_names.deinit(b.gpa);
+        b.step_buffer.deinit(b.gpa);
         b.top.deinit(b.gpa);
         var zit = b.in_zone.valueIterator();
         while (zit.next()) |l| l.deinit(b.gpa);
@@ -235,6 +253,18 @@ const Builder = struct {
         for (found.items, 0..) |f, i| {
             try b.names.append(b.gpa, f.name);
             try b.by_name.put(b.gpa, f.name, @fromBackingInt(@as(u16, @intCast(i))));
+        }
+    }
+
+    /// Each named record's name, the first defined when several name it.
+    fn nameRecords(b: *Builder) error{OutOfMemory}!void {
+        var it = b.in.env.values.iterator();
+        while (it.next()) |kv| {
+            const d = kv.value_ptr.decoded orelse continue;
+            if (d != .record) continue;
+            const token: u32 = kv.value_ptr.token orelse 0;
+            const gop = try b.record_names.getOrPut(b.gpa, @backingInt(d.record));
+            if (!gop.found_existing or token < gop.value_ptr.token) gop.value_ptr.* = .{ .name = kv.key_ptr.*, .token = token };
         }
     }
 
@@ -289,20 +319,34 @@ const Builder = struct {
     fn prepareThemes(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}!void {
         var themes: std.ArrayList(Themed) = .empty;
         defer themes.deinit(b.gpa);
-        var records: std.ArrayList(decoded.Record) = .empty;
+        var records: std.ArrayList(decoded.RecordIndex) = .empty;
         defer records.deinit(b.gpa);
-        if (b.kindTheme(zone)) |r| try b.expand(.{ .record = r }, &records, 8);
-        for (records.items) |r| try themes.append(b.gpa, .{ .record = r, .layer = .kind });
+        const kind = b.kindTheme(zone);
+        if (kind) |k| try b.expand(.{ .record = k.record }, &records, 8);
+        for (records.items) |r| try themes.append(b.gpa, b.themed(r, .kind, kind));
         records.clearRetainingCapacity();
         if (try b.themeValue(zone)) |v| try b.expand(v, &records, 8);
-        for (records.items) |r| try themes.append(b.gpa, .{ .record = r, .layer = .theme });
+        for (records.items) |r| try themes.append(b.gpa, b.themed(r, .theme, null));
         b.zone_themes[@backingInt(zone)] = try b.arena.dupe(Themed, themes.items);
     }
 
+    /// A theme and its step: the kind's own by the kind, a named one by its
+    /// name.
+    fn themed(b: *Builder, r: decoded.RecordIndex, layer: Layer, kind: ?KindTheme) Themed {
+        const step: Sheet.Step = if (kind != null and kind.?.record == r)
+            .{ .kind = kind.?.label }
+        else
+            .{ .theme = if (b.record_names.get(@backingInt(r))) |n| n.name else "" };
+        return .{ .record = b.in.env.records.items[@backingInt(r)], .index = r, .layer = layer, .step = step };
+    }
+
+    const KindTheme = struct { record: decoded.RecordIndex, label: []const u8 };
+
     /// The theme of the kind `zone` states itself, if it has one.
-    fn kindTheme(b: *Builder, zone: Ir.ZoneIndex) ?decoded.RecordIndex {
+    fn kindTheme(b: *Builder, zone: Ir.ZoneIndex) ?KindTheme {
         for (b.in.kinds) |k| if (k.zone == zone and k.from == zone) {
-            return (b.in.env.kind_themes.get(k.label) orelse return null).record;
+            const theme = b.in.env.kind_themes.get(k.label) orelse return null;
+            return .{ .record = theme.record, .label = k.label };
         };
         return null;
     }
@@ -360,7 +404,7 @@ const Builder = struct {
 
     /// `[dark/print]`: each record, after the themes its own `:theme`
     /// includes.
-    fn expand(b: *Builder, v: Value, out: *std.ArrayList(decoded.Record), depth: u32) error{OutOfMemory}!void {
+    fn expand(b: *Builder, v: Value, out: *std.ArrayList(decoded.RecordIndex), depth: u32) error{OutOfMemory}!void {
         if (depth == 0) return;
         const items: []const Value = switch (v) {
             .elements => |es| es,
@@ -371,7 +415,7 @@ const Builder = struct {
             .record => |r| {
                 const theme = b.in.env.records.items[@backingInt(r)];
                 for (theme.bindings) |binding| if (std.mem.eql(u8, binding.descriptor, ":theme")) try b.expand(binding.value, out, depth - 1);
-                try out.append(b.gpa, theme);
+                try out.append(b.gpa, r);
             },
             else => {},
         };
@@ -388,30 +432,83 @@ const Builder = struct {
         const slots = try b.gpa.alloc(Slot, b.names.items.len);
         defer b.gpa.free(slots);
         @memset(slots, null);
-        // [base] is layer 0. Then each diagram of the chain, its containers
-        // outermost first and the diagram last: each theme one layer more,
-        // then its classes in the program. The program's top-level classes
-        // are every diagram's own, ranked below the diagram's classes.
+        var tokens: std.ArrayList(decoded.Token) = .empty;
+        defer tokens.deinit(b.gpa);
+        // [base] is layer 0, then the diagram's steps.
         if (b.base) |base| try b.foldRecord(slots, base, classes, 0, .base);
-        var layer: Precedence = 1;
-        for (try b.chain(zone)) |d| {
-            for (b.zone_themes[@backingInt(d)]) |theme| {
-                try b.foldRecord(slots, theme.record, classes, layer, theme.layer);
-                layer += 1;
-            }
-            if (d == zone) for (b.top.items) |i| try b.foldProgram(slots, i, classes, layer, 0);
-            if (b.in_zone.get(@backingInt(d))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, layer, 4);
-            layer += 1;
-        }
+        for (try b.layerSteps(zone)) |s| try b.apply(slots, &tokens, s, classes);
 
         const start: u32 = @intCast(b.entries.items.len);
         try b.emit(slots, b.zone_tokens[@backingInt(zone)], &b.entries);
+        try b.rule_zones.append(b.gpa, zone);
         try b.rules.append(b.gpa, .{
-            .zone = zone,
+            .adds = .{ .zone = zone },
             .classes = classes,
             .entries = .{ .start = start, .end = @intCast(b.entries.items.len) },
         });
         return index;
+    }
+
+    /// A diagram's steps above `[base]`, lowest first: each diagram of its
+    /// chain, containers outermost first, its themes (each one layer more),
+    /// then its classes in the program; the top level's classes, every
+    /// diagram's own, just below the diagram's. The list is the Builder's,
+    /// valid until the next call.
+    fn layerSteps(b: *Builder, zone: Ir.ZoneIndex) error{OutOfMemory}![]const LayerStep {
+        b.step_buffer.clearRetainingCapacity();
+        var layer: Precedence = 1;
+        for (try b.chain(zone)) |d| {
+            for (b.zone_themes[@backingInt(d)]) |theme| {
+                try b.step_buffer.append(b.gpa, .{ .adds = theme.step, .at = layer, .what = .{ .theme = theme } });
+                layer += 1;
+            }
+            if (d == zone) try b.step_buffer.append(b.gpa, .{ .adds = .{ .zone = null }, .at = layer, .what = .top });
+            try b.step_buffer.append(b.gpa, .{ .adds = .{ .zone = d }, .at = layer, .what = .{ .classes = d } });
+            layer += 1;
+        }
+        return b.step_buffer.items;
+    }
+
+    /// Folds step `s` for `classes` into `slots`, and binds its tokens.
+    fn apply(b: *Builder, slots: []Slot, tokens: *std.ArrayList(decoded.Token), s: LayerStep, classes: Env.Classes) error{OutOfMemory}!void {
+        switch (s.what) {
+            .theme => |t| {
+                try b.foldRecord(slots, t.record, classes, s.at, t.layer);
+                for (t.record.tokens) |token| try bindToken(b.gpa, tokens, token);
+            },
+            .top => for (b.top.items) |i| try b.foldProgram(slots, i, classes, s.at, 0),
+            .classes => |d| {
+                if (b.in_zone.get(@backingInt(d))) |list| for (list.items) |i| try b.foldProgram(slots, i, classes, s.at, 4);
+                for (b.in.tokens) |t| if (t.zone == d) try bindToken(b.gpa, tokens, t.token);
+            },
+        }
+    }
+
+    /// Whether step `s` binds nothing for `classes` and no token: it is left
+    /// out of the sequence, so diagrams differing only by it share.
+    fn idle(b: *Builder, s: LayerStep, classes: Env.Classes) bool {
+        switch (s.what) {
+            .theme => |t| {
+                if (t.record.tokens.len > 0) return false;
+                for (t.record.bindings) |binding| {
+                    if (binding.key != null) continue;
+                    const c = binding.classes orelse continue;
+                    if (c.intersectWith(classes).count() > 0) return false;
+                }
+                return true;
+            },
+            .top => return !b.meets(b.top.items, classes),
+            .classes => |d| {
+                for (b.in.tokens) |t| if (t.zone == d) return false;
+                return !b.meets(if (b.in_zone.get(@backingInt(d))) |l| l.items else &.{}, classes);
+            },
+        }
+    }
+
+    /// Whether a class binding of `list` describes some of `classes`.
+    fn meets(b: *Builder, list: []const u32, classes: Env.Classes) bool {
+        for (list) |i| if (b.in.bindings[i].subject.class.classes.intersectWith(classes).count() > 0) return true;
+        return false;
     }
 
     fn foldRecord(b: *Builder, slots: []Slot, r: decoded.Record, classes: Env.Classes, layer: Precedence, as: Layer) error{OutOfMemory}!void {
@@ -460,11 +557,14 @@ const Builder = struct {
         };
     }
 
-    /// Shares the rules (§22.14): each an element names becomes its base
-    /// rule, made once per set of classes, and a diagram rule over it with
-    /// the entries that differ, by value or by layer; none when none do. The
-    /// rules no element names (the `&canonical` check makes some on the way)
-    /// are dropped, and the entries only they held.
+    /// Shares the rules as a tree of steps (statements.md §25). Each rule
+    /// an element names is folded again, step by step: `[base]` class by
+    /// class, by rank, a rule each; then the diagram's layer steps for the
+    /// whole set, a rule each that changes something, by value or by layer.
+    /// A sequence of steps is made once (`Trie`), whichever diagram takes
+    /// it; an idle step is no part of it. The element then names the last
+    /// rule made. The rules no element names (the `&canonical` check makes
+    /// some on the way) are dropped, and the entries only they held.
     fn share(b: *Builder) error{OutOfMemory}!void {
         const tables = [_][]Sheet.Element{ b.nodes, b.edges, b.cells, b.zones };
         const renumber = try b.gpa.alloc(?Sheet.RuleIndex, b.rules.items.len);
@@ -476,53 +576,57 @@ const Builder = struct {
         for (tables) |table| for (table) |e| {
             used[@backingInt(e.rule)] = true;
         };
-        var entries: std.ArrayList(Entry) = .empty;
-        errdefer entries.deinit(b.gpa);
-        var rules: std.ArrayList(Sheet.Rule) = .empty;
-        errdefer rules.deinit(b.gpa);
-        var bases: std.AutoHashMapUnmanaged(u16, Sheet.RuleIndex) = .empty;
-        defer bases.deinit(b.gpa);
-        var diff: std.ArrayList(Entry) = .empty;
-        defer diff.deinit(b.gpa);
-        const slots = try b.gpa.alloc(Slot, b.names.items.len);
-        defer b.gpa.free(slots);
+        var t: Tree = .{ .b = b, .slots = try b.gpa.alloc(Slot, b.names.items.len) };
+        defer t.deinit();
+        errdefer t.entries.deinit(b.gpa);
+        errdefer t.rules.deinit(b.gpa);
         const base_tokens: []const decoded.Token = if (b.base) |base| base.tokens else &.{};
 
-        for (b.rules.items, used, renumber) |r, is_used, *new| if (is_used) {
-            const gop = try bases.getOrPut(b.gpa, bits(r.classes));
-            if (!gop.found_existing) {
-                gop.value_ptr.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
-                @memset(slots, null);
-                if (b.base) |base| try b.foldRecord(slots, base, r.classes, 0, .base);
-                const start: u32 = @intCast(entries.items.len);
-                try b.emit(slots, base_tokens, &entries);
-                try rules.append(b.gpa, .{ .classes = r.classes, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
+        for (b.rules.items, b.rule_zones.items, used, renumber) |r, zone, is_used, *new| if (is_used) {
+            t.start();
+            // [base], one class at a time: these rules are always made.
+            var order: [16]Env.Class = undefined;
+            var set: Env.Classes = .empty;
+            for (byRank(r.classes, &order)) |class| {
+                set.insert(class);
+                @memset(t.slots, null);
+                if (b.base) |base| try b.foldRecord(t.slots, base, set, 0, .base);
+                try t.step(.{ .tag = .class, .a = @backingInt(class) }, .{ .class = class }, set, base_tokens, true);
             }
-            const parent = gop.value_ptr.*;
-            const inherited = rules.items[@backingInt(parent)].entries;
-            diff.clearRetainingCapacity();
-            for (b.entries.items[r.entries.start..r.entries.end]) |e| {
-                if (!inheritedFrom(entries.items[inherited.start..inherited.end], e)) try diff.append(b.gpa, e);
+            // Then the diagram's layers, onto [base]'s fold of the set.
+            t.tokens.clearRetainingCapacity();
+            try t.tokens.appendSlice(b.gpa, base_tokens);
+            for (try b.layerSteps(zone)) |s| {
+                if (b.idle(s, r.classes)) continue;
+                try b.apply(t.slots, &t.tokens, s, r.classes);
+                try t.step(stepKey(s), s.adds, r.classes, t.tokens.items, false);
             }
-            if (diff.items.len == 0) {
-                new.* = parent;
-                continue;
+            if (std.debug.runtime_safety) {
+                const full = b.entries.items[r.entries.start..r.entries.end];
+                std.debug.assert(full.len == t.prev.items.len);
+                for (full) |e| std.debug.assert(inheritedFrom(t.prev.items, e));
             }
-            new.* = @fromBackingInt(@as(u32, @intCast(rules.items.len)));
-            const start: u32 = @intCast(entries.items.len);
-            try entries.appendSlice(b.gpa, diff.items);
-            try rules.append(b.gpa, .{ .zone = r.zone, .classes = r.classes, .parent = parent, .entries = .{ .start = start, .end = @intCast(entries.items.len) } });
+            new.* = t.at.?;
         };
         for (tables) |table| for (table) |*e| {
             e.rule = renumber[@backingInt(e.rule)].?;
-            const start: u32 = @intCast(entries.items.len);
-            try entries.appendSlice(b.gpa, b.entries.items[e.own.start..e.own.end]);
-            e.own = .{ .start = start, .end = @intCast(entries.items.len) };
+            const start: u32 = @intCast(t.entries.items.len);
+            try t.entries.appendSlice(b.gpa, b.entries.items[e.own.start..e.own.end]);
+            e.own = .{ .start = start, .end = @intCast(t.entries.items.len) };
         };
         b.entries.deinit(b.gpa);
-        b.entries = entries;
+        b.entries = t.entries;
         b.rules.deinit(b.gpa);
-        b.rules = rules;
+        b.rules = t.rules;
+    }
+
+    /// A step, as the trie keys it: what it adds, not where.
+    fn stepKey(s: LayerStep) StepKey {
+        return switch (s.what) {
+            .theme => |theme| .{ .tag = .theme, .a = @backingInt(theme.index), .b = @backingInt(theme.layer) },
+            .top => .{ .tag = .top },
+            .classes => |d| .{ .tag = .zone, .a = @backingInt(d) },
+        };
     }
 
     /// A label one of `tokens` binds, replaced by its value, once: in a
@@ -647,6 +751,80 @@ const Builder = struct {
         };
     }
 };
+
+const StepKey = struct { tag: enum(u8) { class, theme, top, zone }, a: u32 = 0, b: u32 = 0 };
+
+/// The rules `share` makes, and the sequences of steps it has walked: a
+/// trie, each node the sequence of its parent and one step more, holding
+/// the last rule made along it.
+const Tree = struct {
+    b: *Builder,
+    slots: []Slot,
+    entries: std.ArrayList(Entry) = .empty,
+    rules: std.ArrayList(Sheet.Rule) = .empty,
+    trie: std.AutoHashMapUnmanaged(TrieKey, TrieNode) = .empty,
+    tokens: std.ArrayList(decoded.Token) = .empty,
+    /// The style so far, resolved, and the step's.
+    prev: std.ArrayList(Entry) = .empty,
+    cur: std.ArrayList(Entry) = .empty,
+    /// Where the walk is: its trie node, and the last rule made on it.
+    node: u32 = root,
+    at: ?Sheet.RuleIndex = null,
+
+    const root = std.math.maxInt(u32);
+    const TrieKey = struct { parent: u32, step: StepKey };
+    const TrieNode = struct { id: u32, rule: ?Sheet.RuleIndex };
+
+    fn deinit(t: *Tree) void {
+        t.b.gpa.free(t.slots);
+        t.trie.deinit(t.b.gpa);
+        t.tokens.deinit(t.b.gpa);
+        t.prev.deinit(t.b.gpa);
+        t.cur.deinit(t.b.gpa);
+    }
+
+    fn start(t: *Tree) void {
+        t.node = root;
+        t.at = null;
+        t.prev.clearRetainingCapacity();
+    }
+
+    /// One step more: the slots, as they now are, resolved by `tokens`. Made
+    /// the first time the sequence is walked, as a rule holding what differs
+    /// from the style before it, when something does or `always`.
+    fn step(t: *Tree, key: StepKey, adds: Sheet.Step, classes: Env.Classes, tokens: []const decoded.Token, always: bool) error{OutOfMemory}!void {
+        const gpa = t.b.gpa;
+        t.cur.clearRetainingCapacity();
+        try t.b.emit(t.slots, tokens, &t.cur);
+        const gop = try t.trie.getOrPut(gpa, .{ .parent = t.node, .step = key });
+        if (!gop.found_existing) {
+            gop.value_ptr.* = .{ .id = t.trie.count() - 1, .rule = t.at };
+            const start_at: u32 = @intCast(t.entries.items.len);
+            for (t.cur.items) |e| if (!inheritedFrom(t.prev.items, e)) try t.entries.append(gpa, e);
+            if (always or t.entries.items.len > start_at) {
+                gop.value_ptr.rule = @fromBackingInt(@as(u32, @intCast(t.rules.items.len)));
+                try t.rules.append(gpa, .{ .adds = adds, .classes = classes, .parent = t.at, .entries = .{ .start = start_at, .end = @intCast(t.entries.items.len) } });
+            }
+        }
+        t.node = gop.value_ptr.id;
+        t.at = gop.value_ptr.rule;
+        std.mem.swap(std.ArrayList(Entry), &t.prev, &t.cur);
+    }
+};
+
+/// `classes` in the order `[base]` adds them, by rank: `&node`, its kind,
+/// `&canonical`, `&hole`.
+fn byRank(classes: Env.Classes, out: []Env.Class) []const Env.Class {
+    var n: usize = 0;
+    for (0..4) |r| {
+        var it = classes.iterator();
+        while (it.next()) |c| if (rank(.initOne(c)) == r) {
+            out[n] = c;
+            n += 1;
+        };
+    }
+    return out[0..n];
+}
 
 /// A token bound again replaces the binding before it.
 fn bindToken(gpa: std.mem.Allocator, tokens: *std.ArrayList(decoded.Token), t: decoded.Token) error{OutOfMemory}!void {
