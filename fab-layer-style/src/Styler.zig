@@ -15,7 +15,8 @@
 //! its name while any is unsupported. `:marks []` draws none.
 
 const std = @import("std");
-const Ir = @import("../analyse/Ir.zig");
+const fab = @import("fab_core");
+const Ir = fab.Ir;
 const Sheet = @import("Sheet.zig");
 const cascade = @import("cascade.zig");
 const Mark = Sheet.Mark;

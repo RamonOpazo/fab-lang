@@ -115,11 +115,11 @@ pub fn run(gpa: std.mem.Allocator, command: Command, source: []const u8, label: 
             }
 
             // Graphviz. Without --strict the IR is kept, holes and all, so
-            // there is always a sheet; with it, only a clean program gets here.
-            const sheet = (try c.sheet()) orelse return .{ .code = code };
+            // there is always something to draw; with it, only a clean program
+            // gets here.
             var notes: render.Note.List = .init(gpa);
             defer notes.deinit();
-            try render.to_dot.write(sheet, out, &notes);
+            if (!try render.to_dot.draw(&c, out, &notes)) return .{ .code = code };
             try report.writeNotes(err, notes.items.items, options);
             return .{
                 .code = code,

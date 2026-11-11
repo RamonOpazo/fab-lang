@@ -1594,7 +1594,7 @@ Measured on the examples, from 11c2's JSON to 11c3's: 39% to 50% smaller (`order
 
 ## 26. Layers as runtimes, 2026-11-11
 
-Amends §22.12 (the Sheet made in fab-core), §22.13 and §25 (the Sheet in JSON), 11c3's choice to write computed labels, and L2b (the prelude's file, after a comment naming the build). Planned as step S, after 11c3 and before 11d.
+Amends §22.12 (the Sheet made in fab-core), §22.13 and §25 (the Sheet in JSON), and L2b (the prelude's file, after a comment naming the build). Step S, after 11c3 and before 11d.
 
 ### 26.1 Decided
 
@@ -1604,31 +1604,24 @@ Amends §22.12 (the Sheet made in fab-core), §22.13 and §25 (the Sheet in JSON
     - **fab-layer-place:** only if places turn out to need resolving; otherwise they are the renderer's input. Not made before then.
 
   Analysis stays cheap and total, which the language server needs on every change; a layer's evaluation may be costly (a proof), and runs when asked. The cascade is no analysis: no diagnostic depends on it, and fab-lsp never reads the Sheet.
-- **Layers meet by annotations, not imports.** What a layer adds to the IR's elements (classes, issues) is its output; style takes extra classes per element as an input, so prove's findings (`&refutable`, `&dead-end`, §24.5) reach style that way. The driver (fab-cli) runs prove before style. A layer depends on fab-core only.
-- **Diagnostics are open to layers.** A layer reports in fab-core's shape (tag, token, related, subject, severity), with tags and messages of its own. `fab check` and fab-lsp run the layers that report; fab-lsp may depend on a layer's package, never on a renderer.
+- **Layers meet by annotations, not imports.** What a layer adds to the IR's elements (classes, issues) is its output; style takes extra classes per element as an input, so prove's findings (`&refutable`, `&dead-end`, §24.5) reach style that way. A layer depends on fab-core only.
+- **The consumer calls the layers it needs, in memory, in order:** prove, style, place. A renderer calls them before drawing, so it holds the Sheet and, once place exists, the placing primitives place resolves from it (place comes last: it needs resolved styles, a label's size, a shape). `fab check` and fab-lsp call the layers that report (prove), and draw nothing.
+- **Diagnostics are open to layers.** A layer reports in fab-core's shape (tag, token, related, subject, severity), with tags and messages of its own.
 - **The prelude stays in fab-core:** it is the schema the analyser checks against. What a name means when the layer runs, and the tests of it (`:label`, `:arrow`, `:theme`, `:marks` in `:Style`), move with the layer.
-- **Files made from the prelude are named by the build's version, and say nothing of it inside.** `prelude-0.1.0-dev.116+6049169.fab`, the prelude as embedded, byte for byte: L2b's comment goes, and a definition's span in it is the span in the prelude. Several versions live side by side in the cache; they are small. A dirty build's files are written again at every start, since its version doesn't change with its sources. The source keeps its name, `fab-core/src/prelude.fab`: the version is written once (`release.md` §3), and a rename at each release would be noise in its history.
-- **The prelude's Sheet, resolved once.** fab-layer-style makes `prelude-<version>.sheet.json`: `[base]`'s rules for every set of classes an element can have, the prelude's kinds' themes over them, `[base]`'s tokens. It is the same for every program of that version, so no program writes it.
-- **A program's Sheet continues the prelude's.** Its rules are numbered after the prelude's: a rule below the prelude's count is the prelude's, so an unstyled element names a prelude rule and a program's step names a prelude rule as its parent, in one space of indices. Only the author's steps are written. The JSON's `"version"` already names the build, so it names the prelude: no field more.
-- **Nothing computed is written.** What the cascade computes is a function of the IR, filled wherever the resolved value is nil; a reader derives it:
-    - a node's `:label`: its name without `#`, else its diagram's name, else its canonical end (`+f` from a domain, `f+` from a codomain), else `""`;
-    - an edge's, a cell's, a zone's `:label`: its name;
-    - a cell's `:arrow`: `[/double/>]` at level 2, `[/triple/>]` above.
-
-  This reverses 11c3's choice: the computed values repeated the IR, a fifth of some examples' JSON, and the rule is small. The conformance tests check the rule against the cascade.
-- **The JSON in sections, one per package.** fab-core writes the IR, the diagnostics and the layers as described; fab-layer-style the `"sheet"`; later, fab-layer-prove its findings. The data model is kept apart from its encoding: JSON first, for us and for any renderer; a binary encoding later is the same model written otherwise.
+- **The JSON is fab-core's analysis, the IR, and nothing else.** It is the web's form of what fab-core produces, for our tools first: the diagnostics and the IR. No layer's result is written into it: the Sheet stays in memory, where renderers read it. §22.13's and §25's `"sheet"` go.
+- **Each package's conformance corpus is the truth of what it owns:** fab-core's, the diagnostics and the IR; fab-layer-style's, the Sheet; fab-layer-prove's, later, the findings. `make test-layer-style`, and so for each layer.
+- **Files made from the prelude are named by the build's version, and say nothing of it inside.** `prelude-0.1.0-dev.116+6049169.fab`, the prelude as embedded, byte for byte: L2b's comment goes, and a definition's span in it is the span in the prelude. Several versions live side by side in the cache; they are small. A dirty build's file is written again at every start, since its version doesn't change with its sources. The source keeps its name, `fab-core/src/prelude.fab`: the version is written once (`release.md` §3), and a rename at each release would be noise in its history.
 
 ### 26.2 Rejected
 
 - **The cascade in fab-render.** Every backend resolves the same way, so it would be shared code there anyway, and fab-lsp may read it one day (hover showing what an element resolves to), but never a renderer.
-- **Only the author's layers in the JSON, each reader running the cascade.** It would be a second implementation of the language's meaning, outside the conformance corpus, and would drift.
-- **A layer importing another** (style reading prove): the order of the layers would be fixed by their packages, not by the driver.
+- **A layer importing another** (style reading prove): the order of the layers would be fixed by their packages, not by their consumer.
+- **The Sheet in the JSON,** whole (§22.13), as a tree (§25), or relative to a published Sheet of the prelude: the JSON is the analysis, and a layer's result is its consumer's, in memory.
+- **One corpus for every package** (`conformance/`, over all of them): a package that exists only to test, and truth kept away from its owner.
 - **A package per layer before it has code** (place).
 - **The version in a comment** (L2b): a file's name is what a tool sees, and two versions can't share one path.
-- **A `"prelude"` field, or a hash of the prelude:** the version names it; only a dirty build's doesn't, and that build writes its files again.
 
 ### 26.3 Open
 
 - How a layer's diagnostics extend fab-core's tags (decided with fab-layer-prove).
-- The binary encoding.
-- How a reader outside fab gets `prelude-<version>.sheet.json`: printed by fab, or published with each release.
+- A binary encoding of the analysis, beside the JSON.

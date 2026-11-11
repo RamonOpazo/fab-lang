@@ -1,12 +1,14 @@
 //! A compilation as JSON: the core's output contract.
 //!
-//! The JSON is lossless: it holds the whole IR and every diagnostic, so the
-//! IR can be rebuilt from it. Views of the diagram (SVG, DOT, tikz-cd, …) are
-//! not made here; they belong to renderers and transpilers.
+//! The JSON is fab-core's analysis, and nothing else (statements.md §26): the
+//! whole IR and every diagnostic, so the IR can be rebuilt from it. No
+//! layer's result is written: the Sheet stays in memory, where renderers
+//! read it. Views of the diagram (SVG, DOT, tikz-cd, …) are not made here;
+//! they belong to renderers and transpilers.
 //!
 //! Names are written without sigils (statements.md §22.13): where a name
-//! stands says its sort, so the node `#A` is "A", the class `&node` "node",
-//! the descriptor `:label` "label". Diagnostics quote the source as written.
+//! stands says its sort, so the node `#A` is "A". Diagnostics quote the
+//! source as written.
 //!
 //! Format, version 1. It stays 1 while the language is being formalised,
 //! however the format changes (release.md §3). A compilation:
@@ -15,8 +17,7 @@
 //!     "version": "0.1.0-dev.97+e3ee815",   the build (release.md §2)
 //!     "status": "ok" | "warning" | "promoted" | "error",
 //!     "diagnostics": [Diagnostic],
-//!     "ir": IR | null,                null when the tolerance withholds it
-//!     "sheet": Sheet | null }         null when "ir" is
+//!     "ir": IR | null }               null when the tolerance withholds it
 //!
 //!   Diagnostic:
 //!     { "code": "edge_declared_twice",
@@ -48,32 +49,6 @@
 //!       "issues": [{"subject": {"node" | "edge" | "cell" | "zone": index},
 //!                   "diagnostic": index into "diagnostics"}] }
 //!
-//!   Sheet: every element's style, resolved (statements.md §22.12). A rule
-//!   holds what a set of classes makes; an element names its rule and holds
-//!   only its own entries, which win over the rule's, and those over its
-//!   parent's.
-//!     { "rules": [{"zone": null | zone, "classes": ["node", "plain"],
-//!                  "parent": null | rule, "style": Style}],
-//!                                       a base rule, [base]'s, has no zone and
-//!                                       no parent; a diagram's names its base
-//!                                       rule, written before it, and holds what
-//!                                       differs from it (statements.md §22.14)
-//!       "nodes" | "edges" | "cells" | "zones":
-//!               [{"rule": rule, "style": Style,
-//!                 "mark": null | "unsupported" | "warning" | "error"}],
-//!                                       indexed as the IR's tables
-//!       "tokens": {"base": {"ink": Value, …}, "zones": [{"ink": Value, …}]} }
-//!
-//!   Style: descriptors in :Style's order, each with the layer that bound it.
-//!     { "label": {"layer": "computed" | "base" | "theme" | "program" | "mark",
-//!                 "value": Value}, … }
-//!
-//!   Value:
-//!     null | true | false | [Value]            nil, a flag, elements
-//!     {"text": "…"}  {"math": "…"}  {"color": "#rrggbbaa"}
-//!     {"number": "0.85"}  {"range": ["1", "2" | null]}    normal forms
-//!     {"label": "circle", "inverted": false}
-//!
 //! Tokens, for syntax highlighting:
 //!
 //!   { "format": 1, "version": "…", "tokens": [{"tag": "edge_id", "bytes": [s, e], "utf16": [s, e]}] }
@@ -88,9 +63,6 @@ const Compilation = @import("../compile/Compilation.zig");
 const Diagnostic = @import("../compile/Diagnostic.zig");
 const messages = @import("../compile/messages.zig");
 const Lines = @import("../compile/Lines.zig");
-const Sheet = @import("../style/Sheet.zig");
-const decoded = @import("../analyse/decoded.zig");
-const Decimal = @import("../analyse/Decimal.zig");
 const build = @import("../version.zig");
 
 const Writer = std.Io.Writer;
@@ -116,8 +88,6 @@ pub fn writeCompilation(c: *Compilation, w: *Writer) Error!void {
     }
     try w.writeAll("],\"ir\":");
     if (ir) |graph| try writeIr(c, graph, w) else try w.writeAll("null");
-    try w.writeAll(",\"sheet\":");
-    if (try c.sheet()) |s| try writeSheet(s, w) else try w.writeAll("null");
     try w.writeByte('}');
 }
 
@@ -241,170 +211,6 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
         try w.print("{{\"subject\":{{\"{s}\":{d}}},\"diagnostic\":{d}}}", .{ kind, index, try c.diagnosticIndex(issue) });
     }
     try w.writeAll("]}");
-}
-
-/// The Sheet (statements.md §22.13, §25): each value written once. A rule
-/// is `{parent, adds, style}`, `parent` left out at a root; an element
-/// `{rule, style, mark}`; a style is grouped by layer; a zone's tokens are
-/// those differing from `[base]`'s. What is empty or null is not written.
-fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
-    try w.writeAll("{\"rules\":[");
-    for (s.rules, 0..) |r, i| {
-        if (i > 0) try w.writeByte(',');
-        try w.writeByte('{');
-        if (r.parent) |p| try w.print("\"parent\":{d},", .{@backingInt(p)});
-        try w.writeAll("\"adds\":");
-        try writeStep(r.adds, w);
-        try writeStyle(s, s.slice(r.entries), w);
-        try w.writeByte('}');
-    }
-    try w.writeByte(']');
-    inline for (.{ "nodes", "edges", "cells", "zones" }) |table| {
-        try w.print(",\"{s}\":[", .{table});
-        for (@field(s.elements, table), 0..) |e, i| {
-            if (i > 0) try w.writeByte(',');
-            try w.print("{{\"rule\":{d}", .{@backingInt(e.rule)});
-            try writeStyle(s, s.slice(e.own), w);
-            if (e.mark) |m| {
-                try w.writeAll(",\"mark\":");
-                try string(w, @tagName(m));
-            }
-            try w.writeByte('}');
-        }
-        try w.writeByte(']');
-    }
-    try w.writeAll(",\"tokens\":{\"base\":");
-    try writeTokenMap(s.base_tokens, &.{}, w);
-    try w.writeAll(",\"zones\":[");
-    for (s.tokens, 0..) |tokens, i| {
-        if (i > 0) try w.writeByte(',');
-        try writeTokenMap(tokens, s.base_tokens, w);
-    }
-    try w.writeAll("]}}");
-}
-
-/// A rule's step (statements.md §25): `{"class": "plain"}`, `{"kind":
-/// "git"}`, `{"theme": "dark"}`, `{"zone": i}`, null for the top level.
-fn writeStep(step: Sheet.Step, w: *Writer) Writer.Error!void {
-    switch (step) {
-        .class => |c| {
-            try w.writeAll("{\"class\":");
-            try string(w, @tagName(c));
-        },
-        .kind => |k| {
-            try w.writeAll("{\"kind\":");
-            try string(w, k);
-        },
-        .theme => |t| {
-            try w.writeAll("{\"theme\":");
-            try string(w, t);
-        },
-        .zone => |z| {
-            try w.writeAll("{\"zone\":");
-            try optionalIndex(w, z);
-        },
-    }
-    try w.writeByte('}');
-}
-
-/// `,"style":{"base":{"ink":…},"program":{…}}`, the entries by layer,
-/// each layer in the cascade's order; nothing when there are none.
-fn writeStyle(s: *const Sheet, entries: []const Sheet.Entry, w: *Writer) Writer.Error!void {
-    if (entries.len == 0) return;
-    try w.writeAll(",\"style\":{");
-    var first_layer = true;
-    for (std.enums.values(Sheet.Layer)) |layer| {
-        var first = true;
-        for (entries) |e| {
-            if (e.layer != layer) continue;
-            if (first) {
-                if (!first_layer) try w.writeByte(',');
-                first_layer = false;
-                try string(w, @tagName(layer));
-                try w.writeAll(":{");
-            } else try w.writeByte(',');
-            first = false;
-            try string(w, unsigiled(s.descriptors[@backingInt(e.descriptor)]));
-            try w.writeByte(':');
-            try writeValue(e.value, w);
-        }
-        if (!first) try w.writeByte('}');
-    }
-    try w.writeByte('}');
-}
-
-/// The tokens, those `base` binds to the same value left out.
-fn writeTokenMap(tokens: []const decoded.Token, base: []const decoded.Token, w: *Writer) Writer.Error!void {
-    try w.writeByte('{');
-    var first = true;
-    for (tokens) |t| {
-        if (inBase(base, t)) continue;
-        if (!first) try w.writeByte(',');
-        first = false;
-        try string(w, t.label);
-        try w.writeByte(':');
-        try writeValue(t.value, w);
-    }
-    try w.writeByte('}');
-}
-
-fn inBase(base: []const decoded.Token, t: decoded.Token) bool {
-    for (base) |b| if (std.mem.eql(u8, b.label, t.label)) return std.meta.eql(b.value, t.value);
-    return false;
-}
-
-/// A value, tagged by its shape (statements.md §22.13).
-fn writeValue(v: decoded.Value, w: *Writer) Writer.Error!void {
-    switch (v) {
-        .nil => try w.writeAll("null"),
-        .flag => |on| try w.print("{}", .{on}),
-        .text => |t| {
-            try w.writeAll("{\"text\":");
-            try string(w, t);
-            try w.writeByte('}');
-        },
-        .math => |m| {
-            try w.writeAll("{\"math\":");
-            try string(w, m);
-            try w.writeByte('}');
-        },
-        .color => |c| try w.print("{{\"color\":\"#{x:0>2}{x:0>2}{x:0>2}{x:0>2}\"}}", .{ c.r, c.g, c.b, c.a }),
-        .number => |n| {
-            try w.writeAll("{\"number\":");
-            try number(n, w);
-            try w.writeByte('}');
-        },
-        .range => |r| {
-            try w.writeAll("{\"range\":[");
-            try number(r.lo, w);
-            try w.writeByte(',');
-            if (r.hi) |hi| try number(hi, w) else try w.writeAll("null");
-            try w.writeAll("]}");
-        },
-        .label => |l| {
-            try w.writeAll("{\"label\":");
-            try string(w, l.name);
-            if (l.inverted) try w.writeAll(",\"inverted\":true");
-            try w.writeByte('}');
-        },
-        .elements => |es| {
-            try w.writeByte('[');
-            for (es, 0..) |e, i| {
-                if (i > 0) try w.writeByte(',');
-                try writeValue(e, w);
-            }
-            try w.writeByte(']');
-        },
-        // Only `:theme` takes a record, and it is no element's style.
-        .record => unreachable,
-    }
-}
-
-/// A number in its normal form, as a string: `"0.85"`.
-fn number(n: Decimal, w: *Writer) Writer.Error!void {
-    try w.writeByte('"');
-    try n.format(w);
-    try w.writeByte('"');
 }
 
 /// A name as JSON writes it: `#A` is "A", `:label` "label".

@@ -13,8 +13,9 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 
 | Path          | What                                                                          |
 | ------------- | ----------------------------------------------------------------------------- |
-| `fab-core/`   | Lexer, parser, analyser, IR, styling, diagnostics, JSON. Source in, IR out, no I/O. `src/prelude.fab`: the prelude, read before every program (`statements.md` §21) |
-| `fab-render/` | Pure backends from the styled IR to bytes (DOT for now)                       |
+| `fab-core/`   | Lexer, parser, analyser, IR, diagnostics, JSON (the analysis alone). Source in, IR out, no I/O. `src/prelude.fab`: the prelude, read before every program (`statements.md` §21) |
+| `fab-layer-style/` | The style layer's runtime: the cascade and the Sheet, from fab-core's analysis (`statements.md` §26) |
+| `fab-render/` | Pure backends from the analysis to bytes, calling the layers they need (DOT for now) |
 | `fab-cli/`    | The `fab` command, the only package that does I/O                             |
 | `fab-lsp/`    | The language server, over fab-core only (step L)                              |
 | `docs/`       | Empty, for later                                                              |
@@ -23,11 +24,11 @@ fAB is a language for diagrams: a program declares a graph by its edges, and nod
 | `examples/`   | `.fab` programs to read and to draw, for users; no test reads them            |
 | `spec/`       | The language: spec, grammar and decision notes                                |
 
-Each package is a plain Zig project that depends only on the ones above it. fAB itself (fab-core, fab-render, fab-lsp, fab-cli) uses nothing but Zig and its standard library. Only `tree-sitter-fab/` and `editors/` may depend on other toolchains (Node, Rust, the Tree-sitter CLI), since editors need them; nothing in fAB builds or tests through them.
+Each package is a plain Zig project that depends only on the ones above it. A layer's package (`fab-layer-<name>`) depends on fab-core only; its consumers call it. fAB itself (fab-core, the layers, fab-render, fab-lsp, fab-cli) uses nothing but Zig and its standard library. Only `tree-sitter-fab/` and `editors/` may depend on other toolchains (Node, Rust, the Tree-sitter CLI), since editors need them; nothing in fAB builds or tests through them.
 
-**The conformance corpus is the truth** (`fab-core/src/compile/conformance.test.zig`): what the spec says a program means, its diagnostics, its graph and its style, checked against the code. `examples/` are illustrations for users, checked to compile and drawn by `make examples`; no test reads them.
+**The conformance corpora are the truth**, one per package, each of what it owns (`statements.md` §26): `fab-core/src/compile/conformance.test.zig`, a program's diagnostics and its graph; `fab-layer-style/src/conformance.test.zig`, its style. What the spec says a program means, checked against the code. `examples/` are illustrations for users, checked to compile and drawn by `make examples`; no test reads them.
 
-**Tests** are separate from the code, beside it: `Lexer.zig` is tested by `lexer.test.zig` (the source's name, snake_case), which the source pulls in with a trailing `test { _ = @import("lexer.test.zig"); }`. Tests go file by file. Files with a logical dependency share one test file, named after their stage (its folder): a file built only by another is tested with it, so `lex.test.zig` covers Lexer and Token, `parse.test.zig` Parser and Cst, `analyse.test.zig` the analyser, `style.test.zig` the style pass. A behaviour can have its own file, as `recovery.test.zig` does. A test file sees only `pub` declarations.
+**Tests** are separate from the code, beside it: `Lexer.zig` is tested by `lexer.test.zig` (the source's name, snake_case), which the source pulls in with a trailing `test { _ = @import("lexer.test.zig"); }`. Tests go file by file. Files with a logical dependency share one test file, named after their stage (its folder): a file built only by another is tested with it, so `lex.test.zig` covers Lexer and Token, `parse.test.zig` Parser and Cst, `analyse.test.zig` the analyser, `style.test.zig` the style layer (in fab-layer-style). A behaviour can have its own file, as `recovery.test.zig` does. A test file sees only `pub` declarations.
 
 ### spec/
 
@@ -36,7 +37,7 @@ Each package is a plain Zig project that depends only on the ones above it. fAB 
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November); §22.10 layers read; §22.11 the cascade: ties, exact numbers, tokens in a diagram's own layer; §22.12 the prelude the only schema, the Sheet of values in rules and elements, renderers declaring what they draw; §22.13 the Sheet in JSON, names without sigils; §22.14 base rules, shared by every diagram; §22.15 a label's three values (10 November); §23 diagrams as nodes, `@` removed, `*` on one side (10 November); §24 kinds as the diagram's own (`G :kind [flow]`), passed down, cases on them (`:>`), flow's vocabulary (10 November); §25 the Sheet as a tree of differences; §26 layers as runtimes: fab-core resolves the language, a layer's package its meaning (11 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November); §22.10 layers read; §22.11 the cascade: ties, exact numbers, tokens in a diagram's own layer; §22.12 the prelude the only schema, the Sheet of values in rules and elements, renderers declaring what they draw; §22.13 the Sheet in JSON, names without sigils; §22.14 base rules, shared by every diagram; §22.15 a label's three values (10 November); §23 diagrams as nodes, `@` removed, `*` on one side (10 November); §24 kinds as the diagram's own (`G :kind [flow]`), passed down, cases on them (`:>`), flow's vocabulary (10 November); §25 the Sheet as a tree of differences; §26 layers as runtimes: fab-core resolves the language, a layer's package its meaning; the JSON the analysis alone (11 November) |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 | `profile.md`     | Performance note, 10 November: method, measurements, findings (F1–F8), goals (G1–G5; hard and soft targets, none blocking yet) and the bench |
 | `release.md`     | Decision note, 10 November: stable and dev builds, versions in Zig's style (`0.1.0-dev.N+HASH[.dirty][.incomplete]`), one version written once, advancing below and from 1.0.0, Conventional Commits and the changelog |
@@ -47,7 +48,7 @@ Zig 0.17. Graphviz only for `-e graphviz` to svg, png or pdf.
 
 ```
 make                # debug build of every package, in dependency order
-make test           # all tests; or test-core, test-render, test-lsp, test-cli
+make test           # all tests; or test-core, test-layer-style, test-render, test-lsp, test-cli
 make examples       # check every example, then draw it to SVG (Graphviz); `make test examples` for both
 make fmt            # zig fmt, and fab fmt on the examples and the prelude; fmt-check to verify
 fab check x.fab     # diagnostics only
@@ -59,7 +60,7 @@ fab lsp             # the language server, over stdio
 
 ## Pipeline
 
-Lexer → tokens; parser → CST, a permissive superset with error nodes; analyser → IR. Language errors (attachment, references, kinds, arities) belong to the analyser; the parser only builds trees.
+Lexer → tokens; parser → CST, a permissive superset with error nodes; analyser → IR. Language errors (attachment, references, kinds, arities) belong to the analyser; the parser only builds trees. That is fab-core's analysis, and the JSON's whole content. Then the layers, each in its package and called by its consumer: fab-layer-style, IR → Sheet, which renderers draw.
 
 ## Plan: closing the gap to the spec
 
@@ -275,8 +276,8 @@ Done (8–10) when the styled examples in the spec draw as described.
 ### E. Shells and docs
 
 **S. Layers as packages** (`statements.md` §26). fab-core stops at analysis; each layer with a meaning of its own gets a package over it, its runtime. In increments, each keeping every package green:
-- **S1. fab-layer-style.** `fab-core/src/style/` (the cascade, the Sheet, the Styler, `style.test.zig`) and the JSON's Sheet writer move to `fab-layer-style/`; `Compilation` loses `sheet()` (`marks()` stays) and fab-cli composes; fab-render and fab-cli depend on it; the Makefile, the layout table and the dependency order follow. No change in behaviour: every test, dump, drawing and JSON byte the same.
-- **S2. The prelude by version.** `fab lsp` writes `prelude-<version>.fab`, the prelude byte for byte (L2b's comment and its shift go). fab-layer-style makes the prelude's Sheet (every set of classes an element can have, the prelude's kinds' themes, `[base]`'s tokens), printed as `prelude-<version>.sheet.json`; a program's rules are numbered after it, and only the author's steps are written; nothing computed is written, and a test derives every computed value from the IR as §26 states. The examples' JSON measured against 11c3b's.
+- **S1. fab-layer-style** (done). `fab-core/src/style/` (the cascade, the Sheet, the Styler, `style.test.zig`) and the corpus's `.sheet` rows (its own `conformance.test.zig`) move to `fab-layer-style/`. `Compilation` loses `sheet()`; `marks()` and `Mark` stay in fab-core, `ZoneMark` goes with the style pass; fab-core exports what the layer reads. The JSON loses `"sheet"`: it is the analysis alone. fab-render's backends call the layer (`style.of`); fab-render and fab-cli depend on it; `make test-layer-style`; the layout table and the dependency order follow. Otherwise no change in behaviour: every Sheet dump and drawing the same.
+- **S2. The prelude by version.** `fab lsp` writes `prelude-<version>.fab`, the prelude byte for byte; L2b's comment and its shift go.
 
 fab-layer-prove comes with 11d–11e: its findings are annotations (classes, issues) style takes as input, its diagnostics in fab-core's shape. fab-layer-place only if places need resolving.
 

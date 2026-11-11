@@ -20,8 +20,6 @@ const Cst = @import("../parse/Cst.zig");
 const Parser = @import("../parse/Parser.zig");
 const Ir = @import("../analyse/Ir.zig");
 const Analyser = @import("../analyse/Analyser.zig");
-const Sheet = @import("../style/Sheet.zig");
-const Styler = @import("../style/Styler.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Env = @import("../analyse/Env.zig");
 
@@ -44,9 +42,8 @@ prelude_cst: ?Cst = null,
 lexed: ?std.MultiArrayList(Token) = null,
 parsed: ?Cst = null,
 analysed: ?Analyser.Result = null,
-styled: ?Sheet = null,
-/// The severity each IR issue is drawn with, for the style pass.
-issue_marks: ?[]Sheet.Mark = null,
+/// The severity each IR issue is drawn with, for the style layer.
+issue_marks: ?[]Mark = null,
 /// Syntax diagnostics first, then analysis diagnostics, each in the order
 /// found: by statement, then what only the final graph shows (cells that are
 /// not parallel). Complete once analysis has run.
@@ -98,7 +95,6 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8, tolerance: Tolerance) er
 pub fn deinit(c: *Compilation) void {
     if (c.lexed) |*list| list.deinit(c.gpa);
     if (c.parsed) |*tree| tree.deinit(c.gpa);
-    if (c.styled) |*s| s.deinit();
     if (c.issue_marks) |m| c.gpa.free(m);
     if (c.analysed) |*result| result.deinit(c.gpa);
     if (c.prelude_cst) |*tree| tree.deinit(c.gpa);
@@ -135,24 +131,25 @@ pub fn ir(c: *Compilation) error{OutOfMemory}!?*const Ir {
     return &result.ir;
 }
 
-/// Stage 4: the sheet, a resolved Style for every node, edge and zone, or
-/// null when `ir` is.
-pub fn sheet(c: *Compilation) error{OutOfMemory}!?*const Sheet {
-    const graph = try c.ir() orelse return null;
-    if (c.styled == null) {
-        const result = try c.analysis();
-        c.styled = try Styler.style(c.gpa, graph, .{ .env = &result.env, .bindings = result.bindings, .tokens = result.tokens, .kinds = result.kinds }, try c.marks());
+/// How serious an issue is, as drawn: the colour of its mark, the token of
+/// that name. A promoted warning is drawn as an error.
+pub const Mark = enum(u2) {
+    unsupported,
+    warning,
+    @"error",
+
+    pub fn max(a: Mark, b: Mark) Mark {
+        return if (@backingInt(a) >= @backingInt(b)) a else b;
     }
-    return &c.styled.?;
-}
+};
 
 /// The severity each issue of the analysed IR is drawn with: its
-/// diagnostic's, under this tolerance. A promoted warning is drawn as an
-/// error (statements.md §18).
-fn marks(c: *Compilation) error{OutOfMemory}![]const Sheet.Mark {
+/// diagnostic's, under this tolerance (statements.md §18). What the style
+/// layer marks elements by.
+pub fn marks(c: *Compilation) error{OutOfMemory}![]const Mark {
     if (c.issue_marks) |m| return m;
     const graph = &(try c.analysis()).ir;
-    const list = try c.gpa.alloc(Sheet.Mark, graph.issues.len);
+    const list = try c.gpa.alloc(Mark, graph.issues.len);
     errdefer c.gpa.free(list);
     for (list, 0..) |*m, i| m.* = switch ((try c.diagnosticOf(graph.issues.get(i))).severity) {
         .unsupported => .unsupported,
@@ -189,17 +186,6 @@ pub fn status(c: *Compilation) error{OutOfMemory}!Status {
     var s: Status = .ok;
     for (try c.diagnostics()) |d| s = s.join(.of(d.severity));
     return s;
-}
-
-/// How a diagram is drawn for its diagnostics (spec, Errors): a border in the
-/// colour of the most severe one, and a label while any is unsupported
-/// (spec/statements.md §15.3).
-pub const ZoneMark = Styler.ZoneMark;
-
-/// The mark of a zone, as the style pass draws it, whether or not the IR is
-/// withheld.
-pub fn zoneMark(c: *Compilation, zone: Ir.ZoneIndex) error{OutOfMemory}!ZoneMark {
-    return Styler.zoneMark(&(try c.analysis()).ir, try c.marks(), zone);
 }
 
 /// The diagnostic an IR issue comes from.

@@ -9,8 +9,8 @@
 #   make fmt-check    check they are formatted (zig fmt, then `fab fmt`)
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
-# each one, in dependency order: fab-core, then fab-render and fab-lsp, then
-# fab-cli.
+# each one, in dependency order: fab-core, then the layers (fab-layer-style),
+# then fab-render and fab-lsp, then fab-cli.
 #
 # Variables:
 #   ZIG       the Zig 0.17 compiler          (default: zig)
@@ -26,16 +26,17 @@ PREFIX   ?= $(HOME)/.local
 OPTIMIZE ?= ReleaseSafe
 
 # In dependency order.
-PACKAGES := fab-core fab-render fab-lsp fab-cli
+PACKAGES := fab-core fab-layer-style fab-render fab-lsp fab-cli
 
-.PHONY: all build test test-versions test-core test-render test-lsp test-cli examples \
+.PHONY: all build test test-versions test-core test-layer-style test-render test-lsp test-cli examples \
         tree-sitter test-tree-sitter release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
-	@echo "Targets: build test test-versions test-core test-render test-lsp test-cli examples release install"
+	@echo "Targets: build test test-versions test-core test-layer-style test-render test-lsp test-cli examples"
+	@echo "         release install"
 	@echo "         tree-sitter test-tree-sitter uninstall fmt fmt-check check-graphviz clean help"
 
 ## Building
@@ -48,10 +49,10 @@ build:
 
 ## Testing
 
-test: test-versions test-core test-render test-lsp test-cli
+test: test-versions test-core test-layer-style test-render test-lsp test-cli
 
 # One version, written once (release.md §3): fab-core's manifest holds it,
-# and Zig wants it in the other three too, so they must say the same.
+# and Zig wants it in the others too, so they must say the same.
 test-versions:
 	@echo "==> test versions"
 	@want=$$(sed -n 's/^ *\.version = "\(.*\)",$$/\1/p' fab-core/build.zig.zon); \
@@ -63,6 +64,11 @@ test-versions:
 test-core:
 	@echo "==> test fab-core"
 	@cd fab-core && $(ZIG) build test --summary all
+
+# Each layer's tests: `test-layer-<name>` (statements.md §26).
+test-layer-style:
+	@echo "==> test fab-layer-style"
+	@cd fab-layer-style && $(ZIG) build test --summary all
 
 test-render:
 	@echo "==> test fab-render"

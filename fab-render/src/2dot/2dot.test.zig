@@ -8,6 +8,7 @@
 const std = @import("std");
 const testing = std.testing;
 const fab = @import("fab_core");
+const style = @import("fab_layer_style");
 const to_dot = @import("root.zig");
 const Note = @import("../shared/Note.zig");
 
@@ -24,12 +25,22 @@ const Output = struct {
     }
 };
 
-fn render(sheet: *const fab.Sheet) !Output {
+fn render(sheet: *const style.Sheet) !Output {
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
     var notes: Note.List = .init(testing.allocator);
     errdefer notes.deinit();
     try to_dot.write(sheet, &out.writer, &notes);
+    return .{ .dot = try out.toOwnedSlice(), .notes = notes };
+}
+
+/// `c` drawn as a renderer draws it: styled, then written.
+fn renderOf(c: *fab.Compilation) !Output {
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    var notes: Note.List = .init(testing.allocator);
+    errdefer notes.deinit();
+    try testing.expect(try to_dot.draw(c, &out.writer, &notes));
     return .{ .dot = try out.toOwnedSlice(), .notes = notes };
 }
 
@@ -47,7 +58,7 @@ const header =
 fn expectDot(source: []const u8, body: []const u8) !void {
     var c = try fab.Compilation.init(testing.allocator, source, preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try expectBody(body, o.dot);
 }
@@ -179,7 +190,7 @@ test "an end is a bullseye" {
 test "every circle has the size of the longest label" {
     var c = try fab.Compilation.init(testing.allocator, "G :: #A/f/#Approved g", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     // "Approved" has 8 characters: 0.085 × 8 + 0.2 = 0.88, for all three.
     try testing.expectEqual(3, std.mem.count(u8, o.dot, "width=0.88, height=0.88"));
@@ -188,7 +199,9 @@ test "every circle has the size of the longest label" {
 test "cells are left out, with one note each" {
     var c = try fab.Compilation.init(testing.allocator, "Iso :: +(f, g)+ | f/α/g/β", preview);
     defer c.deinit();
-    const sheet = (try c.sheet()).?;
+    var owned = (try style.of(testing.allocator, &c)).?;
+    defer owned.deinit();
+    const sheet = &owned;
     var o = try render(sheet);
     defer o.deinit();
     try testing.expectEqual(sheet.ir.cells.len, o.notes.items.items.len);
@@ -259,7 +272,7 @@ test "unsupported: a violet frame, and the caption above the name" {
 test "under a red frame, the caption stays violet" {
     var c = try fab.Compilation.init(testing.allocator, "G :: f g/+k h\nG :style { f :label \"x\" }\nG :prove { :strict }", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try testing.expect(std.mem.indexOf(u8, o.dot,
         \\    label=<<font point-size="9" color="#8250df">unsupported</font><br/>G>
@@ -301,7 +314,7 @@ test "a marked edge takes the colour, and a marked dot is filled with it" {
     defer ir.deinit(testing.allocator);
     var c = try fab.Compilation.init(testing.allocator, "", preview);
     defer c.deinit();
-    var sheet = try fab.Styler.style(testing.allocator, &ir, .{ .env = &(try c.analysis()).env }, &.{ .@"error", .warning });
+    var sheet = try style.Styler.style(testing.allocator, &ir, .{ .env = &(try c.analysis()).env }, &.{ .@"error", .warning });
     defer sheet.deinit();
     var o = try render(&sheet);
     defer o.deinit();
@@ -346,7 +359,7 @@ test "a diagram held by another is a cluster inside it, and edges stop at its bo
 test "a member's cluster writes every attribute, or it would wear its container's" {
     var c = try fab.Compilation.init(testing.allocator, "A :: f\nB :: A\nA :style { :marks [], :stroke [#ff0000] }\nB :style { :marks [], :fill [#00ff00], :line [dashed] }", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_1 {
@@ -376,7 +389,7 @@ test "an edge from inside a diagram to its node is not clipped; a flat diagram's
     // node in C is an ordinary node, labelled with its name.
     var c = try fab.Compilation.init(testing.allocator, "A :: f\nB :: g\nC :: A.f+/h/A, k/B\nB :style { :marks [], :as [flat] }", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try testing.expect(std.mem.indexOf(u8, o.dot, "[label=\"h\"]") != null);
     try testing.expect(std.mem.indexOf(u8, o.dot, "[label=\"k\"]") != null);
@@ -420,7 +433,7 @@ test "HTML text escapes what an HTML label would read" {
 test "a framed cluster draws its border, label and fill" {
     var c = try fab.Compilation.init(testing.allocator, "G :: f\nG :style { :marks [], :stroke [#336699], :fill [accent], :line [dashed] }", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -447,7 +460,7 @@ test "flat zones have no cluster; :as node and table are clusters, with a note" 
         \\C :style { :marks [], :as [table] }
     , preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try testing.expect(std.mem.indexOf(u8, o.dot, "cluster_0") == null);
     try testing.expect(std.mem.indexOf(u8, o.dot, "cluster_1") != null);
@@ -469,7 +482,7 @@ test "lines and shapes: double, invisible, wavy, approximations" {
         \\}
     , preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -491,7 +504,7 @@ test "lines and shapes: double, invisible, wavy, approximations" {
 test "lines: triple, as three parallel lines" {
     var c = try fab.Compilation.init(testing.allocator, "G :: f\nG :style { :marks [], +f { :label \"a\", :line [triple] }, f+ :label \"b\", f :arrow [/triple/>] }", preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try expectBody(
         \\  subgraph cluster_0 {
@@ -627,7 +640,7 @@ const Expected = struct {
     written: []bool,
     anchor: []bool,
 
-    fn init(sheet: *const fab.Sheet) !Expected {
+    fn init(sheet: *const style.Sheet) !Expected {
         const gpa = testing.allocator;
         const ir = sheet.ir;
         const n = ir.zones.len;
@@ -687,7 +700,9 @@ const Expected = struct {
 fn expectLaw(source: []const u8) !void {
     var c = try fab.Compilation.init(testing.allocator, source, preview);
     defer c.deinit();
-    const sheet = (try c.sheet()) orelse return;
+    var owned = try style.of(testing.allocator, &c) orelse return;
+    defer owned.deinit();
+    const sheet = &owned;
     const ir = sheet.ir;
     var o = try render(sheet);
     defer o.deinit();
@@ -847,7 +862,7 @@ test "the law holds on random programs, broken ones included" {
 
 test "out of memory is reported, never a crash or a leak" {
     const Case = struct {
-        fn run(gpa: std.mem.Allocator, sheet: *const fab.Sheet) !void {
+        fn run(gpa: std.mem.Allocator, sheet: *const style.Sheet) !void {
             var out: std.Io.Writer.Allocating = .init(gpa);
             defer out.deinit();
             var notes: Note.List = .init(gpa);
@@ -861,7 +876,9 @@ test "out of memory is reported, never a crash or a leak" {
     };
     var c = try fab.Compilation.init(testing.allocator, "Iso :: +(f, g)+ | f/α/g/β", preview);
     defer c.deinit();
-    const sheet = (try c.sheet()).?;
+    var owned = (try style.of(testing.allocator, &c)).?;
+    defer owned.deinit();
+    const sheet = &owned;
     try testing.checkAllAllocationFailures(testing.allocator, Case.run, .{sheet});
 }
 
@@ -883,7 +900,7 @@ test "what the author binds and graphviz doesn't draw is noted, once per diagram
         \\H :style { :marks [], h :bend [outer] }
     , preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     const notes = o.notes.items.items;
     // :bend, bound on two edges of G and one of H: one note per diagram.
@@ -904,7 +921,7 @@ test ":hide, a bold face, and a themed diagram's own colours" {
         \\G :style { :marks [], :theme [dark], #A :hide, #B :face [bold] }
     , preview);
     defer c.deinit();
-    var o = try render((try c.sheet()).?);
+    var o = try renderOf(&c);
     defer o.deinit();
     try testing.expectEqual(0, o.notes.items.items.len);
     // [dark]'s ink, not the header's [base] one.

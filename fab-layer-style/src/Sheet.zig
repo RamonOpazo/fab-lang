@@ -11,17 +11,18 @@
 //! then up its rules. A renderer reads what it draws, by descriptor, and
 //! reports the rest.
 //!
-//! Made by Styler.zig. A Sheet borrows the IR and the environment, which
+//! Made by Styler.zig, from fab-core's analysis (statements.md §26). A Sheet borrows the IR and the environment, which
 //! must outlive it, and owns its tables; what the cascade computes (labels,
 //! values with their tokens resolved, each diagram's tokens) is in its
 //! arena.
 
 const std = @import("std");
-const Ir = @import("../analyse/Ir.zig");
-const Env = @import("../analyse/Env.zig");
-const Decimal = @import("../analyse/Decimal.zig");
-const value = @import("../analyse/value.zig");
-const decoded = @import("../analyse/decoded.zig");
+const fab = @import("fab_core");
+const Ir = fab.Ir;
+const Env = fab.Env;
+const Decimal = fab.Decimal;
+const value = fab.value;
+const decoded = fab.decoded;
 const Value = decoded.Value;
 
 const Sheet = @This();
@@ -56,17 +57,9 @@ pub const Entry = struct { descriptor: Descriptor, value: Value, layer: Layer = 
 /// it: what a renderer reports when it can't draw it.
 pub const Layer = enum { computed, base, kind, theme, program, mark };
 
-/// How serious an issue is, as drawn: the colour of its mark, the token of
-/// that name. A promoted warning is drawn as an error.
-pub const Mark = enum(u2) {
-    unsupported,
-    warning,
-    @"error",
-
-    pub fn max(a: Mark, b: Mark) Mark {
-        return if (@backingInt(a) >= @backingInt(b)) a else b;
-    }
-};
+/// How serious an issue is, as drawn (fab-core's: it is read from the
+/// diagnostics).
+pub const Mark = fab.Compilation.Mark;
 
 /// Entries `start..end` of `entries`.
 pub const Span = struct { start: u32 = 0, end: u32 = 0 };

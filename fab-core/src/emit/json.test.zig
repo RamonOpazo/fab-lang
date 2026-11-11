@@ -32,17 +32,12 @@ fn expectContains(haystack: []const u8, needle: []const u8) !void {
     }
 }
 
-/// The document up to its sheet: status, diagnostics and IR.
-fn beforeSheet(doc: []const u8) []const u8 {
-    return doc[0 .. std.mem.indexOf(u8, doc, ",\"sheet\":") orelse doc.len];
-}
-
 test "a valid program, its IR in full" {
     const doc = try document("G :: f g", strict);
     defer testing.allocator.free(doc);
     try testing.expectEqualStrings(head ++
         \\"status":"ok","diagnostics":[],"ir":{"zones":[{"name":"G","container":null,"members":[],"placeholder":false}],"nodes":[{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"dom"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":0,"side":"cod"}},{"kind":"plain","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}],"edges":[{"name":"f","source":0,"target":1,"directed":true,"zone":0},{"name":"g","source":1,"target":2,"directed":true,"zone":0}],"cells":[],"issues":[]}
-    , beforeSheet(doc));
+    ++ "}", doc);
 }
 
 test "cells name their sides by kind, with their direction" {
@@ -74,7 +69,7 @@ test "a broken program: diagnostics, holes and issues" {
         \\{"kind":"hole","name":null,"zone":0,"diagram":null,"canonical":{"edge":1,"side":"cod"}}
     );
     try expectContains(doc,
-        \\"issues":[{"subject":{"node":2},"diagnostic":0}]},"sheet":
+        \\"issues":[{"subject":{"node":2},"diagnostic":0}]}}
     );
 }
 
@@ -82,7 +77,7 @@ test "a withheld IR is null" {
     const doc = try document("G :: f g/+k h", strict);
     defer testing.allocator.free(doc);
     try expectContains(doc, "\"status\":\"error\"");
-    try testing.expect(std.mem.endsWith(u8, doc, ",\"ir\":null,\"sheet\":null}"));
+    try testing.expect(std.mem.endsWith(u8, doc, ",\"ir\":null}"));
 }
 
 test "issues point into the document's diagnostics, after the syntax ones" {
@@ -115,78 +110,9 @@ test "tokens" {
 }
 
 test "names are written without sigils" {
-    const doc = try document("G :: #A/f\nG :style { #A :fill [#ff0000] }", strict);
+    const doc = try document("G :: #A/f", strict);
     defer testing.allocator.free(doc);
     try expectContains(doc, "{\"kind\":\"plain\",\"name\":\"A\",");
-    try expectContains(doc, "\"adds\":{\"class\":\"plain\"}");
-    try expectContains(doc, "\"program\":{\"fill\":{\"color\":\"#ff0000ff\"}}");
-}
-
-test "the sheet: rules as a tree, an element's own entries, by layer, values by shape" {
-    const doc = try document(
-        \\G :: #A/f g
-        \\G :style { :theme [dark], &edge :size [1.5], #A :fill [#ff000080], #A :hide, f :arrow [?!/dashed/>], f :label $x_1$ }
-    , strict);
-    defer testing.allocator.free(doc);
-    // The edges' tree: [base]'s `&edge` (a root: no parent), `[dark]` over
-    // it, then G's class binding (statements.md §25). A rule writes no
-    // classes: its class steps are its classes.
-    try expectContains(doc, "{\"adds\":{\"class\":\"edge\"},\"style\":{\"base\":{\"label\":null,");
-    try expectContains(doc, "\"adds\":{\"theme\":\"dark\"},\"style\":{\"base\":{\"ink\":{\"color\":\"#aaaaaaff\"}");
-    try expectContains(doc, "\"adds\":{\"zone\":0},\"style\":{\"program\":{\"size\":{\"number\":\"1.5\"}}}}");
-    try expectContains(doc, "\"theme\":{\"fill\":{\"color\":\"#1e1e1eff\"}}");
-    try testing.expect(std.mem.indexOf(u8, doc, "\"classes\"") == null);
-    // Each element: its rule, and only its own entries, by layer; no mark
-    // when it has none.
-    try expectContains(doc, "{\"rule\":4,\"style\":{\"computed\":{\"label\":{\"text\":\"A\"}},\"program\":{\"fill\":{\"color\":\"#ff000080\"},\"hide\":true}}}");
-    try expectContains(doc, "\"program\":{\"label\":{\"math\":\"x_1\"},\"arrow\":[{\"label\":\"?\",\"inverted\":true},{\"label\":\"dashed\"},{\"label\":\">\"}]}");
-    try testing.expect(std.mem.indexOf(u8, doc, "\"mark\":null") == null);
-    try testing.expect(std.mem.indexOf(u8, doc, "\"inverted\":false") == null);
-    // Nil is null; :theme is no element's style.
-    try expectContains(doc, "\"caption\":null");
-    try testing.expect(std.mem.indexOf(u8, doc, "\"theme\":[") == null);
-    // The tokens: [base]'s, and what G's theme changes, only.
-    try expectContains(doc, "\"tokens\":{\"base\":{\"ink\":{\"color\":\"#333333ff\"}");
-    try expectContains(doc, "\"zones\":[{\"ink\":{\"color\":\"#ddddddff\"},\"soft\":{\"color\":\"#aaaaaaff\"}}]");
-}
-
-test "an unstyled diagram's tokens are [base]'s, written once" {
-    const doc = try document("G :: f", strict);
-    defer testing.allocator.free(doc);
-    try expectContains(doc, "\"zones\":[{}]");
-}
-
-test "marks are the last layer, and a marked element's mark is written" {
-    const doc = try document("G :: f g/+k h", preview);
-    defer testing.allocator.free(doc);
-    try expectContains(doc, "\"mark\":{\"stroke\":{\"color\":\"#d1242fff\"}}},\"mark\":\"error\"}");
-}
-
-test "a sheet is indexed as its IR" {
-    // Cells, members, a placeholder, a marked zone, themes.
-    const programs = [_][]const u8{
-        "G :: f g",
-        "Nat :: +(f, g)+ | f/α/g\nNat :style { α :label \"a\" }",
-        "A :: */f\nB :: */g\nDb :: A/h/B\nDb :prove { :strict }",
-        "review :: a b\nG :: f/? +(g, h)\nG :style { :theme [dark], &choice :fill [accent] }",
-    };
-    for (programs, 0..) |source, name| {
-        const doc = try document(source, preview);
-        defer testing.allocator.free(doc);
-        const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, doc, .{});
-        defer parsed.deinit();
-        const root = parsed.value.object;
-        const ir = root.get("ir").?.object;
-        const sheet = root.get("sheet").?.object;
-        const rules = sheet.get("rules").?.array.items.len;
-        errdefer std.debug.print("\nin program {d}\n", .{name});
-        inline for (.{ "nodes", "edges", "cells", "zones" }) |table| {
-            const elements = sheet.get(table).?.array.items;
-            try testing.expectEqual(ir.get(table).?.array.items.len, elements.len);
-            for (elements) |e| try testing.expect(e.object.get("rule").?.integer < rules);
-        }
-        try testing.expectEqual(ir.get("zones").?.array.items.len, sheet.get("tokens").?.object.get("zones").?.array.items.len);
-    }
 }
 
 test "positions: lines, and UTF-16 characters" {
@@ -237,4 +163,10 @@ test "every document is valid JSON" {
             }
         }
     }
+}
+
+test "the analysis alone: no layer's result is written" {
+    const doc = try document("G :: #A/f\nG :style { #A :fill [#ff0000] }", strict);
+    defer testing.allocator.free(doc);
+    try testing.expect(std.mem.indexOf(u8, doc, "\"sheet\"") == null);
 }

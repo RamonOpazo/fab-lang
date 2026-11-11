@@ -1,10 +1,11 @@
-//! fab-render: pure functions from a Sheet (the styled IR) to bytes. No I/O.
+//! fab-render: pure functions from the analysis to bytes. No I/O.
 //!
-//! Each backend realizes the looks the Sheet has already resolved; none of
-//! them decides a look. Starting processes (Graphviz, LaTeX) belongs to the
+//! Each backend calls the layers it needs (statements.md §26), the style
+//! layer first, and realizes the looks the Sheet has resolved; none of them
+//! decides a look. Starting processes (Graphviz, LaTeX) belongs to the
 //! hosts, fab-cli and fab-wasm, never to this package.
 //!
-//!   2dot/      Sheet → DOT; Graphviz lays it out
+//!   2dot/      the analysis, styled → DOT; Graphviz lays it out
 //!   Note.zig   what a backend couldn't express exactly
 //!
 //! Later: 2tikz/ (plain TikZ, with coordinates), layout/ (shared by native

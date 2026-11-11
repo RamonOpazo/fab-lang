@@ -1,9 +1,11 @@
 //! Tests for the style pass: Styler.zig, cascade.zig and Sheet.zig.
 
 const std = @import("std");
+const fab = @import("fab_core");
 const testing = std.testing;
-const Compilation = @import("../compile/Compilation.zig");
+const Compilation = fab.Compilation;
 const Sheet = @import("Sheet.zig");
+const style = @import("root.zig");
 
 const preview: Compilation.Tolerance = .{ .warnings = .warn, .ir = .keep };
 const strict: Compilation.Tolerance = .{ .warnings = .promote, .ir = .withhold };
@@ -65,7 +67,9 @@ const Expected = struct { []const u8, bool, ?u24, []const u8 };
 fn expectNodes(source: []const u8, expected: []const Expected) !void {
     var c = try Compilation.init(testing.allocator, source, preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expectEqual(expected.len, s.ir.nodes.len);
     for (expected, 0..) |want, i| {
         const got = look(s, nodeAt(@intCast(i)));
@@ -132,7 +136,9 @@ test "a diagram's node is labelled with its diagram's name" {
 test "holes are dashed circles, labelled by their canonical end" {
     var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nDb :: Doc/owner/User", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     // n2 is the hole that replaced `+k`, glued to g's codomain.
     const hole = look(s, nodeAt(2));
     try testing.expectEqualStrings("g+", hole.label);
@@ -147,7 +153,9 @@ test "holes are dashed circles, labelled by their canonical end" {
 test "edges and zones are labelled by name, and zones are unframed clusters by default" {
     var c = try Compilation.init(testing.allocator, "A :: f g\nB :: h/A.+f", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expectEqualStrings("f", look(s, edgeAt(0)).label);
     try testing.expectEqualStrings("h", look(s, edgeAt(2)).label);
     try testing.expect(!look(s, edgeAt(0)).italic);
@@ -163,21 +171,45 @@ test "edges and zones are labelled by name, and zones are unframed clusters by d
     try testing.expectEqualStrings("+f", look(s, nodeAt(0)).label);
 }
 
-test "the sheet stage follows the IR: withheld with it, and computed once" {
+test "the Sheet follows the IR: withheld with it" {
     var withheld = try Compilation.init(testing.allocator, "G :: f g f", strict);
     defer withheld.deinit();
-    try testing.expectEqual(@as(?*const Sheet, null), try withheld.sheet());
+    try testing.expectEqual(null, try style.of(testing.allocator, &withheld));
 
     var kept = try Compilation.init(testing.allocator, "G :: f g f", preview);
     defer kept.deinit();
-    const first = (try kept.sheet()).?;
-    try testing.expectEqual(first, (try kept.sheet()).?);
+    var first_sheet = (try style.of(testing.allocator, &kept)).?;
+    defer first_sheet.deinit();
+    const first = &first_sheet;
     // The second f is a hole, not an edge.
     try testing.expectEqual(@as(usize, 2), first.elements.edges.len);
 }
 
 // ---------------------------------------------------------------------------
 // Marks: the last layer (statements.md §15.3, §18)
+
+test "a diagram's mark: the border of its worst issue, and the unsupported label" {
+    var c = try Compilation.init(testing.allocator,
+        \\G :: f g/+k h
+        \\H :: (f/*, g) h
+        \\J :: f
+        \\K :: f
+        \\review :: a b
+        \\J :prove { :strict }
+    , preview);
+    defer c.deinit();
+    const Mark = style.ZoneMark;
+    // An error on a hole in G, a warning on a node in H.
+    try testing.expectEqual(Mark{ .border = .@"error" }, try style.zoneMark(&c, @fromBackingInt(@intCast(0))));
+    try testing.expectEqual(Mark{ .border = .warning }, try style.zoneMark(&c, @fromBackingInt(@intCast(1))));
+    // Its proof is not applied yet: J is drawn with the unsupported label.
+    try testing.expectEqual(Mark{ .border = .unsupported, .unsupported = true }, try style.zoneMark(&c, @fromBackingInt(@intCast(2))));
+    try testing.expectEqual(Mark{}, try style.zoneMark(&c, @fromBackingInt(@intCast(3))));
+    // The reserved head draws a placeholder, bordered by its error.
+    const ir = (try c.ir()).?;
+    try testing.expect(ir.zones.items(.placeholder)[4]);
+    try testing.expectEqual(Mark{ .border = .@"error" }, try style.zoneMark(&c, @fromBackingInt(@intCast(4))));
+}
 
 // [base]'s `[error]`, `[warning]` and `[unsupported]`.
 const red: ?u24 = 0xd1242f;
@@ -187,7 +219,9 @@ const violet: ?u24 = 0x8250df;
 test "marks win: a hole keeps its dashes, in its error's colour, and frames its diagram" {
     var c = try Compilation.init(testing.allocator, "G :: f g/+k h\nH :: f", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expectEqual(red, look(s, nodeAt(2)).stroke);
     try testing.expectEqualStrings("dashed", look(s, nodeAt(2)).line);
     try testing.expectEqual(ink, look(s, nodeAt(1)).stroke);
@@ -209,7 +243,9 @@ test "a diagram's frame is its worst issue; unsupported adds the caption, even u
         \\G :prove { :strict }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expectEqual(amber, look(s, zoneAt(0)).stroke);
     try testing.expectEqual(@as(?[]const u8, null), look(s, zoneAt(0)).caption);
     try testing.expectEqual(violet, look(s, zoneAt(1)).stroke);
@@ -223,20 +259,24 @@ test "a diagram's frame is its worst issue; unsupported adds the caption, even u
 test "a promoted warning is drawn as an error" {
     var c = try Compilation.init(testing.allocator, "K :: (f/*, g) h", .{ .warnings = .promote, .ir = .keep });
     defer c.deinit();
-    try testing.expectEqual(red, look((try c.sheet()).?, zoneAt(0)).stroke);
+    var sheet = (try style.of(testing.allocator, &c)).?;
+    defer sheet.deinit();
+    try testing.expectEqual(red, look(&sheet, zoneAt(0)).stroke);
 }
 
 test "a placeholder is framed by its error" {
     var c = try Compilation.init(testing.allocator, "G :: f\nH :: g /k", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expect(s.ir.zones.items(.placeholder)[1]);
     try testing.expectEqual(red, look(s, zoneAt(1)).stroke);
 }
 
 test "a marked edge takes the colour; a solid shape's fill follows its line" {
     // No analysis error marks an edge yet, so the IR is made by hand.
-    const Ir = @import("../analyse/Ir.zig");
+    const Ir = fab.Ir;
     const Styler = @import("Styler.zig");
     var b: Ir.Builder = .init(testing.allocator);
     errdefer b.deinit();
@@ -269,7 +309,9 @@ test "a marked edge takes the colour; a solid shape's fill follows its line" {
 test "every rule is an element's or a parent; :theme is no element's style" {
     var c = try Compilation.init(testing.allocator, "G :: f/? +(a, b)\nG :style { :theme [dark] }", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     for (s.rules, 0..) |_, r| {
         var named = false;
         for (s.elements.nodes) |e| named = named or @backingInt(e.rule) == r;
@@ -278,7 +320,7 @@ test "every rule is an element's or a parent; :theme is no element's style" {
         for (s.rules) |other| named = named or (other.parent != null and @backingInt(other.parent.?) == r);
         try testing.expect(named);
     }
-    try testing.expectEqual(@as(?@import("../analyse/decoded.zig").Value, null), s.style(zoneAt(0)).get(s.descriptor(":theme").?));
+    try testing.expectEqual(@as(?fab.decoded.Value, null), s.style(zoneAt(0)).get(s.descriptor(":theme").?));
 }
 
 /// The rule `subject` names.
@@ -289,7 +331,9 @@ fn ruleOf(s: *const Sheet, subject: Sheet.Subject) Sheet.Rule {
 test "an unstyled program is [base]'s rules, class by class, shared by every diagram" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f\nH :: #B/g", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     // One per class step: the zones; `&node`, the named nodes
     // (`&plain`), the canonical ones (`f+`, `&canonical`); the edges.
     try testing.expectEqual(5, s.rules.len);
@@ -314,7 +358,9 @@ test "a diagram rule holds what differs from its base rule, by value or by layer
         \\H :style { &edge :size [0.85] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const ink_of = s.descriptor(":ink").?;
     const size = s.descriptor(":size").?;
 
@@ -346,7 +392,9 @@ test "a diagram rule holds what differs from its base rule, by value or by layer
 test "a theme makes a diagram rule; parents come first" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f\nG :style { :theme [dark] }", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const r = ruleOf(s, nodeAt(0));
     try testing.expectEqualStrings("dark", r.adds.theme);
     for (s.slice(r.entries)) |e| try testing.expect(e.layer == .theme or e.value == .color);
@@ -361,7 +409,9 @@ test "diagrams of one kind share its step" {
         \\B :kind [git]
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const x = (try nodeNamed(s, "#X")).rule.?;
     try testing.expectEqual(x, (try nodeNamed(s, "#Y")).rule.?);
     try testing.expectEqualStrings("git", s.rule(x).adds.kind);
@@ -377,7 +427,9 @@ test "members share their container's step, and the container's own nodes too" {
         \\R :style { &node :fill [#ff0000] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const x = (try nodeNamed(s, "#X")).rule.?;
     try testing.expectEqual(x, (try nodeNamed(s, "#Y")).rule.?);
     try testing.expectEqual(2, @backingInt(s.rule(x).adds.zone.?));
@@ -397,7 +449,9 @@ test "a theme's step is shared by the diagrams it themes" {
         \\H :style { :theme [dark] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const a = (try nodeNamed(s, "#A")).rule.?;
     try testing.expectEqual(a, (try nodeNamed(s, "#B")).rule.?);
     try testing.expectEqualStrings("dark", s.rule(a).adds.theme);
@@ -405,19 +459,21 @@ test "a theme's step is shared by the diagrams it themes" {
     try testing.expectEqual(s.element(edgeAt(0)).rule, s.element(edgeAt(1)).rule);
 }
 
-fn rgb(c: @import("../analyse/value.zig").Rgba) u24 {
+fn rgb(c: fab.value.Rgba) u24 {
     return @as(u24, c.r) << 16 | @as(u24, c.g) << 8 | c.b;
 }
 
 fn styleEverything(gpa: std.mem.Allocator) !void {
     var c = try Compilation.init(gpa, "G :: #A f? (g/+k, h) f\nH :: *x! y", preview);
     defer c.deinit();
-    _ = try c.sheet();
+    var sheet = (try style.of(gpa, &c)).?;
+    sheet.deinit();
+    _ = try style.zoneMark(&c, @fromBackingInt(@as(u32, 0)));
 }
 
 test "running out of memory while styling leaks nothing" {
     // In-place growth makes the count of allocations drift from run to run.
-    var fixed: @import("../compile/compilation.test.zig").FixedInPlace = .{ .backing = testing.allocator };
+    var fixed: fab.testing.FixedInPlace = .{ .backing = testing.allocator };
     try testing.checkAllAllocationFailures(fixed.allocator(), styleEverything, .{});
 }
 
@@ -432,7 +488,9 @@ fn labelName(v: Sheet.View, d: Sheet.Descriptor) []const u8 {
 test "the Sheet of values: [base] folded by specificity into rules" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f/? +(a, b), g/? +(c, d)", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const d = struct {
         fn of(sheet: *const Sheet, name: []const u8) !Sheet.Descriptor {
             return sheet.descriptor(name) orelse error.TestUnexpectedResult;
@@ -455,7 +513,7 @@ test "the Sheet of values: [base] folded by specificity into rules" {
     try testing.expectEqualStrings("", choice.text(label).?);
     try testing.expectEqualStrings("regular", labelName(choice, face));
     // `[ink]`, a token, resolved to [base]'s colour.
-    try testing.expectEqual(@import("../analyse/value.zig").Rgba{ .r = 0x33, .g = 0x33, .b = 0x33 }, choice.color(try d(s, ":ink")).?);
+    try testing.expectEqual(fab.value.Rgba{ .r = 0x33, .g = 0x33, .b = 0x33 }, choice.color(try d(s, ":ink")).?);
 
     // The two choices share one rule; #A has its own.
     var choices: usize = 0;
@@ -471,7 +529,7 @@ test "the Sheet of values: [base] folded by specificity into rules" {
     const edge = s.style(.{ .edge = @fromBackingInt(@as(u32, 0)) });
     const arrow = edge.get(try d(s, ":arrow")).?.elements;
     try testing.expectEqual(@as(usize, 3), arrow.len);
-    try testing.expectEqual(@as(@import("../analyse/decoded.zig").Value, .nil), arrow[0]);
+    try testing.expectEqual(@as(fab.decoded.Value, .nil), arrow[0]);
     const zone = s.style(.{ .zone = @fromBackingInt(@as(u32, 0)) });
     try testing.expectEqualStrings("cluster", labelName(zone, try d(s, ":as")));
 }
@@ -479,7 +537,9 @@ test "the Sheet of values: [base] folded by specificity into rules" {
 test "a renderer reads labels as its own enum, and is told what it can't draw" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f/? +(a, b)", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const Shape = enum { circle, diamond, double_circle };
     const shape = s.descriptor(":shape").?;
     const choice = s.style(.{ .node = @fromBackingInt(@as(u32, 1)) });
@@ -493,7 +553,9 @@ test "a renderer reads labels as its own enum, and is told what it can't draw" {
 test "the names core gives meaning to are :Style's descriptors" {
     var c = try Compilation.init(testing.allocator, "", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     for ([_][]const u8{ ":label", ":arrow", ":theme", ":marks" }) |name| {
         if (s.descriptor(name) == null) {
             std.debug.print("not in :Style: {s}\n", .{name});
@@ -507,7 +569,7 @@ test "the names core gives meaning to are :Style's descriptors" {
 // ---------------------------------------------------------------------------
 // The cascade (plan step 9d4): computed < [base] < themes < the program < marks
 
-const Rgba = @import("../analyse/value.zig").Rgba;
+const Rgba = fab.value.Rgba;
 
 fn rgba(hex: u24) Rgba {
     return .{ .r = @truncate(hex >> 16), .g = @truncate(hex >> 8), .b = @truncate(hex) };
@@ -521,7 +583,7 @@ fn nodeNamed(s: *const Sheet, name: []const u8) !Sheet.View {
 }
 
 /// The style of the first node of `kind`.
-fn firstOf(s: *const Sheet, kind: @import("../analyse/Ir.zig").Node.Kind) !Sheet.View {
+fn firstOf(s: *const Sheet, kind: fab.Ir.Node.Kind) !Sheet.View {
     for (s.ir.nodes.items(.kind), 0..) |k, i| if (k == kind)
         return s.style(.{ .node = @fromBackingInt(@as(u32, @intCast(i))) });
     return error.TestUnexpectedResult;
@@ -539,7 +601,9 @@ test "themes: left to right, a theme's own :theme included first, tokens through
         \\H :: #B/g
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const a = try nodeNamed(s, "#A");
     try testing.expectEqual(rgba(0xffeeee), a.color(s.descriptor(":fill").?).?);
     // [dark]'s, included by [warm]: its tokens and its zone fill.
@@ -556,7 +620,7 @@ test "themes: left to right, a theme's own :theme included first, tokens through
 }
 
 /// A number in its normal form, `0.2`.
-fn decimal(d: @import("../analyse/Decimal.zig")) ![]const u8 {
+fn decimal(d: fab.Decimal) ![]const u8 {
     const State = struct {
         var buf: [32]u8 = undefined;
     };
@@ -573,7 +637,9 @@ test "the program's ranks: a top-level class, then a class in the diagram, then 
         \\G :style { &node :shape [hexagon], #A :shape [round] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const shape = s.descriptor(":shape").?;
     const Shape = enum { box, hexagon, round, circle, diamond };
     // In H, the top-level &choice over [base]'s.
@@ -596,7 +662,9 @@ test "a bundle binds its body where it is used; a token bound to a label resolve
         \\G :style { #A :ref, :theme [boxes] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const Shape = enum { box, round, circle };
     const shape = s.descriptor(":shape").?;
     const a = try nodeNamed(s, "#A");
@@ -610,7 +678,9 @@ test "a bundle binds its body where it is used; a token bound to a label resolve
 test "a diagram's own tokens come after its themes" {
     var c = try Compilation.init(testing.allocator, "G :: #A/f\nG :style { :theme [dark], [ink] := [#000000] }", preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     try testing.expectEqual(rgba(0x000000), (try nodeNamed(s, "#A")).color(s.descriptor(":ink").?).?);
     try testing.expectEqual(rgba(0x000000), s.token(@fromBackingInt(@as(u32, 0)), "ink").?.color);
 }
@@ -628,7 +698,9 @@ test "a container's layer reaches its members, beneath their own (statements.md 
         \\Outer :style { &node :fill [#00ff00] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const Shape = enum { point, box, circle };
     const Line = enum { solid, dashed, dotted };
     const shape = s.descriptor(":shape").?;
@@ -668,7 +740,9 @@ test "computed below [base]: labels by name, `:label []` gives the name back, a 
         \\G :style { &node :label "n", #B :label [] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const label = s.descriptor(":label").?;
     try testing.expectEqualStrings("n", (try nodeNamed(s, "#A")).text(label).?);
     try testing.expectEqualStrings("B", (try nodeNamed(s, "#B")).text(label).?);
@@ -687,7 +761,9 @@ test "marks over everything, unless the diagram draws none" {
         \\Q :style { :marks [], &node :stroke [#00ff00] }
     , preview);
     defer c.deinit();
-    const s = (try c.sheet()).?;
+    var s_sheet = (try style.of(testing.allocator, &c)).?;
+    defer s_sheet.deinit();
+    const s = &s_sheet;
     const stroke = s.descriptor(":stroke").?;
     var seen: [2]bool = .{ false, false };
     for (s.ir.nodes.items(.kind), s.ir.nodes.items(.zone), s.elements.nodes, 0..) |k, z, e, i| {
@@ -710,7 +786,9 @@ fn expectDump(source: []const u8, want: []const u8) !void {
     defer c.deinit();
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
-    try (try c.sheet()).?.dump(&out.writer, .{});
+    var sheet = (try style.of(testing.allocator, &c)).?;
+    defer sheet.deinit();
+    try sheet.dump(&out.writer, .{});
     try testing.expectEqualStrings(want, out.written());
 }
 
@@ -740,7 +818,9 @@ test "the dump: what the author asked for, by layer; [base] and the computed lef
 test "the dump with [base]: its entries and every token, never the computed" {
     var c = try Compilation.init(testing.allocator, "G :: f", preview);
     defer c.deinit();
-    const sheet = (try c.sheet()).?;
+    var sheet_sheet = (try style.of(testing.allocator, &c)).?;
+    defer sheet_sheet.deinit();
+    const sheet = &sheet_sheet;
     var out: std.Io.Writer.Allocating = .init(testing.allocator);
     defer out.deinit();
     try sheet.dump(&out.writer, .{ .base = true });

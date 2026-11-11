@@ -24,10 +24,11 @@
 //! rules and elements alike.
 
 const std = @import("std");
-const Ir = @import("../analyse/Ir.zig");
-const Env = @import("../analyse/Env.zig");
-const decoded = @import("../analyse/decoded.zig");
-const layers = @import("../analyse/layers.zig");
+const fab = @import("fab_core");
+const Ir = fab.Ir;
+const Env = fab.Env;
+const decoded = fab.decoded;
+const layers = fab.layers;
 const Sheet = @import("Sheet.zig");
 
 const Descriptor = Sheet.Descriptor;

@@ -1,7 +1,8 @@
 # fab-render
 
-Backends from the styled IR (a fab-core `Sheet`) to bytes. Today: DOT, for
-Graphviz. Pure functions, no I/O. Depends on fab-core.
+Backends from fab-core's analysis to bytes, styled by fab-layer-style (the
+`Sheet`, which each backend asks for). Today: DOT, for Graphviz. Pure
+functions, no I/O. Depends on fab-core and fab-layer-style.
 
 ```
 zig build test

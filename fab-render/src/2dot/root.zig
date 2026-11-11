@@ -51,14 +51,25 @@
 
 const std = @import("std");
 const fab = @import("fab_core");
+const style = @import("fab_layer_style");
 const Note = @import("../shared/Note.zig");
 const Theme = @import("../shared/Theme.zig");
 
-const Sheet = fab.Sheet;
+const Sheet = style.Sheet;
 const Rgba = fab.value.Rgba;
 const Writer = std.Io.Writer;
 
 pub const Error = Writer.Error || error{OutOfMemory};
+
+/// Draws `c`'s program as a DOT digraph: the style layer first, then the
+/// graph (statements.md §26). False, and nothing written, when its IR is
+/// withheld. Whatever DOT can't express is added to `notes`.
+pub fn draw(c: *fab.Compilation, w: *Writer, notes: *Note.List) Error!bool {
+    var sheet = try style.of(notes.gpa, c) orelse return false;
+    defer sheet.deinit();
+    try write(&sheet, w, notes);
+    return true;
+}
 
 /// Writes `sheet` as a DOT digraph. Whatever DOT can't express is added to
 /// `notes`.

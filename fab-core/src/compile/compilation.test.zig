@@ -96,29 +96,6 @@ test "syntax diagnostics come first, and issues find their own in either list" {
     try testing.expectEqualStrings("x", j.span.text(c.source));
 }
 
-test "a diagram's mark: the border of its worst issue, and the unsupported label" {
-    var c = try Compilation.init(testing.allocator,
-        \\G :: f g/+k h
-        \\H :: (f/*, g) h
-        \\J :: f
-        \\K :: f
-        \\review :: a b
-        \\J :prove { :strict }
-    , preview);
-    defer c.deinit();
-    const Mark = Compilation.ZoneMark;
-    // An error on a hole in G, a warning on a node in H.
-    try testing.expectEqual(Mark{ .border = .@"error" }, try c.zoneMark(@fromBackingInt(@intCast(0))));
-    try testing.expectEqual(Mark{ .border = .warning }, try c.zoneMark(@fromBackingInt(@intCast(1))));
-    // Its proof is not applied yet: J is drawn with the unsupported label.
-    try testing.expectEqual(Mark{ .border = .unsupported, .unsupported = true }, try c.zoneMark(@fromBackingInt(@intCast(2))));
-    try testing.expectEqual(Mark{}, try c.zoneMark(@fromBackingInt(@intCast(3))));
-    // The reserved head draws a placeholder, bordered by its error.
-    const ir = (try c.ir()).?;
-    try testing.expect(ir.zones.items(.placeholder)[4]);
-    try testing.expectEqual(Mark{ .border = .@"error" }, try c.zoneMark(@fromBackingInt(@intCast(4))));
-}
-
 test "stages run on demand, and only once" {
     var c = try Compilation.init(testing.allocator, "G :: f g", preview);
     defer c.deinit();
@@ -160,8 +137,7 @@ fn compileEverything(gpa: std.mem.Allocator, source: []const u8) !void {
     defer c.deinit();
     _ = try c.tokens();
     _ = try c.ir();
-    _ = try c.sheet();
-    _ = try c.zoneMark(@fromBackingInt(@as(u32, 0)));
+    _ = try c.marks();
     _ = try c.status();
 }
 
@@ -181,33 +157,6 @@ test "running out of memory at any allocation leaks nothing" {
         \\J :: +(f, g)+ | f/α/g, f/β/g | α/m/β, f/γ
         \\
     ;
-    var fixed: FixedInPlace = .{ .backing = testing.allocator };
+    var fixed: @import("testing.zig").FixedInPlace = .{ .backing = testing.allocator };
     try testing.checkAllAllocationFailures(fixed.allocator(), compileEverything, .{source});
 }
-
-/// An allocator that never resizes in place. The checker counts allocations
-/// only, and whether the testing allocator can grow a list in place depends
-/// on what earlier runs left free, so with in-place growth the count drifts
-/// from run to run. Without it, every growth is a counted allocation.
-pub const FixedInPlace = struct {
-    backing: std.mem.Allocator,
-
-    pub fn allocator(f: *FixedInPlace) std.mem.Allocator {
-        return .{ .ptr = f, .vtable = &.{
-            .alloc = alloc,
-            .resize = std.mem.Allocator.noResize,
-            .remap = std.mem.Allocator.noRemap,
-            .free = free,
-        } };
-    }
-
-    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
-        const f: *FixedInPlace = @ptrCast(@alignCast(ctx));
-        return f.backing.rawAlloc(len, alignment, ra);
-    }
-
-    fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ra: usize) void {
-        const f: *FixedInPlace = @ptrCast(@alignCast(ctx));
-        f.backing.rawFree(memory, alignment, ra);
-    }
-};
