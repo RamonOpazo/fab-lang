@@ -118,39 +118,48 @@ test "names are written without sigils" {
     const doc = try document("G :: #A/f\nG :style { #A :fill [#ff0000] }", strict);
     defer testing.allocator.free(doc);
     try expectContains(doc, "{\"kind\":\"plain\",\"name\":\"A\",");
-    try expectContains(doc, "\"classes\":[\"node\",\"plain\"]");
-    try expectContains(doc, "\"fill\":{\"layer\":\"program\",\"value\":{\"color\":\"#ff0000ff\"}}");
+    try expectContains(doc, "\"adds\":{\"class\":\"plain\"}");
+    try expectContains(doc, "\"program\":{\"fill\":{\"color\":\"#ff0000ff\"}}");
 }
 
-test "the sheet: rules shared, an element's own entries, layers, values by shape" {
+test "the sheet: rules as a tree, an element's own entries, by layer, values by shape" {
     const doc = try document(
         \\G :: #A/f g
         \\G :style { :theme [dark], &edge :size [1.5], #A :fill [#ff000080], #A :hide, f :arrow [?!/dashed/>], f :label $x_1$ }
     , strict);
     defer testing.allocator.free(doc);
-    // The edges' tree: [base]'s `&edge`, `[dark]` over it, then G's class
-    // binding (statements.md §25).
-    try expectContains(doc, "{\"adds\":{\"class\":\"edge\"},\"classes\":[\"edge\"],\"parent\":null,\"style\":{\"label\":{\"layer\":\"base\",\"value\":null},");
-    try expectContains(doc, "{\"adds\":{\"theme\":\"dark\"},\"classes\":[\"edge\"],\"parent\":");
-    try expectContains(doc, "{\"adds\":{\"zone\":0},\"classes\":[\"edge\"],\"parent\":");
-    try expectContains(doc, "\"size\":{\"layer\":\"program\",\"value\":{\"number\":\"1.5\"}}");
-    try expectContains(doc, "\"layer\":\"theme\"");
-    // Each element: its rule, and only its own entries.
-    try expectContains(doc, "\"style\":{\"label\":{\"layer\":\"computed\",\"value\":{\"text\":\"A\"}},\"fill\":{\"layer\":\"program\",\"value\":{\"color\":\"#ff000080\"}},");
-    try expectContains(doc, "\"hide\":{\"layer\":\"program\",\"value\":true}},\"mark\":null}");
-    try expectContains(doc, "\"label\":{\"layer\":\"program\",\"value\":{\"math\":\"x_1\"}}");
-    try expectContains(doc, "\"arrow\":{\"layer\":\"program\",\"value\":[{\"label\":\"?\",\"inverted\":true},{\"label\":\"dashed\",\"inverted\":false},{\"label\":\">\",\"inverted\":false}]}");
+    // The edges' tree: [base]'s `&edge` (a root: no parent), `[dark]` over
+    // it, then G's class binding (statements.md §25). A rule writes no
+    // classes: its class steps are its classes.
+    try expectContains(doc, "{\"adds\":{\"class\":\"edge\"},\"style\":{\"base\":{\"label\":null,");
+    try expectContains(doc, "\"adds\":{\"theme\":\"dark\"},\"style\":{\"base\":{\"ink\":{\"color\":\"#aaaaaaff\"}");
+    try expectContains(doc, "\"adds\":{\"zone\":0},\"style\":{\"program\":{\"size\":{\"number\":\"1.5\"}}}}");
+    try expectContains(doc, "\"theme\":{\"fill\":{\"color\":\"#1e1e1eff\"}}");
+    try testing.expect(std.mem.indexOf(u8, doc, "\"classes\"") == null);
+    // Each element: its rule, and only its own entries, by layer; no mark
+    // when it has none.
+    try expectContains(doc, "{\"rule\":4,\"style\":{\"computed\":{\"label\":{\"text\":\"A\"}},\"program\":{\"fill\":{\"color\":\"#ff000080\"},\"hide\":true}}}");
+    try expectContains(doc, "\"program\":{\"label\":{\"math\":\"x_1\"},\"arrow\":[{\"label\":\"?\",\"inverted\":true},{\"label\":\"dashed\"},{\"label\":\">\"}]}");
+    try testing.expect(std.mem.indexOf(u8, doc, "\"mark\":null") == null);
+    try testing.expect(std.mem.indexOf(u8, doc, "\"inverted\":false") == null);
     // Nil is null; :theme is no element's style.
-    try expectContains(doc, "\"caption\":{\"layer\":\"base\",\"value\":null}");
-    try testing.expect(std.mem.indexOf(u8, doc, "\"theme\":{") == null);
-    // The tokens: [base]'s, and G's after its theme.
+    try expectContains(doc, "\"caption\":null");
+    try testing.expect(std.mem.indexOf(u8, doc, "\"theme\":[") == null);
+    // The tokens: [base]'s, and what G's theme changes, only.
     try expectContains(doc, "\"tokens\":{\"base\":{\"ink\":{\"color\":\"#333333ff\"}");
+    try expectContains(doc, "\"zones\":[{\"ink\":{\"color\":\"#ddddddff\"},\"soft\":{\"color\":\"#aaaaaaff\"}}]");
 }
 
-test "marks are the last layer, and every element's mark is written" {
+test "an unstyled diagram's tokens are [base]'s, written once" {
+    const doc = try document("G :: f", strict);
+    defer testing.allocator.free(doc);
+    try expectContains(doc, "\"zones\":[{}]");
+}
+
+test "marks are the last layer, and a marked element's mark is written" {
     const doc = try document("G :: f g/+k h", preview);
     defer testing.allocator.free(doc);
-    try expectContains(doc, "\"stroke\":{\"layer\":\"mark\",\"value\":{\"color\":\"#d1242fff\"}}},\"mark\":\"error\"}");
+    try expectContains(doc, "\"mark\":{\"stroke\":{\"color\":\"#d1242fff\"}}},\"mark\":\"error\"}");
 }
 
 test "a sheet is indexed as its IR" {

@@ -243,22 +243,18 @@ fn writeIr(c: *Compilation, ir: *const Ir, w: *Writer) Error!void {
     try w.writeAll("]}");
 }
 
+/// The Sheet (statements.md §22.13, §25): each value written once. A rule
+/// is `{parent, adds, style}`, `parent` left out at a root; an element
+/// `{rule, style, mark}`; a style is grouped by layer; a zone's tokens are
+/// those differing from `[base]`'s. What is empty or null is not written.
 fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
     try w.writeAll("{\"rules\":[");
     for (s.rules, 0..) |r, i| {
         if (i > 0) try w.writeByte(',');
-        try w.writeAll("{\"adds\":");
+        try w.writeByte('{');
+        if (r.parent) |p| try w.print("\"parent\":{d},", .{@backingInt(p)});
+        try w.writeAll("\"adds\":");
         try writeStep(r.adds, w);
-        try w.writeAll(",\"classes\":[");
-        var it = r.classes.iterator();
-        var first = true;
-        while (it.next()) |class| : (first = false) {
-            if (!first) try w.writeByte(',');
-            try string(w, @tagName(class));
-        }
-        try w.writeAll("],\"parent\":");
-        try optionalIndex(w, r.parent);
-        try w.writeAll(",\"style\":");
         try writeStyle(s, s.slice(r.entries), w);
         try w.writeByte('}');
     }
@@ -267,20 +263,22 @@ fn writeSheet(s: *const Sheet, w: *Writer) Writer.Error!void {
         try w.print(",\"{s}\":[", .{table});
         for (@field(s.elements, table), 0..) |e, i| {
             if (i > 0) try w.writeByte(',');
-            try w.print("{{\"rule\":{d},\"style\":", .{@backingInt(e.rule)});
+            try w.print("{{\"rule\":{d}", .{@backingInt(e.rule)});
             try writeStyle(s, s.slice(e.own), w);
-            try w.writeAll(",\"mark\":");
-            if (e.mark) |m| try string(w, @tagName(m)) else try w.writeAll("null");
+            if (e.mark) |m| {
+                try w.writeAll(",\"mark\":");
+                try string(w, @tagName(m));
+            }
             try w.writeByte('}');
         }
         try w.writeByte(']');
     }
     try w.writeAll(",\"tokens\":{\"base\":");
-    try writeTokenMap(s.base_tokens, w);
+    try writeTokenMap(s.base_tokens, &.{}, w);
     try w.writeAll(",\"zones\":[");
     for (s.tokens, 0..) |tokens, i| {
         if (i > 0) try w.writeByte(',');
-        try writeTokenMap(tokens, w);
+        try writeTokenMap(tokens, s.base_tokens, w);
     }
     try w.writeAll("]}}");
 }
@@ -309,29 +307,50 @@ fn writeStep(step: Sheet.Step, w: *Writer) Writer.Error!void {
     try w.writeByte('}');
 }
 
+/// `,"style":{"base":{"ink":…},"program":{…}}`, the entries by layer,
+/// each layer in the cascade's order; nothing when there are none.
 fn writeStyle(s: *const Sheet, entries: []const Sheet.Entry, w: *Writer) Writer.Error!void {
-    try w.writeByte('{');
-    for (entries, 0..) |e, i| {
-        if (i > 0) try w.writeByte(',');
-        try string(w, unsigiled(s.descriptors[@backingInt(e.descriptor)]));
-        try w.writeAll(":{\"layer\":");
-        try string(w, @tagName(e.layer));
-        try w.writeAll(",\"value\":");
-        try writeValue(e.value, w);
-        try w.writeByte('}');
+    if (entries.len == 0) return;
+    try w.writeAll(",\"style\":{");
+    var first_layer = true;
+    for (std.enums.values(Sheet.Layer)) |layer| {
+        var first = true;
+        for (entries) |e| {
+            if (e.layer != layer) continue;
+            if (first) {
+                if (!first_layer) try w.writeByte(',');
+                first_layer = false;
+                try string(w, @tagName(layer));
+                try w.writeAll(":{");
+            } else try w.writeByte(',');
+            first = false;
+            try string(w, unsigiled(s.descriptors[@backingInt(e.descriptor)]));
+            try w.writeByte(':');
+            try writeValue(e.value, w);
+        }
+        if (!first) try w.writeByte('}');
     }
     try w.writeByte('}');
 }
 
-fn writeTokenMap(tokens: []const decoded.Token, w: *Writer) Writer.Error!void {
+/// The tokens, those `base` binds to the same value left out.
+fn writeTokenMap(tokens: []const decoded.Token, base: []const decoded.Token, w: *Writer) Writer.Error!void {
     try w.writeByte('{');
-    for (tokens, 0..) |t, i| {
-        if (i > 0) try w.writeByte(',');
+    var first = true;
+    for (tokens) |t| {
+        if (inBase(base, t)) continue;
+        if (!first) try w.writeByte(',');
+        first = false;
         try string(w, t.label);
         try w.writeByte(':');
         try writeValue(t.value, w);
     }
     try w.writeByte('}');
+}
+
+fn inBase(base: []const decoded.Token, t: decoded.Token) bool {
+    for (base) |b| if (std.mem.eql(u8, b.label, t.label)) return std.meta.eql(b.value, t.value);
+    return false;
 }
 
 /// A value, tagged by its shape (statements.md §22.13).
@@ -365,7 +384,8 @@ fn writeValue(v: decoded.Value, w: *Writer) Writer.Error!void {
         .label => |l| {
             try w.writeAll("{\"label\":");
             try string(w, l.name);
-            try w.print(",\"inverted\":{}}}", .{l.inverted});
+            if (l.inverted) try w.writeAll(",\"inverted\":true");
+            try w.writeByte('}');
         },
         .elements => |es| {
             try w.writeByte('[');
