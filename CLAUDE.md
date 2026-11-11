@@ -37,7 +37,7 @@ Each package is a plain Zig project that depends only on the ones above it. A la
 | `spec.md`        | The language. **The truth**: where anything else differs, it wins      |
 | `grammar.ebnf`   | Go-style EBNF, a permissive superset; the analyser rejects the rest. `~` touching, `_` apart |
 | `joining.md`     | Decision note, 1 November: chains, pinches, cycles, undirected edges; §12 sorts, null nodes, kinds on the right, a space reaching one branch (2 November) |
-| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November); §22.10 layers read; §22.11 the cascade: ties, exact numbers, tokens in a diagram's own layer; §22.12 the prelude the only schema, the Sheet of values in rules and elements, renderers declaring what they draw; §22.13 the Sheet in JSON, names without sigils; §22.14 base rules, shared by every diagram; §22.15 a label's three values (10 November); §23 diagrams as nodes, `@` removed, `*` on one side (10 November); §24 kinds as the diagram's own (`G :kind [flow]`), passed down, cases on them (`:>`), flow's vocabulary (10 November); §25 the Sheet as a tree of differences; §26 layers as runtimes: fab-core resolves the language, a layer's package its meaning; the JSON the analysis alone (11 November) |
+| `statements.md`  | Decision note, 23 October, superseded in part; §12 lines and the comma, §13 schemas (1 November), §14 operators between chains (2 November), §15 reserved and unsupported (2 November), how they are drawn and statements with syntax errors, §16 levels (3 November), identity and undirected sides; §17 restrictions and passes, planned; §18 drawing issues, and Graphviz as a convenience; §19 one attribute per entry; §20 the examples, drawn; §21 types and the prelude; §22 three forms, typed records, the style pass, the proof's shape (5 November); §22.7 the header, the command line, `:strict`; §22.8 declared types, twins (6 November); §22.9 record types; records and bundles checked by structure where used (9 November); §22.10 layers read; §22.11 the cascade: ties, exact numbers, tokens in a diagram's own layer; §22.12 the prelude the only schema, the Sheet of values in rules and elements, renderers declaring what they draw; §22.13 the Sheet in JSON, names without sigils; §22.14 base rules, shared by every diagram; §22.15 a label's three values (10 November); §23 diagrams as nodes, `@` removed, `*` on one side (10 November); §24 kinds as the diagram's own (`G :kind [flow]`), passed down, cases on them (`:>`), flow's vocabulary (10 November); §25 the Sheet as a tree of differences; §26 layers as runtimes: fab-core resolves the language, a layer's package its meaning; the JSON the analysis alone (11 November); §27 the route after the style layer: `:proof`, math by RaTeX as an optional process, docs folded into each step |
 | `style.md`       | Style note, 23 October: the full `:style` vocabulary                     |
 | `profile.md`     | Performance note, 10 November: method, measurements, findings (F1–F8), goals (G1–G5; hard and soft targets, none blocking yet) and the bench |
 | `release.md`     | Decision note, 10 November: stable and dev builds, versions in Zig's style (`0.1.0-dev.N+HASH[.dirty][.incomplete]`), one version written once, advancing below and from 1.0.0, Conventional Commits and the changelog |
@@ -82,11 +82,18 @@ The code (written against the 22 October revision) has drifted from the spec (1 
 | T    | Tree-sitter grammar (after L1, before L2) | done    |
 | V    | Versions (`release.md`)                   | done    |
 | R    | Diagrams as nodes, `@` removed, `*` on one side (`statements.md` §23; before 9e) | done |
-| S    | Layers as packages (`statements.md` §26; after 11c3, before 11d) |         |
-| P    | Performance: the bench, F1–F6 (`profile.md`) | waits: stable releases only |
-| 11   | Proof and place shells (before 10)        |         |
-| 10   | Renderer: style, arrows, themes           | waits: the native renderer's plan |
-| 12   | CLI, README, examples, docs               |         |
+| 11   | Kinds and cases (11a–11c3; 11d–11e become ε) | done    |
+| S    | Layers as packages (`statements.md` §26; after 11c3) | done    |
+| α    | fab-layer-place: the place vocabulary and its runtime | next    |
+| β    | fab-render: layout                        |         |
+| γ    | fab-render: SVG                           |         |
+| δ    | Math by RaTeX, an optional process        |         |
+| ε    | fab-layer-proof: the proof shell, flow's findings, `:pass` |         |
+| ζ    | fab-layer-style: the proof's result drawn |         |
+| η    | fab-lsp: refinement                       |         |
+| θ    | Performance: the bench, F1–F6 (`profile.md`) |         |
+
+0.1.0 is the user's call, some time after θ (`statements.md` §27).
 
 Steps 0 and 1 are recorded in `joining.md` and `statements.md` §12–13, and stated in the spec.
 
@@ -267,19 +274,13 @@ Done when every level case passes.
 
 **V. Versions** (`release.md`). The version worked towards, `0.1.0`, written in fab-core's `build.zig.zon`; fab-core's `build.zig` reads it, asks git for the rest (`dev.N`, the commit, `.dirty`) and gives it to the code through build options, with `.incomplete` when a dev build admits unsupported tags, which a stable build refuses (`statements.md` §22.16); fab-core exports `fab.version`, which the other packages read. Shown by `fab --version`, the server's `serverInfo`, the JSON's `"version"` and generated files' comments. The other three `build.zig.zon` hold the same literal, checked in `make test`. The release procedure, the artifact and the changelog (after 0.1.0) wait for the first release.
 
-**P. Performance** (`profile.md`). Waits: performance is not a goal of the work towards 0.1.0, and the bench runs only for a stable release that asks for it. `bench/`, a Zig package over fab-core and fab-render: generated families and a 2,000-line document, in-process medians, exact peak memory through a counting allocator, G1–G3 checked and reported, none blocking; `make bench`. Then the findings, each a measured change: F1 cell references, F2 Graphviz's two scans, F6 `show tokens`, then F3 the cascade's full rules, F4 the union-find's memory, F5 the reference sort. Profiling stays by hand.
-
-**10. Renderer.** fab-render realises the Sheet: arrows, ends, `:bend`, `:side`, theme tokens. fAB's own renderer declares every descriptor and label of `:Style`, checked against the prelude by a test (`statements.md` §22.12); SVG writes a CSS class per rule.
-
-Done (8–10) when the styled examples in the spec draw as described.
-
 ### E. Shells and docs
 
 **S. Layers as packages** (`statements.md` §26). fab-core stops at analysis; each layer with a meaning of its own gets a package over it, its runtime. In increments, each keeping every package green:
 - **S1. fab-layer-style** (done). `fab-core/src/style/` (the cascade, the Sheet, the Styler, `style.test.zig`) and the corpus's `.sheet` rows (its own `conformance.test.zig`) move to `fab-layer-style/`. `Compilation` loses `sheet()`; `marks()` and `Mark` stay in fab-core, `ZoneMark` goes with the style pass; fab-core exports what the layer reads. The JSON loses `"sheet"`: it is the analysis alone. fab-render's backends call the layer (`style.of`); fab-render and fab-cli depend on it; `make test-layer-style`; the layout table and the dependency order follow. Otherwise no change in behaviour: every Sheet dump and drawing the same.
 - **S2. The prelude by version** (done). `fab lsp` writes `prelude-<version>.fab`, the prelude byte for byte; L2b's comment and its shift go.
 
-fab-layer-prove comes with 11d–11e: its findings are annotations (classes, issues) style takes as input, its diagnostics in fab-core's shape. fab-layer-place only if places need resolving.
+fab-layer-proof comes with step ε: its findings are annotations (classes, issues) style takes as input, its diagnostics in fab-core's shape.
 
 **11. Proof and place shells**, before 10, which waits for the native renderer's plan. Kinds (`statements.md` §24): six labels of `:Kind` (`[flow]`, `[state-machine]`, `[category]`, `[schema]`, `[git]`, `[sequence]`), stated as the diagram's own, `G :kind [flow]`, before its layers (`&zone :kind :: :Kind`, outside every record type). A case, `&zone :kind [flow] :> { … }` (a new token, `:>`), holds what a kind adds: `:Proposition :: { … }` its properties, admitted in its diagrams only (*not admitted by the kind*), and `:Style := { … }` its look, a new Sheet layer `kind` between `base` and `theme`. Cases test only `:kind`, add and never take away, and may share a name. Only `[flow]` gets rules, with its vocabulary (§24.5). Class ids take `-` (`&dead-end`). The tests and examples that write `:prove { :kind … }` move to `G :kind`. The prelude declares `:Proof`, `:Proposition` and `:Place`, and `&zone :prove`, `&zone :place`. `:prove` and `:place` are records of type `:Proof` and `:Place`, checked for placement: the zone exists, and each layer appears once. The proof's shape (`statements.md` §22.5): a diagram presents a theory; `:axiom` states, `:lemma` is checked against the axioms and the lemmas before it; both are tables of propositions with optional keys; `( … )` is `:Proposition`, a record type of properties (`:pushout`, `:card`, `:pk`), where equations stand and the comma means *and*. Contents are kept, their meaning unchecked, except the kind and `:pass` (`statements.md` §17): the kind decides what is drawn and which structures become findings, `&refutable` or `&undecidable`, and passes acknowledge them.
 
@@ -292,13 +293,29 @@ In increments, each with its corpus rows:
   - **11c3. The Sheet as a tree** (`statements.md` §25). In increments:
     - **11c3a. Rules as a tree** (done). `share` makes, per used rule, its chain of steps: class steps inside `[base]` (always made), then layer steps (each theme, the kind's first; the top level's classes; each diagram of the chain), a step that changes nothing not made, shared by sequence (a trie of steps). `Rule` gains `adds` (`class`, `kind`, `theme` by name, `zone`, null for the top level) and loses `zone`; `View` walks the parents; Graphviz's notes read every rule of the chain. Dumps and drawings unchanged. Tests: two flows share `[flow]`'s step, Repo's members share Repo's, `[dark]` shared, classes nest.
     - **11c3b. The JSON** (done). Rules `{parent, adds, style}`; styles grouped by layer; tokens only where they differ from `[base]`; no `"inverted": false`, `"mark": null` or empty style. The examples' JSON measured against 11c2's.
-- **11d. Proof and place shells.** `:Proof`, `&zone :prove`, `:Place`, `&zone :place` in the prelude; a descriptor with no class is the record's own; contents kept, unchecked; `unsupported_layer` narrows to what stays unchecked.
-- **11e. Flow's findings and `:pass`.** `&refutable`, `&undecidable` and flow's classes (§24.5), drawn as issues; `:pass` acknowledges them, a note; a pass matching nothing warns.
+- **11d–11e** became step ε.
 
-**12. CLI, README, examples.**
-- `fab show` stages follow the new CST, along with help text and messages.
-- The README covers the new syntax, the `:style` layer and the status.
-- `examples/` grow to one example per section of the spec.
+### F. The route (`statements.md` §27)
+
+Eight steps after the style layer, in order. **Each ends with its documentation and its command line**: what it changes in the README, the examples and `fab`'s flags and help is its last increment. Each starts, as before, with its decision note when it decides something.
+
+**α. fab-layer-place.** The place vocabulary (an open decision until now): `:Place`'s descriptors, `&zone :place :: :Place`, and the layer's runtime, which resolves the author's constraints into placing primitives from fab-core's analysis and the Sheet (sizes come from style). Proposed to start with a grid, as tikz-cd draws (`#A :at [0/0]`), then relative constraints and ranks. `make test-layer-place`; its own corpus.
+
+**β. fab-render: layout.** Positions for what the author didn't place, around what they did: a layered layout for flows, state machines and git; nested diagrams (R6's clusters); cells between their parallel edges. Text measured through an interface: plain text by embedded glyph widths (Zig std only), math by an estimate until δ.
+
+**γ. fab-render: SVG.** fAB's own drawing, from the layout and the Sheet: arrows, ends, `:bend`, `:side`, theme tokens; a CSS class per rule of the chain (`statements.md` §25). fAB's own renderer declares every descriptor and label of `:Style`, checked against the prelude by a test (§22.12). Done when the styled examples in the spec draw as described.
+
+**δ. Math by RaTeX.** An optional process the host starts, as Graphviz is: with it, `$…$` labels typeset as LaTeX would, their boxes given to the layout's measuring interface; without it, drawn as their source text.
+
+**ε. fab-layer-proof.** First `:prove` becomes `:proof` everywhere (§27). Then the proof shell (the old 11d): `:Proof` and `&zone :proof` in the prelude; a descriptor with no class is the record's own; propositions read and checked (ill-formed, not admitted by the kind); axioms trusted, lemmas and equations unsupported until checked. Then flow's findings and `:pass` (the old 11e): `&refutable`, `&undecidable` and flow's classes (§24.5) as annotations; `:pass` acknowledges them, a note; a pass matching nothing warns. `make test-layer-proof`; its own corpus.
+
+**ζ. fab-layer-style: the proof's result.** Findings reach the style layer as extra classes per element (§26), drawn as issues.
+
+**η. fab-lsp: refinement.**
+
+**θ. Performance** (`profile.md`). `bench/`, a Zig package over fab-core and fab-render: generated families and a 2,000-line document, in-process medians, exact peak memory through a counting allocator, G1–G3 checked and reported, none blocking; `make bench`. Then the findings, each a measured change: F1 cell references, F2 Graphviz's two scans, F6 `show tokens`, then F3 the cascade's full rules, F4 the union-find's memory, F5 the reference sort. Profiling stays by hand.
+
+
 
 ### Open decisions
 
@@ -306,7 +323,7 @@ In increments, each with its corpus rows:
 | --------------------------------------------------------------- | ------------------ |
 | The prelude's contents beyond the draft (colours, themes; `[base]`'s sizes proposed in 9b4: `:padding` [0.4] nodes, [1] zones) | step 9 |
 | The header's syntax, boundary and further descriptors; the CLI's force flag (settled: command line < header < local, `-H name[=value]`, `:strict`, `:warnings`, `:broken`; `statements.md` §22.7) | after fab-core |
-| Restrictions and passes: the kind's findings, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step 11 |
+| Restrictions and passes: the kind's findings, `&refutable`, `&undecidable`, `:pass` (`statements.md` §17) | step ε |
 | Column names for emitters: from `:label`, or a schema attribute | when fAB emits SQL |
 | Equations: what `==` and `~=` mean                              | later              |
-| The place vocabulary                                            | later              |
+| The place vocabulary                                            | step α             |

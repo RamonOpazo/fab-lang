@@ -1625,3 +1625,12 @@ Amends §22.12 (the Sheet made in fab-core), §22.13 and §25 (the Sheet in JSON
 
 - How a layer's diagnostics extend fab-core's tags (decided with fab-layer-prove).
 - A binary encoding of the analysis, beside the JSON.
+
+## 27. The route after the style layer, 2026-11-11
+
+Amends the plan (CLAUDE.md): steps 10, 11d–11e, 12 and P give way to eight steps, α to θ: place, layout, SVG, math, the proof, the proof's result in style, the language server, performance. Their decisions that touch the language and its rendering:
+
+- **The proof layer is `:proof`,** a noun, as `:style` and `:place` are: `&zone :proof :: :Proof`, beside `&zone :style :: :Style` and `&zone :place :: :Place`; its package is fab-layer-proof. `:prove` goes, everywhere it is written (the spec, the prelude, the examples, the corpora, tree-sitter's tests), at the start of step ε.
+- **Math is drawn by RaTeX when the user has it, as Graphviz draws DOT:** a program the host starts (fab-cli), never linked into fAB, which stays Zig and its standard library only (§26). With it, `$…$` labels are typeset as LaTeX would, at native speed; without it, they are drawn as their source text. fab-render stays pure: it measures text through an interface (plain text by embedded glyph widths, math by an estimate, or by RaTeX's box when the host gives one), so layout (step β) never waits for math (step δ).
+- **Each step ends with its documentation and its command line:** what the step changes in the README, the examples and `fab`'s flags and help is written as the step's last increment, not in a step of its own.
+- **0.1.0 is the user's call,** some time after θ.
