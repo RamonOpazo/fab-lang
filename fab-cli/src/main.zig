@@ -85,10 +85,12 @@ fn lsp(gpa: std.mem.Allocator, io: Io, arena: std.mem.Allocator, env: *const std
 }
 
 /// The prelude, written where an editor can open it, as a file URI: a
-/// definition in the prelude lands there. `prelude.fab` in
-/// `$XDG_CACHE_HOME/fab`, or `~/.cache/fab`, written at every start, so it
-/// is always this compiler's; its first line names the build. Null when there is nowhere to write it: navigation then
-/// stops at the program.
+/// definition in the prelude lands there. `prelude-<version>.fab` in
+/// `$XDG_CACHE_HOME/fab`, or `~/.cache/fab` (statements.md §26): named by
+/// the build, so it is always this compiler's, and written once; a dirty
+/// build's at every start, since its version doesn't change with its
+/// sources. Null when there is nowhere to write it: navigation then stops at
+/// the program.
 fn preludeUri(io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.Map) ?[]const u8 {
     const xdg = env.get("XDG_CACHE_HOME") orelse "";
     const dir = if (xdg.len > 0 and xdg[0] == '/')
@@ -98,8 +100,10 @@ fn preludeUri(io: Io, arena: std.mem.Allocator, env: *const std.process.Environ.
     else
         return null;
     Io.Dir.cwd().createDirPath(io, dir) catch return null;
-    const path = std.fmt.allocPrint(arena, "{s}/prelude.fab", .{dir}) catch return null;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = fab_lsp.navigation.prelude_file }) catch return null;
+    const path = std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, fab_lsp.navigation.prelude_name }) catch return null;
+    const dirty = std.mem.indexOf(u8, version, ".dirty") != null;
+    const written = if (Io.Dir.cwd().access(io, path, .{})) true else |_| false;
+    if (dirty or !written) Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = fab_lsp.navigation.prelude_file }) catch return null;
     return fileUri(arena, path) catch null;
 }
 

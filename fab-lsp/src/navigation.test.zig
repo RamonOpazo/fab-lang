@@ -4,7 +4,7 @@ const fab = @import("fab_core");
 const navigation = @import("navigation.zig");
 const Message = @import("Message.zig");
 
-const prelude_uri = "file:///cache/fab/prelude.fab";
+const prelude_uri = "file:///cache/fab/" ++ navigation.prelude_name;
 
 fn doc(source: []const u8) navigation.Document {
     return .{ .uri = "file:///x.fab", .source = source, .prelude_uri = prelude_uri };
