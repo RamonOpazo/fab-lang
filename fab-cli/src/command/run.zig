@@ -4,6 +4,7 @@
 const std = @import("std");
 const fab = @import("fab_core");
 const render = @import("fab_render");
+const place = @import("fab_layer_place");
 const Command = @import("Args.zig").Command;
 const report = @import("../output/report.zig");
 
@@ -65,8 +66,10 @@ pub fn run(gpa: std.mem.Allocator, command: Command, source: []const u8, label: 
             return .{ .code = 0 };
         },
         .check => {
-            try report.write(err, c.source, try c.diagnostics(), options);
-            return .{ .code = try exitCode(&c) };
+            var checked = try Checked.of(gpa, &c);
+            defer checked.deinit(gpa);
+            try report.write(err, c.source, checked.all, options);
+            return .{ .code = checked.code };
         },
         .show => switch (command.stage) {
             .tokens => {
@@ -88,8 +91,18 @@ pub fn run(gpa: std.mem.Allocator, command: Command, source: []const u8, label: 
                 } else if (try c.ir()) |ir| {
                     try ir.dump(out);
                 }
-                try report.write(err, c.source, try c.diagnostics(), options);
-                return .{ .code = try exitCode(&c) };
+                var checked = try Checked.of(gpa, &c);
+                defer checked.deinit(gpa);
+                try report.write(err, c.source, checked.all, options);
+                return .{ .code = checked.code };
+            },
+            .place => {
+                if (command.json) return notYet(err, "`show place --json`", "use `show place` for the text form");
+                var checked = try Checked.of(gpa, &c);
+                defer checked.deinit(gpa);
+                if (checked.placed) |*p| try p.dump(out);
+                try report.write(err, c.source, checked.all, options);
+                return .{ .code = checked.code };
             },
         },
         .render => {
@@ -104,8 +117,10 @@ pub fn run(gpa: std.mem.Allocator, command: Command, source: []const u8, label: 
                 },
             }
 
-            try report.write(err, c.source, try c.diagnostics(), options);
-            const code = try exitCode(&c);
+            var checked = try Checked.of(gpa, &c);
+            defer checked.deinit(gpa);
+            try report.write(err, c.source, checked.all, options);
+            const code = checked.code;
             if (command.strict and code != 0) return .{ .code = code };
 
             if (command.format == .json) {
@@ -141,9 +156,35 @@ pub fn outputPath(arena: std.mem.Allocator, command: Command) error{OutOfMemory}
     return try std.fmt.allocPrint(arena, "{s}.{s}", .{ stem, @tagName(command.format) });
 }
 
-fn exitCode(c: *fab.Compilation) error{OutOfMemory}!u8 {
-    return if ((try c.status()).isError()) 1 else 0;
-}
+/// A program checked by the language and its layers (statements.md §29):
+/// fab-core's diagnostics, then the place layer's, which runs only when
+/// there is an IR. The layers' warnings are promoted as the language's are.
+const Checked = struct {
+    all: []fab.Diagnostic,
+    placed: ?place.Place,
+    code: u8,
+
+    fn of(gpa: std.mem.Allocator, c: *fab.Compilation) error{OutOfMemory}!Checked {
+        var placed = try place.of(gpa, c);
+        errdefer if (placed) |*p| p.deinit();
+        var all: std.ArrayList(fab.Diagnostic) = .empty;
+        errdefer all.deinit(gpa);
+        try all.appendSlice(gpa, try c.diagnostics());
+        if (placed) |p| for (p.diagnostics) |d| {
+            var promoted = d;
+            if (d.severity == .warning and c.tolerance.warnings == .promote) promoted.severity = .promoted;
+            try all.append(gpa, promoted);
+        };
+        var status: fab.Compilation.Status = .ok;
+        for (all.items) |d| status = status.join(.of(d.severity));
+        return .{ .all = try all.toOwnedSlice(gpa), .placed = placed, .code = if (status.isError()) 1 else 0 };
+    }
+
+    fn deinit(ch: *Checked, gpa: std.mem.Allocator) void {
+        gpa.free(ch.all);
+        if (ch.placed) |*p| p.deinit();
+    }
+};
 
 fn notYet(err: *Writer, what: []const u8, why: []const u8) Error!Outcome {
     try err.print("fab: {s} is not available yet: {s}\n", .{ what, why });

@@ -1,0 +1,16 @@
+// Commuting diagrams as tikz-cd draws them: a [category] grows across an
+// area (:flow [area], its case's), so a square stands upright, its
+// composite along the diagonal.
+Sq :: +(f h, g k)+  // f;h = g;k, from A to D
+Sq :kind [category]
+
+// The flow names where a lone child goes: [0/0] keeps a chain on edge 0,
+// straight east; [0/1] would make a stair.
+Ch :: f g h
+Ch :kind [category]
+Ch :place { :flow [0/0] }
+
+// A span states how many ranks an edge crosses: n, not m, meets f g h.
+Br :: +(f g h, m n)+
+Br   :kind [category]
+Br.n :span [2]

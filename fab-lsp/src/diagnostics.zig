@@ -1,4 +1,5 @@
-//! fab-core's diagnostics as the protocol's (`textDocument/publishDiagnostics`).
+//! fab-core's diagnostics, then the layers' (statements.md §29: the place
+//! layer's), as the protocol's (`textDocument/publishDiagnostics`).
 //!
 //!   error, promoted   Error (1)
 //!   warning           Warning (2)
@@ -10,6 +11,7 @@
 
 const std = @import("std");
 const fab = @import("fab_core");
+const place = @import("fab_layer_place");
 const Message = @import("Message.zig");
 
 /// The diagnostics of `source`, allocated in `arena`.
@@ -19,9 +21,15 @@ pub fn of(arena: std.mem.Allocator, uri: []const u8, source: []const u8) error{O
     var lines = try fab.Lines.init(arena, source);
     defer lines.deinit(arena);
 
-    const all = try c.diagnostics();
-    const out = try arena.alloc(Message.Diagnostic, all.len);
-    for (all, out) |d, *o| {
+    var all: std.ArrayList(fab.Diagnostic) = .empty;
+    try all.appendSlice(arena, try c.diagnostics());
+    if (try place.of(arena, &c)) |p| {
+        var placed = p;
+        defer placed.deinit();
+        try all.appendSlice(arena, placed.diagnostics);
+    }
+    const out = try arena.alloc(Message.Diagnostic, all.items.len);
+    for (all.items, out) |d, *o| {
         const related: ?[]const Message.Related = if (d.related) |span| try arena.dupe(Message.Related, &.{.{
             .location = .{ .uri = uri, .range = range(&lines, span) },
             .message = "first here",

@@ -220,3 +220,32 @@ test "fmt: a program with syntax errors is reported, not printed" {
     try testing.expect(std.mem.indexOf(u8, broken.err, "x.fab") != null);
     try testing.expect(!broken.produced);
 }
+
+test "check: the place layer's errors are the program's (statements.md §29)" {
+    const bad = try runArgs(&.{ "check", "x.fab", "--no-color" }, "G :: f g\nG :place { :grid [5] }");
+    defer bad.deinit();
+    try testing.expectEqual(@as(u8, 1), bad.code);
+    try testing.expect(std.mem.startsWith(u8, bad.err, "error: `[5]` is not a seed\n --> x.fab:2:18\n"));
+
+    // Rendering under --strict refuses it, as any error.
+    const refused = try runArgs(&.{ "render", "x.fab", "-o", "x.dot", "--strict", "--no-color" }, "G :: f g\nG :place { :grid [5] }");
+    defer refused.deinit();
+    try testing.expectEqual(@as(u8, 1), refused.code);
+    try testing.expect(!refused.produced);
+}
+
+test "show place: each diagram's place, then the diagnostics" {
+    const r = try runArgs(&.{ "show", "place", "x.fab", "--no-color" }, "G :: f g\nG :kind [category]\nG.g :span [2]");
+    defer r.deinit();
+    try testing.expectEqual(@as(u8, 0), r.code);
+    try testing.expectEqualStrings(
+        \\zone G grid [4] metric [1] flow area 0 sides 0° 90° legs 0° 0°
+        \\  edge g span 2
+        \\
+    , r.out);
+    try testing.expectEqualStrings("", r.err);
+
+    const json = try runArgs(&.{ "show", "place", "x.fab", "--json" }, "G :: f");
+    defer json.deinit();
+    try testing.expectEqual(@as(u8, 2), json.code);
+}

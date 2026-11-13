@@ -37,6 +37,10 @@ pub const Tag = enum {
     /// An arrow's tail or head other than `>`: graphviz draws the line only,
     /// for now.
     arrow_ends_not_drawn,
+    /// Graphviz draws one flow for the whole graph, along an axis: a
+    /// diagram whose flow is another, or between axes, is drawn in the
+    /// graph's.
+    flow_not_drawn,
 };
 
 /// One line, for the terminal or a tooltip.
@@ -49,6 +53,7 @@ pub fn write(n: Note, w: *std.Io.Writer) std.Io.Writer.Error!void {
         .descriptor_not_drawn => try w.print("graphviz does not draw `{s}` yet", .{n.name}),
         .label_not_drawn => try w.print("graphviz has no meaning for `[{s}]`; drawn with a fallback", .{n.name}),
         .arrow_ends_not_drawn => try w.writeAll("graphviz draws an arrow's line, and its head as `>`, for now"),
+        .flow_not_drawn => try w.writeAll("graphviz draws one flow for the whole graph, along an axis; this diagram is drawn in the graph's"),
     }
 }
 

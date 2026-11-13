@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .fab_core = .{ .path = "../fab-core" },
+        .fab_layer_place = .{ .path = "../fab-layer-place" },
     },
     .paths = .{
         "build.zig",

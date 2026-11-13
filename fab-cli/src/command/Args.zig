@@ -2,7 +2,7 @@
 //!
 //!   fab render <file> [options]          draw the diagram
 //!   fab check <file> [options]           diagnostics only
-//!   fab show tokens|cst|ir <file> [options]
+//!   fab show tokens|cst|ir|place <file> [options]
 //!   fab fmt <file> [-w | --check]        the program in its canonical layout
 //!   fab lsp                              the language server
 //!
@@ -47,7 +47,8 @@ pub const Command = struct {
 
     pub const Action = enum { render, check, show, fmt };
     pub const Fmt = enum { print, write, check };
-    pub const Stage = enum { tokens, cst, ir };
+    /// The stages of compilation, and the layers' results (`place`).
+    pub const Stage = enum { tokens, cst, ir, place };
     pub const Verbosity = enum { quiet, brief, full };
 
     pub const Format = enum {
@@ -155,9 +156,9 @@ pub fn parse(args: []const []const u8) Parsed {
         c.action = .check;
     } else if (std.mem.eql(u8, first, "show")) {
         c.action = .show;
-        if (args.len < 2) return usage("`show` needs a stage: tokens, cst or ir", null);
+        if (args.len < 2) return usage("`show` needs a stage: tokens, cst, ir or place", null);
         c.stage = std.meta.stringToEnum(Command.Stage, args[1]) orelse
-            return usage("unknown stage; expected tokens, cst or ir", args[1]);
+            return usage("unknown stage; expected tokens, cst, ir or place", args[1]);
         i = 2;
     } else if (std.mem.eql(u8, first, "fmt")) {
         c.action = .fmt;
@@ -306,6 +307,9 @@ pub const help =
     \\  fab render <file> [options]             draw the diagram
     \\  fab check <file> [options]              report problems only
     \\  fab show tokens|cst|ir <file> [options] show a stage of compilation
+    \\  fab show place <file> [options]         show where things go: each
+    \\                                          diagram's grid, metric and
+    \\                                          flow, each edge's span
     \\  fab fmt <file> [options]                print the program in its
     \\                                          canonical layout
     \\  fab lsp                                 the language server, over

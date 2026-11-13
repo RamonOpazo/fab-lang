@@ -141,6 +141,7 @@ test "every other mistake is reported" {
     try expectUsage(&.{ "render", "x.fab", "--verbosity", "loud" }, "unknown verbosity");
     try expectUsage(&.{"show"}, "needs a stage");
     try expectUsage(&.{ "show", "graph", "x.fab" }, "unknown stage");
+    try testing.expectEqual(Command.Stage.place, (try command(&.{ "show", "place", "x.fab" })).stage);
     try expectUsage(&.{ "check", "x.fab", "-o", "y.svg" }, "`render` only");
     try expectUsage(&.{ "check", "x.fab", "-e", "graphviz" }, "`render` only");
     try expectUsage(&.{ "show", "ir", "x.fab", "--preview" }, "`render` only");

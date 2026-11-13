@@ -8,10 +8,16 @@ fAB is a language for diagrams. A program describes a graph by its edges;
 nodes are where edge ends meet. One line draws a natural transformation:
 
 ```
-Nat :: f, +f/g/f+, [f α g]
+Nat :: +(f, g)+ | f/α/g
 ```
 
-`fab` compiles a program to a graph IR and draws it.
+`fab` compiles a program to a graph IR and draws it. Layers say how: `:style`
+how things look, `:place` where they go.
+
+```
+Sq :: +(f h, g k)+
+Sq :place { :flow [area] }  // drawn upright, as tikz-cd draws a square
+```
 
 ## The name
 
@@ -22,11 +28,14 @@ diagram in fAB is built by gluing such arrows together.
 
 ## Packages
 
-| Package                              | Role                                                    |
-| ------------------------------------ | ------------------------------------------------------- |
-| [`fab-core`](fab-core/README.md)     | Lexer, parser, analyser, IR, styling, diagnostics, JSON |
-| [`fab-render`](fab-render/README.md) | Pure backends from the styled IR to bytes (DOT for now) |
-| [`fab-cli`](fab-cli/README.md)       | The `fab` command: the only package that does I/O       |
+| Package                                        | Role                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| [`fab-core`](fab-core/README.md)               | Lexer, parser, analyser, IR, diagnostics, JSON: the language             |
+| [`fab-layer-style`](fab-layer-style/README.md) | The style layer: every element's look, resolved by the cascade           |
+| [`fab-layer-place`](fab-layer-place/README.md) | The place layer: each diagram's grid, metric and flow, each edge's span  |
+| [`fab-render`](fab-render/README.md)           | Pure backends from the analysis and its layers to bytes (DOT for now)    |
+| [`fab-lsp`](fab-lsp/README.md)                 | The language server                                                      |
+| [`fab-cli`](fab-cli/README.md)                 | The `fab` command: the only package that does I/O                        |
 
 Each depends only on the ones above it. Each is a plain Zig project and
 builds on its own.
@@ -56,6 +65,7 @@ fab render example.fab -f dot -o -           # DOT on standard output
 fab render example.fab -f json               # the compilation, as JSON
 fab check example.fab                        # diagnostics only
 fab show ir example.fab                      # a stage of compilation
+fab show place example.fab                   # where things go: grid, flow, spans
 fab check example.fab --watch                # again on every save
 ```
 
@@ -65,12 +75,15 @@ run. `--strict` turns warnings into errors and writes nothing on failure.
 
 ## Status
 
-Working: the language core, diagnostics, JSON output, and drawing through
-Graphviz. Cells (edges between edges) are not drawn by Graphviz; `fab` says
-so with a note.
+Working: the language core, diagnostics, JSON output, the style layer, the
+place layer's vocabulary and checks, the language server, and drawing
+through Graphviz. Graphviz reads only the flow's direction, one for the
+whole graph, and draws no cells (edges between edges); `fab` says so with a
+note.
 
-Planned: the `:format` layer, the native SVG engine, TikZ through LaTeX,
-`--preview`, `--zone`, and a WebAssembly build.
+Planned: fAB's own layout (the place layer's solver), TikZ through LaTeX,
+the native SVG engine, the proof layer, `--preview`, `--zone`, and a
+WebAssembly build.
 
 ## License
 

@@ -2,7 +2,8 @@
 
 fAB's language server, as a library: messages in, messages out, no I/O.
 `fab lsp` (fab-cli) runs it over standard input and output. Depends on
-fab-core and on Zig's standard library only.
+fab-core and the layers whose diagnostics it publishes (fab-layer-place),
+and on Zig's standard library only.
 
 Today (plan steps L1–L2): diagnostics on open and change (whole-document
 sync), semantic tokens by sort, go to definition, references, document

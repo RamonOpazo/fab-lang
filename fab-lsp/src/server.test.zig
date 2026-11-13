@@ -112,6 +112,26 @@ test "opening a document publishes its diagnostics" {
     try std.testing.expectEqual(0, field(closed[0], &.{ "params", "diagnostics" }).?.array.items.len);
 }
 
+test "the place layer's diagnostics are published with the language's" {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var s: Session = .init();
+    defer s.deinit();
+
+    try s.send(initialize);
+    _ = try s.received(arena.allocator());
+    try s.send(
+        \\{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///a.fab","languageId":"fab","version":1,"text":"G :: f/g\nG :place { :grid [5] }"}}}
+    );
+    const got = try s.received(arena.allocator());
+    const ds = field(got[0], &.{ "params", "diagnostics" }).?.array.items;
+    try std.testing.expectEqual(1, ds.len);
+    try std.testing.expectEqualStrings("seed_not_a_tiling", field(ds[0], &.{"code"}).?.string);
+    try std.testing.expectEqual(1, field(ds[0], &.{"severity"}).?.integer);
+    try std.testing.expectEqual(1, field(ds[0], &.{ "range", "start", "line" }).?.integer);
+    try std.testing.expectEqual(17, field(ds[0], &.{ "range", "start", "character" }).?.integer);
+}
+
 test "semantic tokens of an open document" {
     var arena: std.heap.ArenaAllocator = .init(gpa);
     defer arena.deinit();

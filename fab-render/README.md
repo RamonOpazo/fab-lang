@@ -1,8 +1,9 @@
 # fab-render
 
 Backends from fab-core's analysis to bytes, styled by fab-layer-style (the
-`Sheet`, which each backend asks for). Today: DOT, for Graphviz. Pure
-functions, no I/O. Depends on fab-core and fab-layer-style.
+`Sheet`, which each backend asks for) and placed by fab-layer-place (the
+`Place`; Graphviz reads its flow). Today: DOT, for Graphviz. Pure functions,
+no I/O. Depends on fab-core and the layers.
 
 ```
 zig build test

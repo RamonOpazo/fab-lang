@@ -1,7 +1,8 @@
 # fab-cli
 
 The `fab` command. The only package that does I/O: it reads files, writes
-results and starts Graphviz. Depends on fab-core and fab-render.
+results and starts Graphviz. Depends on fab-core, fab-layer-place (whose
+diagnostics `check` reports, and `show place`), fab-render and fab-lsp.
 
 ```
 zig build test

@@ -30,7 +30,7 @@ fn render(sheet: *const style.Sheet) !Output {
     defer out.deinit();
     var notes: Note.List = .init(testing.allocator);
     errdefer notes.deinit();
-    try to_dot.write(sheet, &out.writer, &notes);
+    try to_dot.write(sheet, null, &out.writer, &notes);
     return .{ .dot = try out.toOwnedSlice(), .notes = notes };
 }
 
@@ -868,7 +868,7 @@ test "out of memory is reported, never a crash or a leak" {
             var notes: Note.List = .init(gpa);
             defer notes.deinit();
             // An allocating writer reports its own failure as WriteFailed.
-            to_dot.write(sheet, &out.writer, &notes) catch |err| return switch (err) {
+            to_dot.write(sheet, null, &out.writer, &notes) catch |err| return switch (err) {
                 error.WriteFailed => error.OutOfMemory,
                 else => err,
             };
@@ -928,4 +928,42 @@ test ":hide, a bold face, and a themed diagram's own colours" {
     try testing.expect(std.mem.indexOf(u8, o.dot, "n0 [label=\"A\", shape=circle, width=0.35, height=0.35, fixedsize=true, fontcolor=\"#dddddd\", color=\"#dddddd\", style=\"invis\"]") != null);
     try testing.expect(std.mem.indexOf(u8, o.dot, "fontname=\"Helvetica-Bold\"") != null);
     try testing.expect(std.mem.indexOf(u8, o.dot, "fillcolor=\"#1e1e1e\"") != null);
+}
+
+test "the flow is the graph's direction, the first top-level diagram's (statements.md §29)" {
+    const cases = [_]struct { source: []const u8, rankdir: ?[]const u8 }{
+        .{ .source = "G :: f g", .rankdir = null },
+        .{ .source = "G :: f g\nG :place { :flow [E] }", .rankdir = "LR" },
+        .{ .source = "G :: f g\nG :place { :flow [N] }", .rankdir = "BT" },
+        .{ .source = "G :: f g\nG :place { :flow [W] }", .rankdir = "RL" },
+        .{ .source = "G :: f g\nG :place { :flow [edge] }", .rankdir = "LR" },
+        .{ .source = "G :: f g\nG :kind [category]", .rankdir = null },
+    };
+    for (cases) |case| {
+        var c = try fab.Compilation.init(testing.allocator, case.source, preview);
+        defer c.deinit();
+        var o = try renderOf(&c);
+        defer o.deinit();
+        const graph_line = std.mem.sliceTo(o.dot[prologue.len..], '\n');
+        if (case.rankdir) |r| {
+            const want = try std.fmt.allocPrint(testing.allocator, ", rankdir={s}]", .{r});
+            defer testing.allocator.free(want);
+            try testing.expect(std.mem.endsWith(u8, graph_line, want));
+        } else try testing.expect(std.mem.indexOf(u8, graph_line, "rankdir") == null);
+        for (o.notes.items.items) |n| try testing.expect(n.tag != .flow_not_drawn);
+    }
+}
+
+test "a diagram whose flow DOT can't draw is noted" {
+    var c = try fab.Compilation.init(testing.allocator, "G :: f\nH :: g\nG :place { :flow [E] }\nH :place { :flow [S/E] }", preview);
+    defer c.deinit();
+    var o = try renderOf(&c);
+    defer o.deinit();
+    try testing.expect(std.mem.indexOf(u8, o.dot, "rankdir=LR") != null);
+    var noted: usize = 0;
+    for (o.notes.items.items) |n| if (n.tag == .flow_not_drawn) {
+        noted += 1;
+        try testing.expectEqual(@as(u32, 1), @backingInt(n.subject.?.zone));
+    };
+    try testing.expectEqual(@as(usize, 1), noted);
 }

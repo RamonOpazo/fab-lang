@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const fab_core = b.dependency("fab_core", .{ .target = target, .optimize = optimize }).module("fab_core");
     const fab_render = b.dependency("fab_render", .{ .target = target, .optimize = optimize }).module("fab_render");
     const fab_lsp = b.dependency("fab_lsp", .{ .target = target, .optimize = optimize }).module("fab_lsp");
+    const fab_layer_place = b.dependency("fab_layer_place", .{ .target = target, .optimize = optimize }).module("fab_layer_place");
 
     // The pure part: command line, running, reporting. No I/O.
     const fab_cli = b.createModule(.{
@@ -18,6 +19,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "fab_core", .module = fab_core },
             .{ .name = "fab_render", .module = fab_render },
+            .{ .name = "fab_layer_place", .module = fab_layer_place },
         },
     });
 

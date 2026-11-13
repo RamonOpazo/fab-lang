@@ -41,6 +41,12 @@
 //! It reads the descriptors it draws (`drawn`), each element's once, into a
 //! `Look`, the labels as its own enums; what else the author binds, a label
 //! it has no meaning for, an arrow's ends, it notes (statements.md §22.12).
+//! The flow is the place layer's (statements.md §29), read as a convenience
+//! until fAB's own layout: `rankdir` is the first top-level diagram's flow,
+//! `[S]` TB (not written), `[E]` LR, `[N]` BT, `[W]` RL, an area TB. DOT has
+//! one per graph, so a diagram whose flow differs, or lies between axes, is
+//! noted.
+//!
 //! What DOT needs and the Sheet doesn't say, such as fonts, sizes and
 //! spacing, is decided here once, in the header:
 //!   - One sans-serif font; edge labels smaller. The header's colours are
@@ -52,6 +58,7 @@
 const std = @import("std");
 const fab = @import("fab_core");
 const style = @import("fab_layer_style");
+const place = @import("fab_layer_place");
 const Note = @import("../shared/Note.zig");
 const Theme = @import("../shared/Theme.zig");
 
@@ -61,19 +68,21 @@ const Writer = std.Io.Writer;
 
 pub const Error = Writer.Error || error{OutOfMemory};
 
-/// Draws `c`'s program as a DOT digraph: the style layer first, then the
-/// graph (statements.md §26). False, and nothing written, when its IR is
-/// withheld. Whatever DOT can't express is added to `notes`.
+/// Draws `c`'s program as a DOT digraph: the layers first, style and place,
+/// then the graph (statements.md §26). False, and nothing written, when its
+/// IR is withheld. Whatever DOT can't express is added to `notes`.
 pub fn draw(c: *fab.Compilation, w: *Writer, notes: *Note.List) Error!bool {
     var sheet = try style.of(notes.gpa, c) orelse return false;
     defer sheet.deinit();
-    try write(&sheet, w, notes);
+    var placed = try place.of(notes.gpa, c) orelse return false;
+    defer placed.deinit();
+    try write(&sheet, &placed, w, notes);
     return true;
 }
 
-/// Writes `sheet` as a DOT digraph. Whatever DOT can't express is added to
-/// `notes`.
-pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
+/// Writes `sheet` as a DOT digraph, its flow from `placed` (top to bottom
+/// without it). Whatever DOT can't express is added to `notes`.
+pub fn write(sheet: *const Sheet, placed: ?*const place.Place, w: *Writer, notes: *Note.List) Error!void {
     const ir = sheet.ir;
     const gpa = notes.gpa;
     const node_zone = ir.nodes.items(.zone);
@@ -95,7 +104,7 @@ pub fn write(sheet: *const Sheet, w: *Writer, notes: *Note.List) Error!void {
 
     // What made it (release.md §2).
     try w.print("// fab {s}\ndigraph {{\n", .{fab.version});
-    try writeHeader(reader.defaults, w);
+    try writeHeader(reader.defaults, if (placed) |p| try rankdir(p, notes) else .TB, w);
 
     var layout: Layout = try .init(gpa, ir, zones);
     defer layout.deinit(gpa);
@@ -456,8 +465,44 @@ fn tokenColor(sheet: *const Sheet, zone: fab.Ir.ZoneIndex, name: []const u8) ?Rg
 // Defaults and sizes
 
 /// Graph-wide defaults, so that each node and edge lists only what differs.
-fn writeHeader(d: Defaults, w: *Writer) Writer.Error!void {
-    try w.print("  graph [compound=true, fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", nodesep=0.45, ranksep=0.45, pad=0.2]\n", .{ Theme.font, hex(d.ink) });
+const Rankdir = enum { TB, LR, BT, RL };
+
+/// The graph's direction: the first top-level diagram's flow. Each diagram
+/// drawn otherwise than its flow says is noted.
+fn rankdir(p: *const place.Place, notes: *Note.List) error{OutOfMemory}!Rankdir {
+    const ir = p.ir;
+    var graph: ?Rankdir = null;
+    for (ir.zones.items(.container), ir.zones.items(.placeholder), p.zones) |container, placeholder, zone| {
+        if (container == null and !placeholder) graph = axis(zone) orelse .TB;
+        if (graph != null) break;
+    }
+    const chosen = graph orelse .TB;
+    for (ir.zones.items(.placeholder), p.zones, 0..) |placeholder, zone, z| {
+        if (placeholder or axis(zone) == chosen) continue;
+        try notes.add(.{ .tag = .flow_not_drawn, .subject = .{ .zone = @fromBackingInt(@as(u32, @intCast(z))) } });
+    }
+    return chosen;
+}
+
+/// A flow along an axis as DOT's direction; an area grows down. Null between
+/// axes.
+fn axis(zone: place.Place.Zone) ?Rankdir {
+    return switch (zone.flow) {
+        .area => .TB,
+        .along => |d| switch (d.degrees(zone.seed)) {
+            0 => .LR,
+            90 => .TB,
+            180 => .RL,
+            270 => .BT,
+            else => null,
+        },
+    };
+}
+
+fn writeHeader(d: Defaults, direction: Rankdir, w: *Writer) Writer.Error!void {
+    try w.print("  graph [compound=true, fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", nodesep=0.45, ranksep=0.45, pad=0.2", .{ Theme.font, hex(d.ink) });
+    if (direction != .TB) try w.print(", rankdir={t}", .{direction});
+    try w.writeAll("]\n");
     try w.print("  node [fontname=\"{s}\", fontsize=11, fontcolor=\"{f}\", color=\"{f}\"]\n", .{ Theme.font, hex(d.ink), hex(d.ink) });
     try w.print("  edge [fontname=\"{s}\", fontsize=9, fontcolor=\"{f}\", color=\"{f}\", arrowsize=0.6]\n", .{ Theme.font, hex(d.soft), hex(d.ink) });
 }
