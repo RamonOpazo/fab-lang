@@ -1628,9 +1628,34 @@ Amends §22.12 (the Sheet made in fab-core), §22.13 and §25 (the Sheet in JSON
 
 ## 27. The route after the style layer, 2026-11-11
 
-Amends the plan (CLAUDE.md): steps 10, 11d–11e, 12 and P give way to eight steps, α to θ: place, layout, SVG, math, the proof, the proof's result in style, the language server, performance. Their decisions that touch the language and its rendering:
+Amends the plan (CLAUDE.md): steps 10, 11d–11e, 12 and P give way to ten steps, α to κ: place's vocabulary, place's solver, embedding and routing, TikZ, SVG, math, the proof, the proof's result in style, the language server, performance. Their decisions that touch the language and its rendering:
 
-- **The proof layer is `:proof`,** a noun, as `:style` and `:place` are: `&zone :proof :: :Proof`, beside `&zone :style :: :Style` and `&zone :place :: :Place`; its package is fab-layer-proof. `:prove` goes, everywhere it is written (the spec, the prelude, the examples, the corpora, tree-sitter's tests), at the start of step ε.
-- **Math is drawn by RaTeX when the user has it, as Graphviz draws DOT:** a program the host starts (fab-cli), never linked into fAB, which stays Zig and its standard library only (§26). With it, `$…$` labels are typeset as LaTeX would, at native speed; without it, they are drawn as their source text. fab-render stays pure: it measures text through an interface (plain text by embedded glyph widths, math by an estimate, or by RaTeX's box when the host gives one), so layout (step β) never waits for math (step δ).
+- **The proof layer is `:proof`,** a noun, as `:style` and `:place` are: `&zone :proof :: :Proof`, beside `&zone :style :: :Style` and `&zone :place :: :Place`; its package is fab-layer-proof. `:prove` goes, everywhere it is written (the spec, the prelude, the examples, the corpora, tree-sitter's tests), at the start of step η.
+- **Math is drawn by RaTeX when the user has it, as Graphviz draws DOT:** a program the host starts (fab-cli), never linked into fAB, which stays Zig and its standard library only (§26). With it, `$…$` labels are typeset as LaTeX would, at native speed; without it, they are drawn as their source text. fab-render stays pure: it measures text through an interface (plain text by embedded glyph widths, math by an estimate, or by RaTeX's box when the host gives one), so the embedding (step γ) never waits for math (step ζ).
 - **Each step ends with its documentation and its command line:** what the step changes in the README, the examples and `fab`'s flags and help is written as the step's last increment, not in a step of its own.
-- **0.1.0 is the user's call,** some time after θ.
+- **Place is solved in its layer, in two steps** (amended the same day, from eight steps to ten): α its vocabulary, β its solver. The solve is on a computed grid, where adjacent anchors are one step apart whatever their distance on the page, so it needs no sizes: fab-layer-place works from fab-core's analysis alone, and renderers only embed its anchors (`:metric`, content sizes) and draw (`layout.md`).
+- **TikZ before SVG:** LaTeX sizes the matrix and typesets the math, so the first native drawing waits for neither the glyph metrics nor RaTeX; RaTeX follows SVG, which needs it.
+- **0.1.0 is the user's call,** some time after κ.
+
+## 28. `!` is a reflection, 2026-11-13
+
+Amends §22.8 and the spec's "`!` inverts what it follows". Decided while designing `:place` (`layout.md` §3.3), whose directions, seeds, spans and metric steps all take a `!`.
+
+**A twin is the value's reflection in its type's mirror.** §22.8 said what a twin is formally (a type with twins is `T × 2`, `!` swaps the halves, twice is the value itself) and left each meaning to Zig, per type. That stays; what it adds is the one idea every meaning is an instance of. Each type with twins has a mirror, a point or an axis, and the twin is the value's image in it:
+
+| Type | Mirror | Twin |
+| --- | --- | --- |
+| an angle, `[30!]` | the edge's line | the inner side |
+| a hook, `[?!]` | the edge's line | the other side |
+| a flag, `:hide!` | on and off | off |
+| a line, `[/solid!/>]` | holds and does not | struck, "does not" |
+| a colour, `[#ff0000!]` | the centre of the RGB cube | the complement, `[#00ffff]`: each channel c becomes 255 − c, alpha kept |
+| a span, `[2!]` | the rank it starts at | against the flow |
+| a metric step, `[3!]` | the step | the sequence read back from there |
+| a seed, `[4!]` | its vertical axis | drawn counterclockwise |
+| a direction, `[1!]` | the seed's vertical axis | direction 1 of the mirrored seed |
+
+- **Only in a bracket, and after a flag.** The `!` of a node kind in a declaration (`f/!`, a parallel) is another thing, as before.
+- **A direction's mirror is the seed's, so `[k!]` is direction k of `[n!]`.** A half turn was considered and rejected: on `[4!]` direction 1 is south, while a half-turned `[1!]` would be north, so the seed's `!` and a direction's would mean two things. Under the mirror, a direction on the axis is its own twin (`[1!]` is `[1]` on `[4]`, `[N!]` is `[N]`); reversing a direction is another direction, never `!`.
+- **Colours take twins where a type says so,** as every type does: `:Color!` in a descriptor's signature admits `[#ff0000!]`, and a named colour's twin (`[ink!]`) is the complement of what the token resolves to in the diagram, computed after tokens. Which descriptors admit it is the prelude's choice; none does yet.
+- **"Specular" and "opposite" were weighed** as the one word. A mirror image fits angles, hooks, seeds and directions but strains for a struck line; an opposite fits lines and flags but is a half turn for a direction, the reading rejected above. A reflection covers both: in one dimension (a flag, a span, a line's truth) it is a reversal, in two it is a mirror.

@@ -522,8 +522,9 @@ The value's type must be the one the attribute expects: `:ink` takes a colour, `
 | a hook or harpoon | its side: inner instead of outer    | `[/solid/^!]`   |
 | an angle          | its side: inward instead of outward | `:bend [30!]`   |
 | a flag            | it: off instead of on               | `f :hide!`      |
+| a colour          | its complement, alpha kept          | `[#ff0000!]` is `[#00ffff]` |
 
-These are one idea: **`!` names a value's twin**, its other side, and the unmarked spelling is the first. Only a type with twins takes it, and the type says so: `T!` is `T` with its twins (`:Angle :: :Number!`, `:Hook!`, `:Line!`); `:Flag` has them by nature. `T` fits `T!`, never the reverse: `:size [2!]` is not invertible. So there are **no negative numbers**: every number starts with a digit. Outside brackets `!` follows only a flag; in a term it is a node kind, and attributes never appear in terms.
+These are one idea: **`!` names a value's twin**, its reflection in its type's mirror (a point or an axis: an angle's and a hook's is the edge's line, a colour's the centre of the RGB cube), and the unmarked spelling is the first. `:place` adds directions, spans, seeds and metric steps (`layout.md` §3.3). Only a type with twins takes it, and the type says so: `T!` is `T` with its twins (`:Angle :: :Number!`, `:Hook!`, `:Line!`); `:Flag` has them by nature. `T` fits `T!`, never the reverse: `:size [2!]` is not invertible. So there are **no negative numbers**: every number starts with a digit. Outside brackets `!` follows only a flag; in a term it is a node kind, and attributes never appear in terms.
 
 ### Types
 
