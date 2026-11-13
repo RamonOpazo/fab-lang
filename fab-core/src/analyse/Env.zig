@@ -48,6 +48,9 @@ records: std.ArrayList(decoded.Record) = .empty,
 /// Each kind's theme, `:Style := { … }` in its case (statements.md §24.3),
 /// by the kind's name: `flow`.
 kind_themes: std.StringHashMapUnmanaged(KindTheme) = .empty,
+/// Each kind's place, `:Place := { … }` in its case, by the kind's name:
+/// what fab-layer-place starts a diagram of the kind from (`layout.md`).
+kind_places: std.StringHashMapUnmanaged(KindTheme) = .empty,
 
 pub const KindTheme = struct { record: decoded.RecordIndex, token: TokenIndex, prelude: bool = false };
 
@@ -195,6 +198,7 @@ pub fn deinit(env: *Env, gpa: std.mem.Allocator) void {
     env.functions.deinit(gpa);
     env.cased.deinit(gpa);
     env.kind_themes.deinit(gpa);
+    env.kind_places.deinit(gpa);
     env.arena.deinit();
     env.* = undefined;
 }
@@ -216,6 +220,8 @@ pub fn adopt(env: *Env) void {
     for (env.cased.items) |*f| f.prelude = true;
     var themes = env.kind_themes.valueIterator();
     while (themes.next()) |t| t.prelude = true;
+    var places = env.kind_places.valueIterator();
+    while (places.next()) |t| t.prelude = true;
 }
 
 /// The descriptor `descriptor_name` in a diagram of `kind` (null: no kind, or none

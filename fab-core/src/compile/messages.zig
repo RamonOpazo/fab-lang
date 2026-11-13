@@ -650,13 +650,13 @@ pub fn analysis(tag: Analyser.Error.Tag) Text {
             .hint = "Attach it between parallel cells: `+(f, g)+ | f/α/g`.",
         },
         .unsupported_layer => .{
-            .message = "Proofs and places are not supported yet",
-            .explanation = "The program is valid, but this compiler only checks the shape of `:prove` and `:place` so far. Their contents are not applied; `:style` is.",
+            .message = "Proofs are not supported yet",
+            .explanation = "The program is valid, but this compiler only checks the shape of `:prove` so far. Its contents are not applied; `:style` and `:place` are.",
             .hint = "Nothing to fix in the program.",
         },
         .unsupported_case => .{
-            .message = "A kind's proof or places are not applied yet",
-            .explanation = "The program is valid, but of the records a case binds for its kind's diagrams this compiler applies only the theme, `:Style := { … }`, so far: `:Proof` and `:Place` records wait for their layers.",
+            .message = "A kind's proof is not applied yet",
+            .explanation = "The program is valid, but of the records a case binds for its kind's diagrams this compiler applies the theme, `:Style := { … }`, and the place, `:Place := { … }`, so far: a `:Proof` record waits for its layer.",
             .hint = "Nothing to fix in the program.",
         },
     };

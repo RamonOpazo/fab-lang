@@ -9,7 +9,7 @@
 //! Each case names the plan step (CLAUDE.md) that makes it pass, and within
 //! a step its part: the analyser's rule in step 5, the increment in steps 7
 //! and 8 (1 for 7a or 8a, 2 for 7b or 8b, and so on), and in step 9 its
-//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b, 3 for 11c1, 4 for 11c2). `done` is the last one finished; later cases
+//! letter and sub-increment (10 for 9a, 20 for 9b0, 22 for 9b2, 30 for 9c, 52 for 9e2), and in step 11 its increment (1 for 11a, 2 for 11b, 3 for 11c1, 4 for 11c2). The route's steps are numbered from 20 (α 20, β 21, …), each with its increment (3 for α3). `done` is the last one finished; later cases
 //! are skipped. Finishing a step or a rule bumps `done`, and its cases must
 //! then pass. Each adds its new diagnostic codes together with their rows.
 //!
@@ -22,7 +22,10 @@ const Compilation = @import("Compilation.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
 /// The last plan step, and its rule or increment, finished.
-const done: Progress = .{ .step = 11, .rule = 4 };
+const done: Progress = .{ .step = 20, .rule = 3 };
+
+/// The route's first step (CLAUDE.md §F), fab-layer-place's vocabulary.
+const alpha = 20;
 
 const Progress = struct {
     step: u8,
@@ -1949,4 +1952,35 @@ test "Kinds: a kind's descriptor waits for the kind in effect (statements.md §2
     try check(.{ .step = 11, .rule = 4, .source = knob ++ "R :kind [schema]" });
     try check(.{ .step = 11, .rule = 4, .source = knob ++ "R :kind [git]", .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
     try check(.{ .step = 11, .rule = 4, .source = knob, .codes = &.{.{ .analysis = .not_admitted_by_kind }} });
+}
+
+// ---------------------------------------------------------------------------
+// The place layer, read (step α3): its descriptors in their record type,
+// `:Place`, inside `G :place { … }` or at the top level; their types and
+// classes are the language's, what their values mean the layer's.
+
+test "Places: the layer and its descriptors (spec, Place layer)" {
+    const g = "G :: +(f h, g k)+\n";
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :grid [4], :metric [1/2/3!], :flow [area] }" });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :flow [0//0/], f :span [2!], &edge :collapse }" });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :flow [S/E]\nG.f :span [2]\nG.(f, g) :collapse" });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :flow [edge] }\nG :style { :fill [white] }" });
+}
+
+test "Places: what the language rejects (spec, Errors, Places)" {
+    const g = "G :: #A/f g\n";
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :flow [N/N/E] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :flow [0/N] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :grid [box] }", .codes = &.{.{ .analysis = .wrong_type }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { #A :span [2] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :collapse }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :fill [red] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :style { :flow [S] }", .codes = &.{.{ .analysis = .does_not_apply }} });
+    try check(.{ .step = alpha, .rule = 3, .source = g ++ "G :place { :flow [S], :flow [E] }", .codes = &.{.{ .analysis = .binding_made_twice }} });
+}
+
+test "Places: a kind's place, one per kind (statements.md §29)" {
+    try check(.{ .step = alpha, .rule = 3, .source = "&zone :kind [flow] :> { :Place := { :flow [E] } }\nG :: f\nG :kind [flow]" });
+    try check(.{ .step = alpha, .rule = 3, .source = "&zone :kind [category] :> { :Place := { :flow [S] } }", .codes = &.{.{ .analysis = .name_defined_twice }} });
+    try check(.{ .step = alpha, .rule = 3, .source = "&zone :kind [flow] :> { :Place := { :fill [red] } }", .codes = &.{.{ .analysis = .does_not_apply }} });
 }

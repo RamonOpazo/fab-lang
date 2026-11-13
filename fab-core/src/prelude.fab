@@ -334,7 +334,8 @@
         &node          :pushout  :: :Flag,
         (&node, &edge) :pullback :: :Flag
     },
-    :Style := { &node :shape [] }  // objects drawn as their labels
+    :Style := { &node :shape [] },  // objects drawn as their labels
+    :Place := { :flow [area] }      // squares drawn upright
 }
 
 &zone :kind [schema] :> {

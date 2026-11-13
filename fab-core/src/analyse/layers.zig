@@ -9,8 +9,9 @@
 //! `@`), a class (`&edge`, `G.&edge`), or a group of them, over which the
 //! descriptor distributes. Inside a block it is relative to the owner, and
 //! only a diagram has parts. A layer is open: every description of it joins
-//! one. Only `:style` is read; `:prove` and `:place` are unsupported, at
-//! their descriptor, until plan step 11.
+//! one. `:style` and `:place` are read, each descriptor in the layer of its
+//! record type (`:Style`, `:Place`); `:prove` is unsupported, at its
+//! descriptor, until plan step η.
 //!
 //! Nodes are union-find elements until the graph is built (`finish`), since
 //! a later diagram can still merge them.
@@ -29,7 +30,27 @@ const decoded = @import("decoded.zig");
 const Node = Cst.Node;
 const TokenIndex = Cst.TokenIndex;
 
-pub const Layer = enum { style };
+pub const Layer = enum {
+    style,
+    place,
+
+    /// The record type whose descriptors the layer holds.
+    pub fn record(layer: Layer) []const u8 {
+        return switch (layer) {
+            .style => ":Style",
+            .place => ":Place",
+        };
+    }
+
+    /// The layer a record type's descriptors belong to; null for one no
+    /// layer holds.
+    pub fn of(env: *const Env, record_type: Env.TypeIndex) ?Layer {
+        inline for (.{ Layer.style, Layer.place }) |layer| {
+            if (env.type_table.get(layer.record())) |named| if (named.index == record_type) return layer;
+        }
+        return null;
+    }
+};
 
 /// What a description is about.
 pub const Subject = union(enum) {
@@ -141,17 +162,19 @@ fn block(a: *Analyser, node: Node.Index, owners: []const Owner, layer: ?Layer) e
 }
 
 /// One descriptor, for all the subjects of its entry. A layer descriptor,
-/// `:style`, opens its layer; any other is a binding of the style, checked
-/// once against the classes of all its subjects.
+/// `:style` or `:place`, opens its layer; any other is a binding of a layer,
+/// checked once against the classes of all its subjects. Inside a layer it
+/// must be of the layer's record type; at the top level it joins the layer
+/// of its own (`G :fill [red]` the style, `G.f :span [2]` the place).
 fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?Layer) error{OutOfMemory}!void {
     const cst = a.cst;
     const name_token = cst.mainToken(attr);
     const name = cst.tokenText(name_token);
     const kind = kindOf(a, subjects);
     const f = a.env.descriptor(name, kind) orelse {
-        // Declared with the proof and place shells (plan step 11): checked
-        // for shape, not read.
-        if (std.mem.eql(u8, name, ":prove") or std.mem.eql(u8, name, ":place")) {
+        // Declared with the proof's layer (plan step η): checked for shape,
+        // not read.
+        if (std.mem.eql(u8, name, ":prove")) {
             try a.fail(.unsupported_layer, name_token);
             return;
         }
@@ -164,7 +187,6 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
         return records.unknown(a, name_token);
     };
     try a.referToken(name_token, .descriptor, .{ .token = f.token, .prelude = f.prelude });
-    const style = if (a.env.type_table.get(":Style")) |named| named.index else null;
     const classes = classesOf(subjects);
 
     // `G :kind [flow]`: declared outside every record type and no record
@@ -172,22 +194,27 @@ fn descriptor(a: *Analyser, attr: Node.Index, subjects: []const Owner, layer: ?L
     if (layer == null and f.record == null and !f.bundle and !a.env.isRecord(f.type))
         return diagramKind(a, attr, f, subjects, classes);
 
-    // `G :style { … }`: the layer, opened on the diagrams it describes.
+    // `G :style { … }`, `G :place { … }`: the layer, opened on the diagrams
+    // it describes.
     const value = cst.data(attr).node;
-    if (layer == null and f.record == null and a.env.isRecord(f.type) and cst.tag(value) == .block) {
+    if (layer == null and f.record == null and cst.tag(value) == .block) if (Layer.of(&a.env, f.type)) |opened| {
         if (!Env.within(classes).subsetOf(f.classes))
             try a.errors.append(a.gpa, .{ .tag = .does_not_apply, .token = name_token, .related = if (f.prelude) null else f.token });
-        try block(a, value, subjects, .style);
+        try block(a, value, subjects, opened);
         return;
-    }
+    };
 
-    try records.function(a, attr, .{ .record = style, .at = .{ .subject = classes }, .kind = kind });
+    // In a layer, its record type's; at the top level, the layer of the
+    // descriptor's own, or the style's, which reports one of no layer.
+    const in: Layer = layer orelse if (f.record) |r| Layer.of(&a.env, r) orelse .style else .style;
+    const record = if (a.env.type_table.get(in.record())) |named| named.index else null;
+    try records.function(a, attr, .{ .record = record, .at = .{ .subject = classes }, .kind = kind });
     const bound = try decode.attr(a, attr, f);
     const key: ?[]const u8 = if (cst.key(attr)) |k| blk: {
         const text = cst.tokenText(k);
         break :blk text[1 .. text.len - 1];
     } else null;
-    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = .style, .descriptor = name, .key = key, .value = bound, .function = f });
+    for (subjects) |s| try a.bindings.append(a.gpa, .{ .subject = s.subject, .attr = attr, .layer = in, .descriptor = name, .key = key, .value = bound, .function = f });
 }
 
 /// `G :kind [flow]`, once per diagram, anywhere. `&zone :kind` is every

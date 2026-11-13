@@ -86,24 +86,30 @@ fn caseItem(a: *Analyser, item: Node.Index) error{OutOfMemory}!void {
     }
 }
 
-/// `:Style := { … }`: the kind's theme, checked as a theme of `:Style` whose
-/// descriptors may be the kind's own, one per kind. A record of another
-/// type, `:Proof` or `:Place`, waits for its layer (plan step 11d).
+/// `:Style := { … }`, the kind's theme, and `:Place := { … }`, its place:
+/// each checked as a record of its type whose descriptors may be the kind's
+/// own, one of each per kind. A `:Proof` waits for its layer (plan step η).
 fn kindTheme(a: *Analyser, head: Node.Index, body: Node.Index, op: Cst.TokenIndex) error{OutOfMemory}!void {
     const cst = a.cst;
     const type_token = cst.mainToken(head);
-    if (!std.mem.eql(u8, cst.tokenText(type_token), ":Style")) return a.fail(.unsupported_case, op);
-    const style = a.env.type_table.get(":Style") orelse return a.fail(.not_a_type, type_token);
-    try a.referToken(type_token, .type, .of(style.token, style.prelude));
+    const name = cst.tokenText(type_token);
+    const table = if (std.mem.eql(u8, name, ":Style"))
+        &a.env.kind_themes
+    else if (std.mem.eql(u8, name, ":Place"))
+        &a.env.kind_places
+    else
+        return a.fail(.unsupported_case, op);
+    const typed = a.env.type_table.get(name) orelse return a.fail(.not_a_type, type_token);
+    try a.referToken(type_token, .type, .of(typed.token, typed.prelude));
     try definitions.brackets(a, body);
     try definitions.entries(a, body);
-    _ = try records.theme(a, body, style.index);
-    const record = switch (try decode.of(a, body, style.index)) {
+    _ = try records.theme(a, body, typed.index);
+    const record = switch (try decode.of(a, body, typed.index)) {
         .record => |r| r,
         else => return,
     };
     const kind = a.case_kind.?;
-    const gop = try a.env.kind_themes.getOrPut(a.gpa, kind);
+    const gop = try table.getOrPut(a.gpa, kind);
     if (gop.found_existing) {
         try a.errors.append(a.gpa, .{ .tag = .name_defined_twice, .token = op, .related = if (gop.value_ptr.prelude) null else gop.value_ptr.token });
         return;

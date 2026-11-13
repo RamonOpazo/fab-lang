@@ -148,8 +148,9 @@ const Path = struct {
 
 /// What a descriptor is written at, and whether at the top level, where a
 /// layer can be opened. In a record's block, only its type's descriptors
-/// are offered (`record`, the type's name); in a bundle's, any.
-const At = struct { paths: []const Path, top: bool, record: ?[]const u8 = null, any: bool = false };
+/// are offered (`record`, the type's name); in a bundle's, any. In a
+/// layer's block (`G :place {`), only the layer's (`layer`, its descriptor).
+const At = struct { paths: []const Path, top: bool, record: ?[]const u8 = null, layer: ?[]const u8 = null, any: bool = false };
 
 /// A block being read: its owner (null at the top level), where its current
 /// entry begins, and how deep in parentheses.
@@ -177,6 +178,8 @@ fn described(arena: std.mem.Allocator, all: Tokens, first: usize, typed: usize, 
     var record: ?[]const u8 = null;
     var bundle = false;
     const applied: []const Path = &.{.{ .part = .whole }};
+    // The layer a top-level block opens: `G :place {`, after its descriptor.
+    var layer: ?[]const u8 = null;
 
     var frames: std.ArrayList(Frame) = .empty;
     try frames.append(arena, .{ .owner = null, .entry = 0 });
@@ -200,12 +203,14 @@ fn described(arena: std.mem.Allocator, all: Tokens, first: usize, typed: usize, 
             .l_cur => if (frames.items.len == 1 and (record != null or bundle)) {
                 try frames.append(arena, .{ .owner = applied, .entry = i + 1 });
             } else {
+                if (frames.items.len == 1 and i > 0 and t.tags[i - 1] == .attr_id) layer = t.text(i - 1);
                 const owner = try within(arena, top.owner, try entryContext(arena, t, top.entry, i) orelse return .{ .what = .nothing }) orelse
                     return .{ .what = .nothing };
                 try frames.append(arena, .{ .owner = owner, .entry = i + 1 });
             },
             .r_cur => if (frames.items.len > 1) {
                 _ = frames.pop();
+                if (frames.items.len == 1) layer = null;
             },
             else => {},
         }
@@ -219,7 +224,7 @@ fn described(arena: std.mem.Allocator, all: Tokens, first: usize, typed: usize, 
     if (bundle and context_.len > 0) return .{ .what = .nothing };
     const paths = try within(arena, top.owner, context_) orelse return .{ .what = .nothing };
     return .{
-        .what = .{ .descriptors = .{ .paths = paths, .top = frames.items.len == 1, .record = record, .any = bundle } },
+        .what = .{ .descriptors = .{ .paths = paths, .top = frames.items.len == 1, .record = record, .layer = layer, .any = bundle } },
         .prefix = word,
     };
 }
@@ -357,7 +362,13 @@ fn kindOf(ir: *const fab.Ir, node: fab.Ir.NodeIndex) Classes {
 /// The descriptors and bundles whose classes hold the subjects'. A layer,
 /// `:style`, is opened only at the top level; a record holds its type's.
 fn descriptors(out: *Collector, env: *const Env, classes_: Classes, at: At) error{OutOfMemory}!void {
-    const record: ?Env.TypeIndex = if (at.record) |name| (env.type_table.get(name) orelse return).index else null;
+    const record: ?Env.TypeIndex = if (at.record) |name|
+        (env.type_table.get(name) orelse return).index
+    else if (at.layer) |name| layer: {
+        // A layer's block holds its record type's descriptors.
+        const f = env.functions.get(name) orelse break :layer null;
+        break :layer if (f.record == null and env.isRecord(f.type)) f.type else null;
+    } else null;
     var it = env.functions.iterator();
     while (it.next()) |entry| {
         const f = entry.value_ptr;

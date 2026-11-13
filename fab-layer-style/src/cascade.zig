@@ -270,10 +270,10 @@ const Builder = struct {
     }
 
     /// The program's bindings, by what they describe. A table's entries
-    /// (`:lemma.[a]`) are no style's.
+    /// (`:lemma.[a]`) and another layer's bindings (`:place`) are no style's.
     fn sortBindings(b: *Builder) error{OutOfMemory}!void {
         for (b.in.bindings, 0..) |binding, i| {
-            if (binding.key != null) continue;
+            if (binding.key != null or binding.layer != .style) continue;
             const index: u32 = @intCast(i);
             const key: SubjectKey = switch (binding.subject) {
                 .class => |c| {

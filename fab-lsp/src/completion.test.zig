@@ -92,6 +92,14 @@ test "descriptors at a context: by the subject's classes" {
     try expectOffered("&edge :sh", ":shorten");
 }
 
+test "a layer's block offers its record type's descriptors" {
+    try expectOffered("G :: f\nG :pl", ":place");
+    try expectOffered("G :: f\nG :place { :f", ":flow");
+    try expectOffered("G :: f\nG :place { f :s", ":span");
+    try expectOffered("G :: f\nG :style { :fl", "");
+    try expectOffered("G :: f\nG :place { :grid [4] }\nG :style { :fi", ":fill");
+}
+
 test "descriptors in a block: the entry's context, or the block's owner" {
     try expectOffered("G :: #A/f\nG :style { :label \"x\", f :ar", ":arrow");
     try expectOffered("G :: #A/f\nG :style {\n  #A { :sh", ":shape");
