@@ -613,7 +613,7 @@ Specificity orders bindings within a layer of style; layers compose on top (see 
 
 ## Style layer
 
-`G :style { … }` gives everything drawn in G its appearance. It never changes the graph, never refers to one element from another, and never names a direction on the page: everything is relative to the element, its text, or the diagram's own shape. A diagram can flow towards any cardinal point and every style still means the same.
+`G :style { … }` gives everything drawn in G its appearance. It never changes the graph, never refers to one element from another, and never names a direction on the page: everything is relative to the element, its text, or the diagram's own shape. A diagram can flow in any direction and every style still means the same.
 
 ```
 G :: f g
@@ -799,12 +799,43 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 
 ## Place layer
 
-`G :place { … }` says where things go. Unlike style, it is relational by nature: placement relates one element to another. Its vocabulary is open, and will be designed with fAB's own layout engine. What is settled:
+`G :place { … }` says where things go. Its design, and the solver that reads it, are in `layout.md`; this section is the vocabulary. A place states constraints and never names an algorithm: fab-layer-place resolves them, from the analysis alone, with no sizes.
 
-- **Direction-agnostic.** The overall flow is given by a cardinal point. Placement within it uses relative ranks, along the flow and across it, without the words vertical and horizontal.
-- **Drawing order is source order.** Without anything in `:place`, branches are drawn in the order they are written, and what is written later is drawn on top. So in `#X/(g1, f, g2)`, f is drawn between g1 and g2.
-- **What belongs here:** relative placement (what the first revision called `:right-of`), ranks and grid cells, the overall direction, layout and routing styles, spacing, which side of a node a loop sits on, and stacking between elements.
-- **A strict grid** (every node on an integer coordinate) is a layout of this layer, for the native engine.
+**The grid is where nodes sit.** A node is placed at an anchor, a vertex of a tiling, by its barycentre; an edge joins any two anchors, not only the tiling's own edges. Steps are computed: adjacent anchors are one step apart, however far apart they are drawn.
+
+**Directions,** two ways, one for each job. **Numbers** point relative to the grid's seed, the polygon resting on its horizontal top edge: `[k]` runs along edge k, from vertex k to k + 1 in the order of drawing, modulo the seed's sides, so `[0]` is west to east on every seed; `[k!]` is direction k of the mirrored seed (`!` is a reflection); `[k/]` is the normal to edge k, turned clockwise, so `[0/]` is south. **Letters** point on the page, the same on every seed: `[N]`, `[E]`, `[S]`, `[W]`, and two adjacent ones for the direction between them, `[N/E]`. Letters and numbers never mix in one word. A direction the grid doesn't serve snaps to the nearest one it does.
+
+| Descriptor | Of | Type | Says | Default |
+| --- | --- | --- | --- | --- |
+| `:grid` | a diagram | `:Seed` | the seed: `[4]` square, `[3]` triangular; `[4!]` drawn counterclockwise | `[4]` |
+| `:metric` | a diagram | `[:Step]` | how long steps are drawn, repeating: `[1/2/3]` is 1 2 3 1 2 3; `[1/2/3!]` turns back at 3, 1 2 3 2 1 2 3 | `[1]` |
+| `:flow` | a diagram | `:Flow` | the direction ranks grow in (below) | `[S]` |
+| `:span` | an edge | `:Span` | how many ranks the edge crosses; `[2!]` against the flow | `[1]`, stretched where branches must agree |
+| `:collapse` | an edge | `:Flag` | edges with the same two ends, each flagged, are drawn as one route of several lines | off |
+
+**The flow** is a direction, or an area:
+
+- along a direction, a number, a normal, a letter or two (`[1]`, `[0/]`, `[S]`, `[S/E]`): a commuting square is drawn as a diamond;
+- across an area, two directions of one edge k (`[0/0]`, `[0/1]`, `[0//0/]`): both edges k and k + 1 advance one rank, and a commuting square is drawn upright, as tikz-cd draws it. A node with one child sends it along the first direction, then the second, down a chain: `[0/0]` straight east, `[0//0/]` straight south, `[0/1]` a stair.
+
+Three named values, the same on every seed: `[edge] := [0]`, `[normal] := [0/]`, `[area] := [0/0]`. `[category]` takes `:flow [area]`; every other kind, `[S]`.
+
+```
+Sq :: +(f h, g k)+
+Sq :place { :flow [area] }            // f and g leave A east and south, D below-right
+Ch :: f g h
+Ch :place { :flow [edge], :metric [2] }   // a chain left to right, steps drawn twice as long
+G  :: +(f g h, m n)+
+G.n :span [2]                          // n, not m, stretches to meet f g h
+G  :place { &edge :collapse }          // every bundle of parallel edges drawn as one route
+```
+
+What is settled besides:
+
+- **Ranks belong to edges.** A node is never moved along the flow; an edge is stretched or shrunk. Where branches must agree, the shorter branch's last edge stretches unless a `:span` says otherwise.
+- **Passed down.** A diagram's place applies to its members, as its style does: its kind's first, then its containers', then its own.
+- **Drawing order is source order.** Without anything in `:place`, a node's children are drawn in the order they are written, the first on the left.
+- **No absolute positions.** A position is relative to another node or to nothing: a diagram has no origin a program could name. Offsets between nodes are planned (`layout.md` §8).
 
 ## Proof layer
 
@@ -1044,6 +1075,28 @@ A program that hits any of these is rejected, each with its precise cause. Warni
 | Exclusive member not nullable                | `(post, photo)? :required` without `:nullable`               | Only one member is set, so the others must be able to be empty                    |
 | Default without exactly one match            | a `&edge` default with no matching column                    | Defaults never guess; state it explicitly                                         |
 
+### Places
+
+The analysis (fab-core) rejects what the language says alone:
+
+| Error | Example | Why |
+| --- | --- | --- |
+| Wrong type | `:flow [N/N/E]`, `:flow [0/N]`, `:grid [box]` | Two letters at most; letters and numbers never mix |
+| Does not apply | `#A :span [2]`, `G :collapse` | A span and a collapse are an edge's |
+
+The place layer (fab-layer-place) rejects what depends on the seed and the graph:
+
+| Error | Example | Why |
+| --- | --- | --- |
+| Seed not a tiling | `:grid [5]` | The seeds are `[3]` and `[4]` |
+| Not an area | `:flow [0/2]` | An area is two directions of one edge: `[k]`, `[k/]` or `[k+1]` |
+| Directions that cancel | `:flow [N/S]` | Two letters must be adjacent |
+| Step of nothing | `:metric [1/0]` | Every step is drawn |
+| Span of nothing | `f :span [0]` | Same-rank edges are open (`layout.md` §12) |
+| Spans that disagree | `+(f g h, m n)+` with `m :span [1]` and `n :span [1]` | Both branches end at one node, so their spans must add up alike |
+| Collapse between different ends | `(f, g) :collapse`, f : A → B, g : A → C | Only edges with the same two ends share a route |
+| Collapse of a cell's side | `+(f, g)+ \| f/α/g` with `(f, g) :collapse` | A 2-cell is drawn between its sides |
+
 ### Proofs
 
 | Error                               | Example                                 | Why                                                     |
@@ -1277,7 +1330,7 @@ A diagram denotes a graph presented by its edges, graded by dimension: the shape
 
 **Place**
 
-- **The whole vocabulary,** with the native layout engine: cardinal flow, relative ranks, grids, routing, loops, stacking.
+- **Offsets** between nodes, probably written on edges (`layout.md` §8); **same-rank edges** (a span of 0); a metric per axis; the GJH tail (`:symmetry`), for grids beyond `[3]` and `[4]`; a member's grid inside its container; routing, loops and stacking, with the solver (`layout.md` §12).
 
 **Proof**
 

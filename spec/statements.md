@@ -1659,3 +1659,14 @@ Amends §22.8 and the spec's "`!` inverts what it follows". Decided while design
 - **A direction's mirror is the seed's, so `[k!]` is direction k of `[n!]`.** A half turn was considered and rejected: on `[4!]` direction 1 is south, while a half-turned `[1!]` would be north, so the seed's `!` and a direction's would mean two things. Under the mirror, a direction on the axis is its own twin (`[1!]` is `[1]` on `[4]`, `[N!]` is `[N]`); reversing a direction is another direction, never `!`.
 - **Colours take twins where a type says so,** as every type does: `:Color!` in a descriptor's signature admits `[#ff0000!]`, and a named colour's twin (`[ink!]`) is the complement of what the token resolves to in the diagram, computed after tokens. Which descriptors admit it is the prelude's choice; none does yet.
 - **"Specular" and "opposite" were weighed** as the one word. A mirror image fits angles, hooks, seeds and directions but strains for a struck line; an opposite fits lines and flags but is a half turn for a direction, the reading rejected above. A reflection covers both: in one dimension (a flag, a span, a line's truth) it is a reversal, in two it is a mirror.
+
+## 29. The place layer's vocabulary and runtime, 2026-11-13
+
+Decided before step α; the design is `layout.md`, the vocabulary the spec's Place layer.
+
+- **The vocabulary of α:** `:grid`, `:metric`, `:flow` of a diagram, `:span` and `:collapse` of an edge, typed in the prelude (`:Seed`, `:Step`, `:Span :: :Number!`; `:Compass`; `:Flow`, with `[edge]`, `[normal]`, `[area]`), in `:Place`, under `&zone :place :: :Place`. Offsets wait (`layout.md` §8); named place records (`:Place [x] := { … }`) are left out, a kind's case being enough for now.
+- **Two packages check it, each what it owns** (§26): fab-core what the language says alone (types, contexts, classes, bindings made twice; `[N/N/E]` is a wrong type, `#A :span` does not apply); fab-layer-place what the values mean against the seed and the graph (`[5]`, `[0/2]`, `[N/S]`, spans that disagree, collapses that can't be).
+- **A layer's diagnostics are its own:** its codes and messages, in a `Diagnostic` shape fab-core exports, so no layer's meaning is written in fab-core. fab-layer-proof follows (η).
+- **The layers run wherever diagnostics are shown:** `fab check` and fab-lsp call fab-layer-place, so an error of place is seen in the editor as one of the language is. fab-lsp depends on fab-core and the layers, no longer on fab-core only.
+- **A diagram's place passes down to its members,** as its style does (R5): the kind's case, then the containers', outermost first, then its own.
+- **Graphviz reads the flow,** as a convenience until fAB's own layout (β): `[S]` is `rankdir=TB`, `[E]` `LR`, `[N]` `BT`, `[W]` `RL`, an area `TB`.
