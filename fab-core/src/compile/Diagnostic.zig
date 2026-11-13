@@ -4,7 +4,8 @@
 //! Each stage keeps its own error type (Cst.Error, Analyser.Error) and knows
 //! nothing of this folder. A diagnostic's code is the coproduct of those
 //! types, so a tag added to any stage needs a text in messages.zig before the
-//! program compiles.
+//! program compiles. A layer's package writes its own codes and texts
+//! (`Foreign`), so no layer's meaning is written here (statements.md §29).
 
 const std = @import("std");
 const Token = @import("../lex/Token.zig");
@@ -26,11 +27,14 @@ expected: Token.Tag = .invalid,
 pub const Code = union(enum) {
     syntax: Cst.Error.Tag,
     analysis: Analyser.Error.Tag,
+    /// A layer's own, defined by its package.
+    layer: *const Foreign,
 
     /// The code's stable name, as `edge_declared_twice`. Names are unique
     /// across stages.
     pub fn name(code: Code) []const u8 {
         return switch (code) {
+            .layer => |f| f.name,
             inline else => |tag| @tagName(tag),
         };
     }
@@ -39,6 +43,7 @@ pub const Code = union(enum) {
         return switch (code) {
             .syntax => |tag| messages.syntax(tag),
             .analysis => |tag| messages.analysis(tag),
+            .layer => |f| f.text,
         };
     }
 
@@ -51,9 +56,21 @@ pub const Code = union(enum) {
                 .@"error" => .@"error",
                 .unsupported => .unsupported,
             },
+            .layer => |f| f.severity,
         };
     }
 };
+
+/// A code a layer's package defines: its stable name, unique across stages
+/// and layers (`seed_not_a_tiling`), its texts, with the placeholders
+/// `write` fills, and its severity before any promotion.
+pub const Foreign = struct {
+    name: []const u8,
+    text: messages.Text,
+    severity: Severity,
+};
+
+pub const Text = messages.Text;
 
 /// Ordered from least to most severe, so the worst of several is their max.
 pub const Severity = enum(u2) {
@@ -103,6 +120,26 @@ pub fn fromAnalysis(cst: *const Cst, err: Analyser.Error) Diagnostic {
         .severity = code.defaultSeverity(),
         .span = tokenSpan(cst, err.token),
         .related = if (err.related) |token| tokenSpan(cst, token) else null,
+    };
+}
+
+/// A layer's diagnostic, at a node of the program (a descriptor, a value),
+/// related to another if one helps. Warnings are not promoted here: the
+/// caller applies its tolerance.
+pub fn fromLayer(cst: *const Cst, code: *const Foreign, at: Cst.Node.Index, related: ?Cst.Node.Index) Diagnostic {
+    return .{
+        .code = .{ .layer = code },
+        .severity = code.severity,
+        .span = nodeSpan(cst, at),
+        .related = if (related) |r| nodeSpan(cst, r) else null,
+    };
+}
+
+/// From a node's first token to its last.
+pub fn nodeSpan(cst: *const Cst, node: Cst.Node.Index) Span {
+    return .{
+        .start = cst.tokens.items(.start)[cst.firstToken(node)],
+        .end = cst.tokens.items(.end)[cst.lastToken(node)],
     };
 }
 

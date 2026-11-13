@@ -109,3 +109,25 @@ test "severities are ordered, and promoted warnings count as errors" {
     try testing.expect(S.promoted.isError());
     try testing.expect(S.@"error".isError());
 }
+
+test "a layer's own code: its name, texts and severity, at a node's span" {
+    const gpa = testing.allocator;
+    const source = "G :: f\nG :place { :grid [5] }";
+    var cst = try Parser.parse(gpa, source);
+    defer cst.deinit(gpa);
+    const code: Diagnostic.Foreign = .{
+        .name = "seed_not_a_tiling",
+        .text = .{ .message = "{} is not a tiling", .explanation = "", .hint = "" },
+        .severity = .warning,
+    };
+    // The bracket's leaf: the last node with a token `[5]`.
+    var at: ?Cst.Node.Index = null;
+    for (0..cst.nodes.len) |i| {
+        const node: Cst.Node.Index = @fromBackingInt(@as(u32, @intCast(i)));
+        if (cst.tag(node) == .leaf and std.mem.eql(u8, cst.tokenText(cst.mainToken(node)), "[5]")) at = node;
+    }
+    const d: Diagnostic = .fromLayer(&cst, &code, at.?, null);
+    try testing.expectEqualStrings("seed_not_a_tiling", d.code.name());
+    try testing.expectEqual(Diagnostic.Severity.warning, d.code.defaultSeverity());
+    try expectLayer(d, .message, source, "`[5]` is not a tiling");
+}

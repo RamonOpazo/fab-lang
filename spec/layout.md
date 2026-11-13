@@ -71,7 +71,7 @@ G :place { :grid [4] }      // square; [3] triangular
 - `[E!]` is `[W]`; `[N!]` is `[N]`, on the axis.
 - Letters and numbers never mix in one word.
 
-**Directions the lattice serves.** A flow needs ranks that are lattice lines with integer ranks, and each rank's anchors offset from the last by 0 or half a step: then a node's children fall evenly (§6.2). On `[4]` eight directions do so (the four letters and the diagonals), on `[3]` twelve (every 30°). Every number and normal is among them. A letter that is not (`[N/E]` on `[3]`, at 45°) **snaps** to the nearest that is, a tie going to the first in the seed's clockwise order from `[0]`.
+**Directions the lattice serves.** A flow needs ranks that are lattice lines with integer ranks, and each rank's anchors offset from the last by 0 or half a step: then a node's children fall evenly (§6.2). On `[4]` eight directions do so (the four letters and the diagonals), on `[3]` twelve (every 30°). Every number and normal is among them. A letter that is not (`[N/E]` on `[3]`, at 45°) **snaps** to the nearest that is, a tie going to the first in the seed's order of drawing from `[0]`: clockwise on `[n]`, counterclockwise on `[n!]` (`[N/E]` is 300° on `[3]`, 330° on `[3!]`).
 
 ### 3.4 The metric: `:metric`
 

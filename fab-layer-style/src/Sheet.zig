@@ -309,7 +309,7 @@ pub const View = struct {
 
     pub fn number(v: View, d: Descriptor) ?Decimal {
         return if (v.get(d)) |x| switch (x) {
-            .number => |n| n,
+            .number => |n| n.value,
             else => null,
         } else null;
     }

@@ -1,0 +1,16 @@
+.{
+    .name = .fab_layer_place,
+    .version = "0.1.0",
+    .fingerprint = 0x127539d1ae977981, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .fab_core = .{ .path = "../fab-core" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

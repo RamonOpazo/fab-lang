@@ -25,7 +25,9 @@ pub const Value = union(enum) {
     /// `$…$`, as written but for `\$`: LaTeX's backslashes are its own.
     math: []const u8,
     color: value.Rgba,
-    number: Decimal,
+    /// `[2]`, `[2!]`: a number, with its `!`, which its type reads
+    /// (statements.md §28: a span against the flow, a mirrored direction).
+    number: Number,
     range: value.Range,
     /// `[circle]`, `[>]`, `[ink]`: a label, by name, with its `!`.
     label: Label,
@@ -36,6 +38,8 @@ pub const Value = union(enum) {
 };
 
 pub const Label = struct { name: []const u8, inverted: bool = false };
+
+pub const Number = struct { value: Decimal, inverted: bool = false };
 
 /// An index into the environment's records.
 pub const RecordIndex = enum(u32) { _ };
@@ -99,7 +103,10 @@ fn element(v: Value, w: *std.Io.Writer) std.Io.Writer.Error!void {
             try w.print("#{x:0>2}{x:0>2}{x:0>2}", .{ c.r, c.g, c.b });
             if (c.a != 0xff) try w.print("{x:0>2}", .{c.a});
         },
-        .number => |n| try n.format(w),
+        .number => |n| {
+            try n.value.format(w);
+            if (n.inverted) try w.writeByte('!');
+        },
         .range => |r| {
             try r.lo.format(w);
             try w.writeAll("..");

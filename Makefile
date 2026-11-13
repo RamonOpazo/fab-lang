@@ -9,7 +9,8 @@
 #   make fmt-check    check they are formatted (zig fmt, then `fab fmt`)
 #
 # Each package is a plain Zig project; this file only calls `zig build` in
-# each one, in dependency order: fab-core, then the layers (fab-layer-style),
+# each one, in dependency order: fab-core, then the layers (fab-layer-style,
+# fab-layer-place),
 # then fab-render and fab-lsp, then fab-cli.
 #
 # Variables:
@@ -26,16 +27,16 @@ PREFIX   ?= $(HOME)/.local
 OPTIMIZE ?= ReleaseSafe
 
 # In dependency order.
-PACKAGES := fab-core fab-layer-style fab-render fab-lsp fab-cli
+PACKAGES := fab-core fab-layer-style fab-layer-place fab-render fab-lsp fab-cli
 
-.PHONY: all build test test-versions test-core test-layer-style test-render test-lsp test-cli examples \
+.PHONY: all build test test-versions test-core test-layer-style test-layer-place test-render test-lsp test-cli examples \
         tree-sitter test-tree-sitter release install uninstall fmt fmt-check check-graphviz clean help
 
 all: build
 
 help:
 	@sed -n '2,/^$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
-	@echo "Targets: build test test-versions test-core test-layer-style test-render test-lsp test-cli examples"
+	@echo "Targets: build test test-versions test-core test-layer-style test-layer-place test-render test-lsp test-cli examples"
 	@echo "         release install"
 	@echo "         tree-sitter test-tree-sitter uninstall fmt fmt-check check-graphviz clean help"
 
@@ -49,7 +50,7 @@ build:
 
 ## Testing
 
-test: test-versions test-core test-layer-style test-render test-lsp test-cli
+test: test-versions test-core test-layer-style test-layer-place test-render test-lsp test-cli
 
 # One version, written once (release.md §3): fab-core's manifest holds it,
 # and Zig wants it in the others too, so they must say the same.
@@ -69,6 +70,10 @@ test-core:
 test-layer-style:
 	@echo "==> test fab-layer-style"
 	@cd fab-layer-style && $(ZIG) build test --summary all
+
+test-layer-place:
+	@echo "==> test fab-layer-place"
+	@cd fab-layer-place && $(ZIG) build test --summary all
 
 test-render:
 	@echo "==> test fab-render"

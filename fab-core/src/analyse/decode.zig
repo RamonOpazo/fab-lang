@@ -67,7 +67,7 @@ fn element(a: *Analyser, e: value.Element) Value {
     return switch (e.kind) {
         .empty => .nil,
         .color => |c| .{ .color = c },
-        .number => |n| .{ .number = n },
+        .number => |n| .{ .number = .{ .value = n, .inverted = e.inverted } },
         .range => |r| .{ .range = r },
         .symbol => .{ .label = .{ .name = e.text, .inverted = e.inverted } },
         .name => if (a.env.values.get(e.text)) |v|
