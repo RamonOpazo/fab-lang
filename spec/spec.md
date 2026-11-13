@@ -664,7 +664,7 @@ f :label ""        // no text
 | `:shape`            | `[]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind                           |
 | `:fill`             | colour                                                                                                                                                                                          | none                              |
 | `:stroke`           | colour                                                                                                                                                                                          | `[ink]`                           |
-| `:pen`              | `[thin]` `[normal]` `[thick]`                                                                                                                                                                   | `[normal]`                        |
+| `:pen`              | `[thin]` `[medium]` `[thick]`                                                                                                                                                                   | `[medium]`                        |
 | `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[wavy]` `[]`                                                                                                                                    | `[solid]`; `[dashed]` for `&hole` |
 | `:width`, `:height` | length, as minimums                                                                                                                                                                             | fitted to the label               |
 | `:padding`          | length                                                                                                                                                                                          | theme                             |
@@ -677,7 +677,7 @@ f :label ""        // no text
 | ---------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `:arrow`                     | an arrow                                                         | `[/solid/>]` for edges, `[/double/>]` for 2-cells, `[/triple/>]` for 3-cells |
 | `:stroke`                    | colour                                                           | `[ink]`                                                                      |
-| `:pen`                       | `[thin]` `[normal]` `[thick]`                                    | `[normal]`                                                                   |
+| `:pen`                       | `[thin]` `[medium]` `[thick]`                                    | `[medium]`                                                                   |
 | `:bend`                      | `[outer]` `[inner]`, or an angle: `[30]` outward, `[30!]` inward | none: straight                                                               |
 | `:label-start`, `:label-end` | text, math                                                       | none                                                                         |
 | `:label-at`                  | `[start]` `[center]` `[end]`, or a fraction                      | `[center]`                                                                   |
@@ -810,7 +810,7 @@ computed  <  [base]  <  themes, left to right  <  the program's own bindings
 | `:grid` | a diagram | `:Seed` | the seed: `[4]` square, `[3]` triangular; `[4!]` drawn counterclockwise | `[4]` |
 | `:metric` | a diagram | `[:Step]` | how long steps are drawn, repeating: `[1/2/3]` is 1 2 3 1 2 3; `[1/2/3!]` turns back at 3, 1 2 3 2 1 2 3 | `[1]` |
 | `:flow` | a diagram | `:Flow` | the direction ranks grow in (below) | `[S]` |
-| `:span` | an edge | `:Span` | how many ranks the edge crosses; `[2!]` against the flow | `[1]`, stretched where branches must agree |
+| `:span` | an edge | `:Ranks` | how many ranks the edge crosses; `[2!]` against the flow | `[1]`, stretched where branches must agree |
 | `:collapse` | an edge | `:Flag` | edges with the same two ends, each flagged, are drawn as one route of several lines | off |
 
 **The flow** is a direction, or an area:

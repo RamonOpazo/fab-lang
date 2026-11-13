@@ -47,7 +47,7 @@
 }
 :Line  :: [solid], [dashed], [dotted], [double], [triple], [wavy]
 :Face  :: [regular], [italic], [bold], [bold-italic]
-:Pen   :: [thin], [normal], [thick]
+:Pen   :: [thin], [medium], [thick]
 :Span  :: [start], [center], [end]
 :As    :: [flat], [cluster], [node], [table]
 :Cross :: [gap], [plain]
@@ -156,7 +156,35 @@
 // owner. Declared outside :Style, so it describes at the top level only.
 &zone :style :: :Style
 
-// ── 4. Named arrows ───────────────────────────────────────────────────
+// Place (layout.md, the spec's Place layer): where things go. Steps are
+// computed, every anchor one step from the next; the metric says how long
+// they are drawn. Directions two ways: numbers, the seed's edges ([0] west
+// to east on every seed, [0!] the mirrored seed's, [0/] the normal turned
+// clockwise), and letters, the page's. fab-layer-place gives them their
+// meaning, and rejects what depends on the seed ([5], [0/2], [N/S]).
+:Seed    :: :Number!  // [4] square, [3] triangular; [4!] drawn counterclockwise
+:Step    :: :Number!  // a metric step; [3!] turns the sequence back there
+:Ranks   :: :Number!  // how many ranks an edge crosses; [2!] against the flow
+:Compass :: [N], [E], [S], [W]
+
+// A direction, or an area: [1], [0/], [S], [S/E]; two directions of one
+// edge, [0/0], [0/1], [0//0/]. A bearing is a number of the seed, or an
+// empty slot after one: the normal to it, [0/].
+:Bearing :: :Number!, :Nil
+:Flow    :: [:Bearing], :Compass!, [:Compass!/:Compass!]
+
+:Place :: {
+    &zone :grid     :: :Seed,
+    &zone :metric   :: [:Step],  // repeating: [1/2/3] is 1 2 3 1 2 3
+    &zone :flow     :: :Flow,
+    &edge :span     :: :Ranks,
+    &edge :collapse :: :Flag     // with its parallel edges, one route
+}
+
+// The layer: a diagram's place, passed down to its members as style is.
+&zone :place :: :Place
+
+// ── 4. Named arrows and flows ─────────────────────────────────────────
 
 :Arrow [mono]   := [>/solid/>]
 :Arrow [epi]    := [/solid/>>]
@@ -164,6 +192,10 @@
 :Arrow [mapsto] := [|/solid/>]
 :Arrow [unique] := [/dashed/>]
 :Arrow [iso]    := [</solid/>]
+
+:Flow [edge]   := [0]    // along edge 0: a diamond opening east
+:Flow [normal] := [0/]   // the normal to edge 0: south
+:Flow [area]   := [0/0]  // across the area: a square, chains straight east
 
 // ── 5. The base theme ─────────────────────────────────────────────────
 
@@ -202,7 +234,7 @@
 
     &node {
         :label [], :font [], :face [regular], :size [1], :ink [ink],
-        :shape [circle], :fill [], :stroke [ink], :pen [normal], :line [solid],
+        :shape [circle], :fill [], :stroke [ink], :pen [medium], :line [solid],
         :width [0], :height [0], :padding [0.4], :align [center], :wrap [],
         :hide!, :note "", :link "", :step []
     },
@@ -216,21 +248,21 @@
     &edge {
         :label [], :label-start [], :label-end [],
         :font [], :face [regular], :size [0.85], :ink [soft],
-        :arrow [/solid/>], :stroke [ink], :pen [normal],
+        :arrow [/solid/>], :stroke [ink], :pen [medium],
         :bend [0], :label-at [center], :side [outer], :shorten [0],
         :hide!, :note "", :link "", :step []
     },
     &cell {
         :label [], :label-start [], :label-end [],
         :font [], :face [regular], :size [0.85], :ink [soft],
-        :arrow [], :stroke [ink], :pen [normal],
+        :arrow [], :stroke [ink], :pen [medium],
         :bend [0], :label-at [center], :side [outer], :shorten [0],
         :hide!, :note "", :link "", :step []
     },
 
     &zone {
         :label [], :caption [], :font [], :face [regular], :size [1], :ink [ink],
-        :fill [], :stroke [], :pen [normal], :line [solid], :padding [1],
+        :fill [], :stroke [], :pen [medium], :line [solid], :padding [1],
         :as [cluster], :theme [], :marks [all], :cross [gap],
         :alt "", :note "", :link ""
     }

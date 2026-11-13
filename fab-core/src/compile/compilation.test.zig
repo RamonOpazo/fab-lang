@@ -29,6 +29,29 @@ test "the prelude checks with nothing to report" {
     try testing.expectEqual(@as(usize, 0), all.len);
 }
 
+test "the prelude declares place's descriptors in :Place, with their types" {
+    var c = try Compilation.init(testing.allocator, "", preview);
+    defer c.deinit();
+    const env = &(try c.analysis()).env;
+    const place = env.type_table.get(":Place").?.index;
+    for ([_][2][]const u8{
+        .{ ":grid", ":Seed" },
+        .{ ":metric", "[:Step]" },
+        .{ ":flow", ":Flow" },
+        .{ ":span", ":Ranks" },
+        .{ ":collapse", ":Flag" },
+    }) |pair| {
+        const f = env.descriptor(pair[0], null).?;
+        try testing.expectEqual(place, f.record.?);
+        var out: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer out.deinit();
+        try env.writeType(f.type, &out.writer);
+        try testing.expectEqualStrings(pair[1], out.written());
+    }
+    // The layer, outside :Place, describes at the top level only.
+    try testing.expectEqual(@as(?@TypeOf(place), null), env.descriptor(":place", null).?.record);
+}
+
 test "references reach into the prelude" {
     var c = try Compilation.init(testing.allocator, "G :: f\nG.f :label \"x\"", preview);
     defer c.deinit();

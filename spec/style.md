@@ -149,7 +149,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** zones.
 | `:shape`            | `[]` `[box]` `[round]` `[circle]` `[double-circle]` `[ellipse]` `[stadium]` `[diamond]` `[hexagon]` `[parallelogram]` `[cylinder]` `[document]` `[bar]` `[point]` `[terminal]` `[bullseye]` | by kind (section 6)               |
 | `:fill`             | colour                                                                                                                                                                                          | none                              |
 | `:stroke`           | colour                                                                                                                                                                                          | `[ink]`                           |
-| `:pen`              | `[thin]` `[normal]` `[thick]`                                                                                                                                                                   | `[normal]`                        |
+| `:pen`              | `[thin]` `[medium]` `[thick]`                                                                                                                                                                   | `[medium]`                        |
 | `:line`             | `[solid]` `[dashed]` `[dotted]` `[double]` `[triple]` `[wavy]` `[]`                                                                                                                                  | `[solid]`; `[dashed]` for `&hole` |
 | `:width`, `:height` | length, as minimums                                                                                                                                                                             | fitted to the label               |
 | `:padding`          | length                                                                                                                                                                                          | theme                             |
@@ -164,7 +164,7 @@ Applies to: **N** nodes, **E** edges, **C** cells, **Z** zones.
 | ---------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `:arrow`                     | arrow (4.6)                                                      | `[/solid/>]` for edges, `[/double/>]` for 2-cells, `[/triple/>]` for 3-cells |
 | `:stroke`                    | colour                                                           | `[ink]`                                                                      |
-| `:pen`                       | `[thin]` `[normal]` `[thick]`                                    | `[normal]`                                                                   |
+| `:pen`                       | `[thin]` `[medium]` `[thick]`                                    | `[medium]`                                                                   |
 | `:bend`                      | `[outer]` `[inner]`, or an angle: `[30]` outward, `[30!]` inward | none: straight                                                               |
 | `:label-start`, `:label-end` | text, math                                                       | none                                                                         |
 | `:label-at`                  | `[start]` `[center]` `[end]`, or a fraction                      | `[center]`                                                                   |
@@ -180,7 +180,7 @@ An edge has no `:line`: its line is part of `:arrow` (`[/dashed/>]`, `[/double/>
 | `:as`      | `[flat]` `[cluster]` `[node]` `[table]`        | `[cluster]`                                  |
 | `:fill`    | colour                                         | none                                         |
 | `:stroke`  | colour                                         | none: an unframed cluster                    |
-| `:pen`     | `[thin]` `[normal]` `[thick]`                  | `[normal]`                                   |
+| `:pen`     | `[thin]` `[medium]` `[thick]`                  | `[medium]`                                   |
 | `:line`    | as for nodes                                   | `[solid]` once framed                        |
 | `:padding` | length                                         | theme                                        |
 | `:caption` | text, math                                     | none                                         |

@@ -119,7 +119,7 @@ and three named values, the same on every seed: **`[edge] := [0]`**, **`[normal]
 
 **Decided.** **Ranks belong to edges, not to nodes.** An edge has a **span**, the number of ranks it crosses; a node's rank follows from the spans that reach it. A node is never moved along the flow; an edge is stretched or shrunk.
 
-- Every edge spans at least 1 unless stated: `:span [k]`. **`[k!]` spans k against the flow**, the explicit back edge (`:Span :: :Number!`).
+- Every edge spans at least 1 unless stated: `:span [k]`. **`[k!]` spans k against the flow**, the explicit back edge (`:Ranks :: :Number!`).
 - **Where a node can stand at two ranks, a span decides.** In `G :: +(f g h, m n)+` the branches must agree, span(f) + span(g) + span(h) = span(m) + span(n), so one of m and n spans 2. By default the shorter branch's last edge stretches (n), so nodes stand as early as they can; `m :span [2]` moves the middle node one rank down instead.
 
 **The solve is constraints, not a search:**
