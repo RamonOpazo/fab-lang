@@ -20,7 +20,7 @@ const Compilation = fab.Compilation;
 const Diagnostic = fab.Diagnostic;
 
 /// The last plan step, and its increment, finished.
-const done: Progress = .{ .step = alpha, .rule = 4 };
+const done: Progress = .{ .step = alpha, .rule = 5 };
 const alpha = 20;
 
 const Progress = struct {
@@ -351,22 +351,251 @@ test "Place layer: passed down, the kind's case, then the containers', then its 
     });
 }
 
-test "Places: what the lattice can't read is passed over, until its checks" {
-    // Step α5 reports each (spec, Errors, Places); until then the layer
-    // below stands.
+fn layer(comptime name: []const u8) Diagnostic.Code {
+    return .{ .layer = &@field(place.messages, name) };
+}
+
+test "Places: what the layer rejects, and the layer below stands" {
     try checkAll(&.{
-        .{ .rule = 4, .source =
+        .{ .rule = 5, .source =
         \\A :: f
         \\A :place { :grid [5], :flow [0/2], :metric [1/0] }
+        , .codes = &.{ layer("seed_not_a_tiling"), layer("not_an_area"), layer("step_of_nothing") }, .place =
+        \\zone A grid [4] metric [1] flow 90° (0,1)
+        \\
+        },
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\A :place { :flow [N/S] }
         \\B :: f
-        \\B :place { :flow [N/S] }
+        \\B :place { :flow [S/S] }
+        , .codes = &.{ layer("directions_cancel"), layer("directions_cancel") }, .place =
+        \\zone A grid [4] metric [1] flow 90° (0,1)
+        \\zone B grid [4] metric [1] flow 90° (0,1)
+        \\
+        },
+        // A flow the seed can't read leaves the one below: here the
+        // container's.
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\G :: A/g
+        \\G :place { &zone :flow [E] }
+        \\A :place { :flow [0/2/] }
+        , .codes = &.{layer("not_an_area")}, .place =
+        \\zone A in G grid [4] metric [1] flow 0° (1,0)
+        \\zone G grid [4] metric [1] flow 0° (1,0)
+        \\
+        },
+        // Not an area: three directions, a mirror on one only, a normal of
+        // the next edge.
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\A :place { :flow [0/0/0] }
+        \\B :: f
+        \\B :place { :flow [0/1!] }
         \\C :: f
-        \\C.f :span [0]
-        , .place =
+        \\C :place { :flow [0/1/] }
+        , .codes = &.{ layer("not_an_area"), layer("not_an_area"), layer("not_an_area") }, .place =
+        \\zone A grid [4] metric [1] flow 90° (0,1)
+        \\zone B grid [4] metric [1] flow 90° (0,1)
+        \\zone C grid [4] metric [1] flow 90° (0,1)
+        \\
+        },
+        // Modulo the seed: [2/0] is edge 2's area on [3], not on [4]. A
+        // class reaching both is reported once.
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\B :: f
+        \\G :: A/g/B
+        \\G :place { &zone :flow [2/0] }
+        \\A :place { :grid [3] }
+        , .codes = &.{layer("not_an_area")}, .place =
+        \\zone A in G grid [3] metric [1] flow area 2 sides 240° 0° legs 240° 0°
+        \\zone B in G grid [4] metric [1] flow 90° (0,1)
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\
+        },
+    });
+}
+
+test "Places: numbers that count are whole, and a flow names a direction" {
+    try checkAll(&.{
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\A :place { :grid [3.5], :flow [0.5], :metric [0.5/1.5] }
+        \\A.f :span [1.5]
+        , .codes = &.{ layer("number_not_whole"), layer("number_not_whole"), layer("number_not_whole") }, .place =
+        \\zone A grid [4] metric [0.5/1.5] flow 90° (0,1)
+        \\
+        },
+        .{ .rule = 5, .source =
+        \\A :: f
+        \\A :place { :flow [] }
+        \\B :: f
+        \\B :place { :flow [//] }
+        \\C :: f
+        \\C :place { :flow [/0] }
+        , .codes = &.{ layer("flow_of_no_direction"), layer("flow_of_no_direction"), layer("flow_of_no_direction") }, .place =
         \\zone A grid [4] metric [1] flow 90° (0,1)
         \\zone B grid [4] metric [1] flow 90° (0,1)
         \\zone C grid [4] metric [1] flow 90° (0,1)
         \\
         },
     });
+}
+
+test "Places: a span of nothing, and spans that disagree" {
+    try checkAll(&.{
+        .{ .rule = 5, .source =
+        \\C :: f
+        \\C.f :span [0]
+        , .codes = &.{layer("span_of_nothing")}, .place =
+        \\zone C grid [4] metric [1] flow 90° (0,1)
+        \\
+        },
+        // The spec's: f g h climb three ranks, m n two.
+        .{ .rule = 5, .source =
+        \\G :: +(f g h, m n)+
+        \\G.m :span [1]
+        \\G.n :span [1]
+        , .codes = &.{layer("spans_disagree")}, .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge m span 1
+        \\  edge n span 1
+        \\
+        },
+        // One span stretches its edge, so the branches agree.
+        .{ .rule = 5, .source =
+        \\G :: +(f g h, m n)+
+        \\G.m :span [2]
+        , .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge m span 2
+        \\
+        },
+        // A class's span, every edge's: two paths of different lengths.
+        .{ .rule = 5, .source =
+        \\G :: +(f g, h)+
+        \\G :place { &edge :span [1] }
+        , .codes = &.{layer("spans_disagree")}, .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge f span 1
+        \\  edge g span 1
+        \\  edge h span 1
+        \\
+        },
+        // A cycle no span states is broken at a back edge; against the
+        // flow, a span states one.
+        .{ .rule = 5, .source =
+        \\G :: #A/f/#B, #B/g/#A
+        \\H :: #A/f/#B, #B/g/#A
+        \\H.f :span [2]
+        \\H.g :span [2!]
+        , .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\zone H grid [4] metric [1] flow 90° (0,1)
+        \\  edge f span 2
+        \\  edge g span 2!
+        \\
+        },
+        .{ .rule = 5, .source =
+        \\H :: #A/f/#B, #B/g/#A
+        \\H.f :span [2]
+        \\H.g :span [1!]
+        , .codes = &.{layer("spans_disagree")}, .place =
+        \\zone H grid [4] metric [1] flow 90° (0,1)
+        \\  edge f span 2
+        \\  edge g span 1!
+        \\
+        },
+    });
+}
+
+test "Places: collapse between different ends, and of a cell's side" {
+    try checkAll(&.{
+        .{ .rule = 5, .source =
+        \\G :: #A/f/#B, #A/g/#C
+        \\G.(f, g) :collapse
+        , .codes = &.{layer("collapse_different_ends")}, .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge f collapse
+        \\  edge g collapse
+        \\
+        },
+        // A class collapses what it can, and says nothing of the rest.
+        .{ .rule = 5, .source =
+        \\G :: #A/f/#B, #A/g/#C
+        \\G :place { &edge :collapse }
+        , .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge f collapse
+        \\  edge g collapse
+        \\
+        },
+        .{ .rule = 5, .source =
+        \\G :: +(f, g)+ | f/α/g
+        \\G.(f, g) :collapse
+        , .codes = &.{layer("collapse_cell_side")}, .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge f collapse
+        \\  edge g collapse
+        \\
+        },
+        .{ .rule = 5, .source =
+        \\G :: +(f, g, h)+ | f/α/g
+        \\G :place { &edge :collapse }
+        , .place =
+        \\zone G grid [4] metric [1] flow 90° (0,1)
+        \\  edge f collapse
+        \\  edge g collapse
+        \\  edge h collapse
+        \\
+        },
+    });
+}
+
+test "Places: the layer's diagnostics point at the value, with their texts" {
+    var c = try Compilation.init(testing.allocator, "G :: +(f g h, m n)+\nG.m :span [1]\nG.n :span [1]\nG :place { :grid [5] }", tolerance);
+    defer c.deinit();
+    var p = (try place.of(testing.allocator, &c)).?;
+    defer p.deinit();
+    try testing.expectEqual(@as(usize, 2), p.diagnostics.len);
+    const expected = [_][2][]const u8{
+        .{ "The span `[1]` disagrees with the diagram's other spans", "[1]" },
+        .{ "`[5]` is not a seed", "[5]" },
+    };
+    for (p.diagnostics, expected) |d, want| {
+        var out: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer out.deinit();
+        try d.write(.message, c.source, &out.writer);
+        try testing.expectEqualStrings(want[0], out.written());
+        try testing.expectEqualStrings(want[1], d.span.text(c.source));
+    }
+    // n, related to m.
+    const span = p.diagnostics[0];
+    try testing.expectEqual(std.mem.indexOf(u8, c.source, "G.n").? + 10, span.span.start);
+    try testing.expectEqual(std.mem.indexOf(u8, c.source, "G.m").? + 10, span.related.?.start);
+}
+
+fn placeEverything(gpa: std.mem.Allocator, source: []const u8) !void {
+    var c = try Compilation.init(gpa, source, tolerance);
+    defer c.deinit();
+    var p = (try place.of(gpa, &c)).?;
+    p.deinit();
+}
+
+test "running out of memory at any allocation leaks nothing" {
+    // Every reader and every check: errors, passing down, bundles, spans.
+    const source =
+        \\A :: f
+        \\G :: A/g, +(m n, h k)+, +(p, q)+ | p/α/q
+        \\G :kind [category]
+        \\G :place { &zone :flow [2/0], &edge :collapse, :grid [5], :metric [1/0] }
+        \\A :place { :grid [3], :flow [N/S] }
+        \\G.(m, n) :span [1]
+        \\G.(p, q) :collapse
+        \\
+    ;
+    var fixed: fab.testing.FixedInPlace = .{ .backing = testing.allocator };
+    try testing.checkAllAllocationFailures(fixed.allocator(), placeEverything, .{source});
 }

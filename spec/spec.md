@@ -1089,12 +1089,14 @@ The place layer (fab-layer-place) rejects what depends on the seed and the graph
 | Error | Example | Why |
 | --- | --- | --- |
 | Seed not a tiling | `:grid [5]` | The seeds are `[3]` and `[4]` |
-| Not an area | `:flow [0/2]` | An area is two directions of one edge: `[k]`, `[k/]` or `[k+1]` |
-| Directions that cancel | `:flow [N/S]` | Two letters must be adjacent |
+| Number not whole | `:grid [3.5]`, `:flow [0.5]`, `f :span [1.5]` | Seeds, directions and spans count; only a metric's steps are fractions |
+| Flow of no direction | `:flow []`, `:flow [//]`, `:flow [/0]` | An empty slot is a normal only after a number |
+| Not an area | `:flow [0/2]`, `:flow [0/1!]`, `:flow [0/0/0]` | An area is two directions of one edge, both mirrored or neither: `[k]` or `[k/]`, then `[k]`, `[k/]` or `[k+1]`, modulo the seed's sides |
+| Directions that cancel | `:flow [N/S]`, `:flow [S/S]` | Two letters must be adjacent |
 | Step of nothing | `:metric [1/0]` | Every step is drawn |
 | Span of nothing | `f :span [0]` | Same-rank edges are open (`layout.md` §12) |
 | Spans that disagree | `+(f g h, m n)+` with `m :span [1]` and `n :span [1]` | Both branches end at one node, so their spans must add up alike |
-| Collapse between different ends | `(f, g) :collapse`, f : A → B, g : A → C | Only edges with the same two ends share a route |
+| Collapse between different ends | `(f, g) :collapse`, f : A → B, g : A → C | Only edges with the same two ends share a route; `&edge :collapse` collapses what it can, and reports nothing |
 | Collapse of a cell's side | `+(f, g)+ \| f/α/g` with `(f, g) :collapse` | A 2-cell is drawn between its sides |
 
 ### Proofs
