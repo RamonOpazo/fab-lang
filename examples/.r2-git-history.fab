@@ -1,0 +1,30 @@
+Repo :=
+    *init readme/Fork +(fix/Main, login session/Feature),
+    (Main/merge, Feature/merge')/Merged bump/V1 +(hotfix/Head, spike/Spike)
+
+@Repo :>
+    class: [git]
+    style/
+        // the refs: what the bundle :ref was, a group now
+        shape: (.Head, .Feature, .V1, .Spike) [round]
+        fill:  (.Head, .Feature, .V1, .Spike) [muted]
+        label: .Head    "main"
+        label: .Feature "feature/auth"
+        label: .V1      "v1.0"
+        label: .Spike   "spike/cache"
+        // the commits
+        label: .init    "a1f3 init"
+        label: .readme  "b27c add readme"
+        label: .fix     "c90e fix typo"
+        label: .login   "d4a1 login form"
+        label: .session "e5b2 sessions"
+        label: .merge   "f6c3 merge feature/auth"
+        arrow: .merge'  [/dashed/>]
+        label: .bump    "0a7d bump to 1.0"
+        label: .hotfix  "1b8e hotfix"
+        label: .spike   "2c9f try cache"
+    proof/
+        // both paths from the fork reach the same state
+        axiom: .(fix merge) == .(login session merge')
+        // fAB checks the merge is clean: the least common state (was keyed [clean])
+        lemma/pushout: .Merged

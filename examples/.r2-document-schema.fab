@@ -1,0 +1,39 @@
+// global types
+T := UUID7, DTZ, String, Text, JSONB, Bool
+
+// database
+Db :=
+    Membership/(user/User, org/Organization),
+    Project/owner/Organization,
+    Document/(project/Project, author/User),
+    Comment/(document/Document, writer/User, parent/Comment),
+    Tagging/(doc/Document, tag/Tag)
+
+// inner nodes' expansion
+Db.User         := *(id/@T.UUID7, email/@T.String, nick/@T.String, name/@T.String, created_at/@T.DTZ)
+Db.Organization := *(id/@T.UUID7, name/@T.String)
+Db.Membership   := *(id/@T.UUID7, admin/@T.Bool)
+Db.Project      := *(id/@T.UUID7, name/@T.String)
+Db.Document     := *(id/@T.UUID7, title/@T.String, body/@T.JSONB)
+Db.Comment      := *(id/@T.UUID7, text/@T.Text)
+Db.Tag          := *(id/@T.UUID7, label/@T.String)
+Db.Tagging      := *(id/@T.UUID7)
+
+@Db :>
+    class: [schema]
+    style/
+        label:  .writer "author_id"
+        label:  .User   "users"
+        fill:   .User   [muted]
+    proof/
+        axiom: .(parent document) == .document
+        axiom/pk: &zone.id
+        axiom/nullable: .parent
+        axiom/
+            cardinality: &edge [0..*/1]
+            cardinality: .parent [0..*/0..1]
+        axiom/
+            uk: .User.(email | nick)
+            uk: .Tag.label
+            uk: .(user | org)
+            uk: .(doc | tag)

@@ -1,0 +1,13 @@
+Repo    := @Main, @FeatOne, @FeatTwo // forward referencing @Zone nodes
+
+Main    := *init commit1 commit2 commit3 commit4 commit5
+FeatOne := (@Main.commit2+)/commit1 commit2 commit3 commit4
+FeatTwo := (@Main.commit2+)/commit1 commit2 merge/(@Main.commit3+)
+
+@Repo   :>
+    class: [git]
+    proof/axiom/main: .Main
+    proof/lemma/init: .Main.init
+    style/
+        label: .FeatOne "feature/cache"
+        label: .FeatTwo "feature/auth"

@@ -1,0 +1,396 @@
+// .r2-prelude.fab: the prelude in the r2 syntax, a proposal to correct.
+//
+// Ordinary fAB, with no powers a program lacks, read before every program:
+// its names are defined first, and defining one again is "defined twice".
+//
+// Names by shape:
+//   &class    a class: a set of a program's elements, by structure or kind
+//   Type      a type: a set of values
+//   key:      a key taking arguments, one line; key/ opens a block of keys
+//   .x        an element of the table's owner; . alone is the owner
+//   [value]   named values and labels; [>] [X] symbols
+//
+// Classes are built in, given by the program, never declared:
+//   &node     a node without an inside, in exactly one of its kinds:
+//             &plain, &choice, &parallel, &start, &end, &hole
+//   &zone     a node with an inside
+//   &edge     an edge
+//   &cell     a cell, level 2 and above
+//   &canonical  a node named by its ends
+//
+// Types built in:
+//   Text "…"  Math $…$  Color [#…]  Number [2] [0.5]  Range [0..*]  Nil []
+//   Equation  a == b, a ~= b
+//
+// Statements:
+//   G := …                defines a node: its inside
+//   T :: { … }            defines a type, once: a new set
+//   [x] :: T              declares a value of T, bound later (a token)
+//   [x] :: T := v         defines a value of T
+//   &c :> …               describes every element of &c (the defaults)
+//   &c/key: [v] :> …      a case: describes those whose key is [v]
+//   @X :> …               describes X (the program's)
+//
+// A type is a set, and braces make a new one, partitioned into its entries:
+// a value is a block of one, a type a block of its values. So a value
+// belongs to one braced set, Facing's [outer] is a Side through Facing, and
+// Length is not Angle though both hold Number's values. Outside braces, a
+// type expression makes no new set: A, B a union, [A/B] a tuple, A | B the
+// values together, and the postfixes:
+//   T?   or nothing: T, Nil
+//   T!   and the twins ([30!], [?!])
+//   T*   the key takes many entries, each `key:` adding one; otherwise a
+//        later entry for the same subject replaces the earlier
+//
+// A record type's braces hold keys, never values. A key is declared with
+// its subject's class, then the types of its slots:
+//   label: &node Label?    on a node, a label
+//   pk: &edge              a class only: a flag, true when written
+//   style: Style           a type only: the owner's own key
+// Declared inside a type's braces, used in a description. In a use the
+// subject may be left out, and is then the owner: label: "x". A group
+// distributes over the slots: fill: (&node, &zone) Color? is two
+// declarations, and a key declared on a class applies to the classes
+// inside it (&choice is a &node).
+
+// ── 1. Types ──────────────────────────────────────────────────────────
+
+// Numbers with a unit: three types of their own, so units are checked.
+Length   :: { Number }   // in em, relative to the theme's text size
+Angle    :: { Number! }  // in degrees; [30!] is the inner side
+Fraction :: { Number }   // 0 to 1, a position along an edge
+
+// Nil leaves a label to its computed default, the element's name; "" is an
+// empty label, written on purpose.
+Label :: { Text, Math }
+
+// Labels: each belongs to exactly one braced set. Words two types share get
+// a type of their own, which both hold (Facing). Nil, [], is never a label.
+All    :: { [all] }
+Facing :: { [outer], [inner] }
+On     :: { [on] }
+Side   :: { Facing, On }
+
+Shape :: {
+    [box], [round], [circle], [double-circle], [ellipse], [stadium],
+    [diamond], [hexagon], [parallelogram], [cylinder], [document],
+    [bar], [point], [terminal], [bullseye]
+}
+Line  :: { [solid], [dashed], [dotted], [double], [triple], [wavy] }
+Face  :: { [regular], [italic], [bold], [bold-italic] }
+Pen   :: { [thin], [medium], [thick] }
+Span  :: { [start], [center], [end] }
+As    :: { [flat], [cluster], [node], [table] }
+Cross :: { [gap], [plain] }
+
+// Arrow ends, read as a picture from tail to head. Any end goes at either
+// side. Hooks and harpoons curl to one side, so they have twins: ! puts
+// them on the inner side, [?!], [^!].
+Head :: {
+    [>], [<], [>>], [<<], [|>], [<|], [|],
+    [O], [@], [X], [<>], [<@>],
+    [||], [O|], [|{], [O{], [|O], [}|], [}O]
+}
+Hook :: { [?], [^] }
+Tip  :: { Head, Hook! }
+
+// An empty slot is nothing there: [/solid/>] has no tail, [/solid/] no
+// head, [>//>] no line. A line in an arrow may be struck: [/solid!/>].
+Arrow       :: { [Tip?/Line!?/Tip?] }
+Cardinality :: { [Range/Range] }
+
+// ── 2. Colours ────────────────────────────────────────────────────────
+
+// Tokens: colours declared here and bound by a style, the defaults first.
+[ink], [soft], [muted], [accent]  :: Color
+[error], [warning], [unsupported] :: Color
+
+[black]  :: Color := [#1f2328]
+[white]  :: Color := [#ffffff]
+[gray]   :: Color := [#6e7781]
+[red]    :: Color := [#cf222e]
+[orange] :: Color := [#bc4c00]
+[yellow] :: Color := [#bf8700]
+[green]  :: Color := [#1a7f37]
+[blue]   :: Color := [#0969da]
+[purple] :: Color := [#8250df]
+[pink]   :: Color := [#bf3989]
+
+// ── 3. Kinds ──────────────────────────────────────────────────────────
+
+// A diagram's kind is what its graph is. A diagram with no kind is a plain
+// graph: drawn by the defaults, nothing found.
+Kind :: { [flow], [state-machine], [category], [schema], [git], [sequence] }
+
+// ── 4. Style ──────────────────────────────────────────────────────────
+
+// Zig gives each key its meaning, and a renderer reports a key or a label
+// it cannot draw. On a class it does not apply to: "does not apply".
+Style :: {
+    // Text
+    label: (&node, &zone, &edge, &cell) Label?
+    font:  (&node, &zone, &edge, &cell) Text?
+    face:  (&node, &zone, &edge, &cell) Face
+    size:  (&node, &zone, &edge, &cell) Length
+    ink:   (&node, &zone, &edge, &cell) Color
+
+    // Lines and fills
+    fill:   (&node, &zone) Color?
+    stroke: (&node, &zone, &edge, &cell) Color?
+    pen:    (&node, &zone, &edge, &cell) Pen
+    line:   (&node, &zone) Line?
+
+    // Nodes
+    shape:   &node Shape?
+    width:   &node Length  // a minimum
+    height:  &node Length  // a minimum
+    padding: (&node, &zone) Length
+    align:   &node Span
+    wrap:    &node Length?
+
+    // Edges and cells
+    arrow:       (&edge, &cell) Arrow?  // nil: by level
+    bend:        (&edge, &cell) (Facing, Angle)
+    label-start: (&edge, &cell) Label?
+    label-end:   (&edge, &cell) Label?
+    label-at:    (&edge, &cell) (Span, Fraction)
+    side:        (&edge, &cell) Side
+    shorten:     (&edge, &cell) Length
+
+    // Zones
+    as:      &zone As
+    caption: &zone Label?
+    marks:   &zone All?
+    cross:   &zone Cross
+    alt:     &zone Text
+
+    // Behaviour. A flag is true when written, false otherwise.
+    hide: (&node, &edge, &cell)
+    note: (&node, &zone, &edge, &cell) Text
+    link: (&node, &zone, &edge, &cell) Text
+    step: (&node, &edge, &cell) Number?
+}
+
+// ── 5. Place ──────────────────────────────────────────────────────────
+
+// Where things go (layout.md). Steps are computed, every anchor one step
+// from the next; the metric says how long they are drawn. Directions two
+// ways: numbers, the seed's edges ([0] west to east on every seed, [0!] the
+// mirrored seed's, [0/] the normal turned clockwise), and letters, the
+// page's. fab-layer-place gives them their meaning.
+Seed    :: { Number! }  // [4] square, [3] triangular; [4!] drawn counterclockwise
+Step    :: { Number! }  // a metric step; [3!] turns the sequence back there
+Ranks   :: { Number! }  // how many ranks an edge crosses; [2!] against the flow
+Compass :: { [N], [E], [S], [W] }
+Bearing :: { Number! }  // [0/] is the normal to [0]: an empty slot after it
+Flow    :: { [Bearing], [Bearing/Bearing?], Compass!, [Compass!/Compass!] }
+
+Place :: {
+    grid:     &zone Seed
+    metric:   &zone Step  // was a list, [1/2/3]: open
+    flow:     &zone Flow
+    span:     &edge Ranks
+    collapse: &edge       // with its parallel edges, one route
+}
+
+// ── 6. Proof ──────────────────────────────────────────────────────────
+
+// A diagram presents a theory: axioms are stated, lemmas checked against
+// the axioms and the lemmas before them. Each kind's facts are a record
+// type of their own, admitted by its case (§11). An axiom/ block holding
+// two keys is one axiom stating both.
+FlowFact :: {
+    may-end:    &zone    // from every node, some path reaches an end
+    must-end:   &zone    // every path reaches an end
+    structured: &zone    // forks joined; loops only through choices
+    reachable:  &node    // some path from a start reaches it
+    exclusive:  &choice  // its branches never both taken
+}
+StateFact :: {
+    reachable: &node  // some path from the initial state reaches it
+}
+CategoryFact :: {
+    pushout:  &node
+    pullback: (&node, &edge)
+}
+SchemaFact :: {
+    cardinality: &edge Cardinality
+    pk:          &edge
+    uk:          (&edge, &edge | &edge)  // one column, or several together
+    nullable:    &edge
+}
+GitFact :: {
+    main:    &zone  // the main branch, drawn on top
+    init:    &edge  // the first commit: its left node a *
+    pushout: &node  // a clean merge: the least common state
+}
+
+Proposition :: { Equation, FlowFact, StateFact, CategoryFact, SchemaFact, GitFact }
+
+Proof :: {
+    axiom: Proposition*
+    lemma: Proposition*
+}
+
+// ── 7. The layers ─────────────────────────────────────────────────────
+
+// What a description holds at its top: the layers, each a key on zones.
+Layer :: {
+    class: &zone Kind
+    style: &zone Style  // a style composes: style: [dark] then entries
+    place: &zone Place
+    proof: &zone Proof
+}
+
+// ── 8. Named values ───────────────────────────────────────────────────
+
+[mono]   :: Arrow := [>/solid/>]
+[epi]    :: Arrow := [/solid/>>]
+[incl]   :: Arrow := [?/solid/>]
+[mapsto] :: Arrow := [|/solid/>]
+[unique] :: Arrow := [/dashed/>]
+[iso]    :: Arrow := [</solid/>]
+
+[edge]   :: Flow := [0]    // along edge 0: a diamond opening east
+[normal] :: Flow := [0/]   // the normal to edge 0: south
+[area]   :: Flow := [0/0]  // across the area: a square, chains straight east
+
+// ── 9. Every zone: the defaults ───────────────────────────────────────
+
+// What [base] was, applied first:
+//
+//   computed  <  &zone :>  <  its kind's case  <  styles composed  <  @X :>
+//
+// Computed defaults depend on the element, so no value states them; they
+// fill in wherever nothing binds the key, nil included:
+//
+//   label   a node's name, else its canonical end (f+, +f); a zone's, an
+//           edge's, a cell's name
+//   arrow   a cell's: [/double/>] at level 2, [/triple/>] at level 3, …
+//   &plain  every circle in a diagram one diameter, fitted to the longest label
+//   &parallel  as wide as its busier side needs
+//
+// The defaults bind every key for every class, so the style is total. Nil
+// is nothing there (fill: [], no fill), or the computation. Marks bind
+// label "": a choice, a parallel, a start or an end is a shape that says
+// what it is. Flags are off unless written.
+&zone :>
+    style/
+        [ink]         := [#333333]
+        [soft]        := [#555555]
+        [muted]       := [#888888]
+        [accent]      := [#1f6feb]
+        [error]       := [#d1242f]
+        [warning]     := [#bf8700]
+        [unsupported] := [#8250df]
+
+        label: (&node, &zone, &edge, &cell) []
+        font:  (&node, &zone, &edge, &cell) []
+        face:  (&node, &zone, &edge, &cell) [regular]
+        size:  (&node, &zone) [1]
+        size:  (&edge, &cell) [0.85]
+        ink:   (&node, &zone) [ink]
+        ink:   (&edge, &cell) [soft]
+        note:  (&node, &zone, &edge, &cell) ""
+        link:  (&node, &zone, &edge, &cell) ""
+
+        fill:   (&node, &zone) []
+        stroke: (&node, &edge, &cell) [ink]
+        stroke: &zone []
+        pen:    (&node, &zone, &edge, &cell) [medium]
+        line:   (&node, &zone) [solid]
+
+        shape:   &node [circle]
+        width:   &node [0]
+        height:  &node [0]
+        padding: &node [0.4]
+        padding: &zone [1]
+        align:   &node [center]
+        wrap:    &node []
+        step:    (&node, &edge, &cell) []
+
+        arrow:       &edge [/solid/>]
+        arrow:       &cell []
+        bend:        (&edge, &cell) [0]
+        label-start: (&edge, &cell) []
+        label-end:   (&edge, &cell) []
+        label-at:    (&edge, &cell) [center]
+        side:        (&edge, &cell) [outer]
+        shorten:     (&edge, &cell) [0]
+
+        as:      &zone [cluster]
+        caption: &zone []
+        marks:   &zone [all]
+        cross:   &zone [gap]
+        alt:     &zone ""
+
+        shape: &choice [diamond]
+        shape: &parallel [bar]
+        shape: &start [point]
+        shape: &end [bullseye]
+        label: (&choice, &parallel, &start, &end) ""
+        line:  &hole [dashed]
+        face:  &canonical [italic]
+        ink:   &canonical [muted]
+
+    place/
+        grid:   [4]
+        metric: [1]
+        flow:   [S]
+
+    // no kind admits its facts: only equations
+    proof/
+        axiom: Equation
+        lemma: Equation
+
+// ── 10. Styles to compose ─────────────────────────────────────────────
+
+[dark] :: Style :=
+    [ink]   := [#dddddd]
+    [soft]  := [#aaaaaa]
+    [muted] := [#888888]
+    fill: &zone [#1e1e1e]
+
+[print] :: Style :=
+    [ink]    := [#000000]
+    [soft]   := [#000000]
+    [muted]  := [#555555]
+    [accent] := [#000000]
+
+[compact] :: Style :=
+    padding: &node [0.2]
+    padding: &zone [0.5]
+
+// ── 11. Cases ─────────────────────────────────────────────────────────
+
+// What holds in the diagrams of one kind, passed down to the diagrams they
+// hold. A type as an argument admits it: a fact of another kind is "not
+// admitted by the kind".
+&zone/class: [flow] :>
+    proof/
+        axiom: (Equation, FlowFact)
+        lemma: (Equation, FlowFact)
+
+&zone/class: [state-machine] :>
+    proof/
+        axiom: (Equation, StateFact)
+        lemma: (Equation, StateFact)
+    style/shape: &node [round]
+
+&zone/class: [category] :>
+    proof/
+        axiom: (Equation, CategoryFact)
+        lemma: (Equation, CategoryFact)
+    style/shape: &node []  // objects drawn as their labels
+    place/flow: [area]     // squares drawn upright
+
+&zone/class: [schema] :>
+    proof/
+        axiom: (Equation, SchemaFact)
+        lemma: (Equation, SchemaFact)
+
+&zone/class: [git] :>
+    proof/
+        axiom: (Equation, GitFact)
+        lemma: (Equation, GitFact)
+    style/shape: &node [point]  // commits between points
